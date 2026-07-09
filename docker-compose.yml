@@ -1,0 +1,37 @@
+services:
+  api:
+    build: .
+    ports:
+      - '3000:3000'
+    environment:
+      NODE_ENV: production
+      DB_TYPE: postgres
+      DB_HOST: db
+      DB_PORT: '5432'
+      DB_USERNAME: itam
+      DB_PASSWORD: itam
+      DB_NAME: itam
+      # Dev convenience; run migrations instead in real deployments.
+      DB_SYNCHRONIZE: 'true'
+      JWT_SECRET: ${JWT_SECRET:-dev-only-access-secret}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-dev-only-refresh-secret}
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: itam
+      POSTGRES_PASSWORD: itam
+      POSTGRES_DB: itam
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U itam']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pgdata:
