@@ -14,6 +14,7 @@ WORKDIR /app
 RUN addgroup -S itam && adduser -S itam -G itam
 COPY --from=build --chown=itam:itam /app/node_modules ./node_modules
 COPY --from=build --chown=itam:itam /app/dist ./dist
+COPY --chown=itam:itam public ./public
 COPY --chown=itam:itam package.json ./
 USER itam
 EXPOSE 3000

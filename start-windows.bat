@@ -34,12 +34,12 @@ echo ============================================================
 echo  Starting the ITAM Platform...
 echo  Your browser will open automatically in ~20 seconds.
 echo  Keep THIS window open - it is the server.
-echo  Address: http://localhost:3000/api/v1/docs
+echo  Web app: http://localhost:3000
 echo ============================================================
 echo.
 
-REM Open the docs page once the server has had time to boot.
-start "" /b cmd /c "timeout /t 20 /nobreak >nul & start http://localhost:3000/api/v1/docs"
+REM Open the web app once the server has had time to boot.
+start "" /b cmd /c "timeout /t 20 /nobreak >nul & start http://localhost:3000/"
 
 call npm.cmd run start:dev
 pause
