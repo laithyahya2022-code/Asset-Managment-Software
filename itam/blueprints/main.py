@@ -1,0 +1,215 @@
+from datetime import date, datetime, timedelta
+
+from flask import (Blueprint, flash, redirect, render_template, request,
+                   url_for)
+from sqlalchemy import func, or_
+
+from ..models import (ASSET_STATUSES, ActivityLog, Asset, Assignment, Category,
+                      Employee, License, Maintenance, Notification,
+                      PurchaseOrder, Vendor, db)
+from ..security import login_required, perm_required
+from ..utils import bar_chart, donut_chart, line_chart, month_key, notify
+
+bp = Blueprint("main", __name__)
+
+STATUS_COLORS = {
+    "Available": "#22a04a", "Checked Out": "#2f6fed", "Under Maintenance": "#e8a13c",
+    "Reserved": "#7c5cd6", "Retired": "#8a929e", "Missing": "#d05574",
+}
+
+
+def _generate_alerts():
+    """Create in-app notifications for warranty/license/maintenance/overdue items."""
+    today = date.today()
+    horizon = today + timedelta(days=90)
+    for a in db.session.scalars(db.select(Asset).where(
+            Asset.warranty_expiry.isnot(None), Asset.warranty_expiry <= horizon,
+            Asset.status != "Retired")):
+        state = "expired" if a.warranty_expiry < today else "expires soon"
+        notify("Warranty", f"Warranty for {a.tag} ({a.name}) {state} ({a.warranty_expiry})",
+               link=url_for("assets.detail", asset_id=a.id),
+               dedupe_key=f"warr-{a.id}-{a.warranty_expiry}")
+    for lic in db.session.scalars(db.select(License).where(
+            License.expiry_date.isnot(None), License.expiry_date <= horizon)):
+        state = "expired" if lic.expiry_date < today else "expires soon"
+        notify("License", f"License {lic.name} {state} ({lic.expiry_date})",
+               link=url_for("ops.license_detail", license_id=lic.id),
+               dedupe_key=f"lic-{lic.id}-{lic.expiry_date}")
+    for m in db.session.scalars(db.select(Maintenance).where(
+            Maintenance.status == "Scheduled", Maintenance.scheduled_for.isnot(None),
+            Maintenance.scheduled_for <= today + timedelta(days=7))):
+        notify("Maintenance", f"Maintenance due: {m.title} ({m.asset.tag}) on {m.scheduled_for}",
+               link=url_for("ops.maintenance_list"),
+               dedupe_key=f"mnt-{m.id}-{m.scheduled_for}")
+    for asg in db.session.scalars(db.select(Assignment).where(
+            Assignment.returned_at.is_(None), Assignment.due_at.isnot(None),
+            Assignment.due_at < today)):
+        notify("Assignment", f"Overdue: {asg.asset.tag} with {asg.employee.name} "
+                             f"(due {asg.due_at})",
+               link=url_for("assets.detail", asset_id=asg.asset_id),
+               dedupe_key=f"due-{asg.id}-{asg.due_at}")
+    db.session.commit()
+
+
+@bp.route("/")
+@login_required
+def dashboard():
+    _generate_alerts()
+    today = date.today()
+    counts = dict(db.session.execute(
+        db.select(Asset.status, func.count(Asset.id)).group_by(Asset.status)).all())
+    total = sum(counts.values())
+    total_value = sum(float(a.purchase_cost or 0) for a in db.session.scalars(db.select(Asset)))
+    overdue = db.session.scalar(db.select(func.count(Assignment.id)).where(
+        Assignment.returned_at.is_(None), Assignment.due_at.isnot(None),
+        Assignment.due_at < today)) or 0
+    scheduled = db.session.scalar(db.select(func.count(Maintenance.id)).where(
+        Maintenance.status.in_(["Scheduled", "In Progress"]))) or 0
+    expiring = db.session.scalar(db.select(func.count(Asset.id)).where(
+        Asset.warranty_expiry.isnot(None), Asset.warranty_expiry >= today,
+        Asset.warranty_expiry <= today + timedelta(days=90),
+        Asset.status != "Retired")) or 0
+    licenses = db.session.scalars(db.select(License)).all()
+    active_lic = len([l for l in licenses if not l.expired])
+    lic_soon = len([l for l in licenses if l.expiry_date and not l.expired
+                    and l.expiry_date <= today + timedelta(days=60)])
+    added_month = db.session.scalar(db.select(func.count(Asset.id)).where(
+        Asset.created_at >= datetime(today.year, today.month, 1))) or 0
+
+    by_cat = db.session.execute(
+        db.select(Category.name, func.count(Asset.id))
+        .join(Asset, Asset.category_id == Category.id)
+        .group_by(Category.name).order_by(func.count(Asset.id).desc())).all()
+    cat_chart = bar_chart([(n, c) for n, c in by_cat])
+    donut = donut_chart([(s, counts.get(s, 0), STATUS_COLORS[s]) for s in ASSET_STATUSES])
+
+    recent = db.session.scalars(
+        db.select(ActivityLog).order_by(ActivityLog.created_at.desc()).limit(8)).all()
+    alerts = db.session.scalars(
+        db.select(Notification).where(Notification.read == False)  # noqa: E712
+        .order_by(Notification.created_at.desc()).limit(6)).all()
+
+    value_short = (f"${total_value / 1000:.1f}K" if total_value >= 1000
+                   else f"${total_value:,.0f}")
+    return render_template(
+        "dashboard.html", total=total, counts=counts, overdue=overdue,
+        scheduled=scheduled, expiring=expiring, active_lic=active_lic,
+        lic_soon=lic_soon, added_month=added_month, value_short=value_short,
+        cat_chart=cat_chart, donut=donut, recent=recent, alerts=alerts)
+
+
+@bp.route("/analytics")
+@perm_required("reports.view")
+def analytics():
+    assets = db.session.scalars(db.select(Asset)).all()
+    months = []
+    cursor = date.today().replace(day=1)
+    for _ in range(12):
+        months.append(cursor)
+        cursor = (cursor - timedelta(days=1)).replace(day=1)
+    months.reverse()
+
+    added = [(month_key(m), len([a for a in assets
+              if a.created_at.year == m.year and a.created_at.month == m.month]))
+             for m in months]
+    spend = [(month_key(m), sum(float(a.purchase_cost or 0) for a in assets
+              if a.purchase_date and a.purchase_date.year == m.year
+              and a.purchase_date.month == m.month)) for m in months]
+    mnt = db.session.scalars(db.select(Maintenance)).all()
+    mnt_cost = [(month_key(m), sum(float(x.cost or 0) for x in mnt
+                 if x.completed_at and x.completed_at.year == m.year
+                 and x.completed_at.month == m.month)) for m in months]
+
+    by_dept = {}
+    for a in assets:
+        key = a.department.name if a.department else "Unassigned"
+        d = by_dept.setdefault(key, {"count": 0, "cost": 0.0, "value": 0.0})
+        d["count"] += 1
+        d["cost"] += float(a.purchase_cost or 0)
+        d["value"] += a.current_value or 0
+    dept_rows = sorted(by_dept.items(), key=lambda kv: -kv[1]["cost"])
+
+    util = 0
+    active_assets = [a for a in assets if a.status != "Retired"]
+    if active_assets:
+        util = round(100 * len([a for a in active_assets if a.status == "Checked Out"])
+                     / len(active_assets))
+    return render_template("analytics.html",
+                           added_chart=line_chart(added),
+                           spend_chart=line_chart(spend, color="#2f6fed", money=True),
+                           mnt_chart=line_chart(mnt_cost, color="#e8a13c", money=True),
+                           dept_rows=dept_rows, utilization=util)
+
+
+@bp.route("/search")
+@login_required
+def search():
+    q = request.args.get("q", "").strip()
+    results = {}
+    if q:
+        like = f"%{q}%"
+        results["assets"] = db.session.scalars(db.select(Asset).where(or_(
+            Asset.tag.ilike(like), Asset.name.ilike(like), Asset.serial.ilike(like),
+            Asset.manufacturer.ilike(like), Asset.model.ilike(like))).limit(25)).all()
+        results["employees"] = db.session.scalars(db.select(Employee).where(or_(
+            Employee.name.ilike(like), Employee.email.ilike(like))).limit(15)).all()
+        results["licenses"] = db.session.scalars(db.select(License).where(
+            License.name.ilike(like)).limit(15)).all()
+        results["vendors"] = db.session.scalars(db.select(Vendor).where(
+            Vendor.name.ilike(like)).limit(15)).all()
+        results["orders"] = db.session.scalars(db.select(PurchaseOrder).where(or_(
+            PurchaseOrder.number.ilike(like),
+            PurchaseOrder.description.ilike(like))).limit(15)).all()
+    return render_template("search.html", q=q, results=results)
+
+
+@bp.route("/notifications")
+@login_required
+def notifications():
+    items = db.session.scalars(
+        db.select(Notification).order_by(Notification.created_at.desc()).limit(200)).all()
+    return render_template("notifications.html", items=items)
+
+
+@bp.post("/notifications/read")
+@login_required
+def notifications_read():
+    nid = request.form.get("id")
+    stmt = db.update(Notification).values(read=True)
+    if nid:
+        stmt = stmt.where(Notification.id == int(nid))
+    db.session.execute(stmt)
+    db.session.commit()
+    return redirect(request.referrer or url_for("main.notifications"))
+
+
+@bp.route("/activity")
+@login_required
+def activity():
+    action = request.args.get("action", "")
+    stmt = db.select(ActivityLog).order_by(ActivityLog.created_at.desc()).limit(300)
+    if action:
+        stmt = db.select(ActivityLog).where(ActivityLog.action == action) \
+            .order_by(ActivityLog.created_at.desc()).limit(300)
+    logs = db.session.scalars(stmt).all()
+    actions = [r[0] for r in db.session.execute(
+        db.select(ActivityLog.action).distinct().order_by(ActivityLog.action)).all()]
+    return render_template("activity.html", logs=logs, actions=actions, action=action)
+
+
+@bp.route("/scanner")
+@login_required
+def scanner():
+    return render_template("scanner.html")
+
+
+@bp.route("/scan-go")
+@login_required
+def scan_go():
+    code = request.args.get("code", "").strip()
+    asset = db.session.scalar(db.select(Asset).where(
+        or_(Asset.tag == code, Asset.serial == code)))
+    if asset:
+        return redirect(url_for("assets.detail", asset_id=asset.id))
+    flash(f'No asset found for code "{code}".', "error")
+    return redirect(url_for("main.scanner"))

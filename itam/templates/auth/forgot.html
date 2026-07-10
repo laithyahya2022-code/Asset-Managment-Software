@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Password reset{% endblock %}
+{% block auth_content %}
+<div class="auth-card">
+  <h1>Reset password</h1>
+  <p class="muted">Enter your account email and we'll create a reset link.</p>
+  <form method="post">
+    <label for="email">Email</label>
+    <input id="email" name="email" type="email" required autofocus>
+    <button class="btn wide" type="submit">Create reset link</button>
+  </form>
+  {% if link %}
+  <div class="card" style="margin-top:1rem; word-break:break-all">
+    <p class="eyebrow">Your reset link</p>
+    <a href="{{ link }}">{{ link }}</a>
+  </div>
+  {% endif %}
+  <p class="auth-links"><a href="{{ url_for('auth.login') }}">← Back to login</a></p>
+</div>
+{% endblock %}

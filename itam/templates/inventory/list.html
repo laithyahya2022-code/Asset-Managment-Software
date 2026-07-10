@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}{{ t("Inventory") }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ t("Inventory") }}</h1>
+  {% if has_perm("inventory.manage") %}
+  <form class="filters no-print" method="post" action="{{ url_for('ops.inventory_new') }}" style="margin:0">
+    <input name="name" placeholder="Audit name (optional)">
+    <button class="btn" type="submit">Start physical audit</button>
+  </form>
+  {% endif %}
+</div>
+
+<div class="kpi-grid">
+  <div class="kpi"><span class="tile green">✓</span>
+    <div><span class="k-label">Assets on record</span><span class="k-value">{{ total_assets }}</span></div></div>
+  <div class="kpi"><span class="tile red">!</span>
+    <div><span class="k-label">{{ t("Missing") }}</span><span class="k-value">{{ missing | length }}</span></div></div>
+  <div class="kpi"><span class="tile blue">≡</span>
+    <div><span class="k-label">Audits run</span><span class="k-value">{{ audits | length }}</span></div></div>
+</div>
+
+{% if missing %}
+<div class="card">
+  <p class="eyebrow">Missing assets</p>
+  <div class="table-wrap"><table>
+    <tr><th>Tag</th><th>{{ t("Name") }}</th><th>Last location</th></tr>
+    {% for a in missing %}
+    <tr><td><a href="{{ url_for('assets.detail', asset_id=a.id) }}">{{ a.tag }}</a></td>
+        <td>{{ a.name }}</td><td>{{ a.location.path if a.location else "—" }}</td></tr>
+    {% endfor %}
+  </table></div>
+</div>
+{% endif %}
+
+<div class="card">
+  <p class="eyebrow">Audits</p>
+  {% if audits %}
+  <div class="table-wrap"><table>
+    <tr><th>{{ t("Name") }}</th><th>Started</th><th>Completed</th><th>Verified</th><th>{{ t("Missing") }}</th><th></th></tr>
+    {% for au in audits %}
+    <tr>
+      <td><a href="{{ url_for('ops.inventory_audit', audit_id=au.id) }}">{{ au.name }}</a></td>
+      <td>{{ au.started_at.strftime("%Y-%m-%d") }}</td>
+      <td>{{ au.completed_at.strftime("%Y-%m-%d") if au.completed_at else "in progress" }}</td>
+      <td>{{ au.verified_count }}</td><td>{{ au.missing_count }}</td>
+      <td><a class="btn secondary sm" href="{{ url_for('ops.inventory_export', audit_id=au.id) }}">CSV</a></td>
+    </tr>
+    {% endfor %}
+  </table></div>
+  {% else %}<p class="empty">No audits yet. Start one to verify your physical inventory.</p>{% endif %}
+</div>
+{% endblock %}

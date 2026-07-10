@@ -1,44 +1,78 @@
 {% extends "base.html" %}
-{% block title %}Assets{% endblock %}
+{% from "_macros.html" import status_badge %}
+{% block title %}{{ t("Assets") }}{% endblock %}
 {% block content %}
 <div class="page-head">
-  <h1>Assets</h1>
-  <a class="btn" href="{{ url_for('itam.asset_new') }}">+ New asset</a>
+  <h1>{{ t("Assets") }}</h1>
+  <div class="actions-row no-print">
+    {% if has_perm("assets.manage") %}
+    <a class="btn" href="{{ url_for('assets.new') }}">+ {{ t("New Asset") }}</a>
+    <a class="btn secondary" href="{{ url_for('assets.import_') }}">{{ t("Import") }} CSV</a>
+    {% endif %}
+    <a class="btn secondary" href="{{ url_for('assets.export_csv', **request.args) }}">{{ t("Export CSV") }}</a>
+    <a class="btn secondary" href="{{ url_for('assets.labels') }}">Labels</a>
+    <a class="btn secondary" href="{{ url_for('assets.categories') }}">Categories</a>
+  </div>
 </div>
 
-<form class="filters" method="get">
-  <input type="text" name="q" value="{{ q }}" placeholder="Search tag, name, serial…">
-  <select name="status">
-    <option value="">All statuses</option>
-    {% for s in statuses %}
-    <option value="{{ s }}" {% if status == s %}selected{% endif %}>{{ s }}</option>
-    {% endfor %}
+<form class="filters no-print" method="get">
+  <input type="search" name="q" value="{{ args.get('q', '') }}" placeholder="{{ t('Search') }}…">
+  <select name="status"><option value="">All statuses</option>
+    {% for s in statuses %}<option value="{{ s }}" {{ 'selected' if args.get('status') == s }}>{{ t(s) }}</option>{% endfor %}
   </select>
-  <select name="category">
-    <option value="">All categories</option>
-    {% for c in categories %}
-    <option value="{{ c.id }}" {% if category_id == c.id|string %}selected{% endif %}>{{ c.name }}</option>
-    {% endfor %}
+  <select name="category"><option value="">All categories</option>
+    {% for c in categories %}<option value="{{ c.id }}" {{ 'selected' if args.get('category') == c.id|string }}>{{ c.name }}</option>{% endfor %}
   </select>
-  <button class="btn btn-secondary" type="submit">Filter</button>
-  {% if q or status or category_id %}<a class="btn btn-secondary" href="{{ url_for('itam.asset_list') }}">Clear</a>{% endif %}
+  <select name="department"><option value="">All departments</option>
+    {% for d in departments %}<option value="{{ d.id }}" {{ 'selected' if args.get('department') == d.id|string }}>{{ d.name }}</option>{% endfor %}
+  </select>
+  <select name="location"><option value="">All locations</option>
+    {% for l in locations %}<option value="{{ l.id }}" {{ 'selected' if args.get('location') == l.id|string }}>{{ l.path }}</option>{% endfor %}
+  </select>
+  <select name="condition"><option value="">All conditions</option>
+    {% for c in conditions %}<option value="{{ c }}" {{ 'selected' if args.get('condition') == c }}>{{ c }}</option>{% endfor %}
+  </select>
+  <button class="btn secondary" type="submit">Filter</button>
+  {% if args %}<a class="btn secondary" href="{{ url_for('assets.list_') }}">Clear</a>{% endif %}
 </form>
 
 {% if assets %}
-<table>
-  <tr><th>Tag</th><th>Name</th><th>Category</th><th>Status</th><th>Assigned to</th><th>Location</th></tr>
-  {% for asset in assets %}
-  <tr>
-    <td><a href="{{ url_for('itam.asset_detail', asset_id=asset.id) }}">{{ asset.asset_tag }}</a></td>
-    <td>{{ asset.name }}</td>
-    <td>{{ asset.category.name if asset.category else "—" }}</td>
-    <td><span class="badge badge-{{ asset.status|lower|replace(' ', '-') }}">{{ asset.status }}</span></td>
-    <td>{% if asset.current_assignment %}<a href="{{ url_for('itam.employee_detail', employee_id=asset.current_assignment.employee.id) }}">{{ asset.current_assignment.employee.name }}</a>{% else %}—{% endif %}</td>
-    <td>{{ asset.location or "—" }}</td>
-  </tr>
-  {% endfor %}
-</table>
+<form method="post" action="{{ url_for('assets.bulk') }}">
+<div class="card table-wrap">
+  <table>
+    <tr>
+      {% if has_perm("assets.manage") %}<th><input type="checkbox" data-check-all></th>{% endif %}
+      <th>Tag</th><th>{{ t("Name") }}</th><th>{{ t("Category") }}</th><th>{{ t("Status") }}</th>
+      <th>Condition</th><th>Assigned to</th><th>{{ t("Location") }}</th><th>{{ t("Department") }}</th>
+    </tr>
+    {% for a in assets %}
+    <tr>
+      {% if has_perm("assets.manage") %}<td><input type="checkbox" name="id" value="{{ a.id }}"></td>{% endif %}
+      <td><a href="{{ url_for('assets.detail', asset_id=a.id) }}">{{ a.tag }}</a></td>
+      <td>{{ a.name }}</td>
+      <td>{{ a.category.name if a.category else "—" }}</td>
+      <td>{{ status_badge(a.status) }}</td>
+      <td>{{ a.condition }}</td>
+      <td>{% if a.current_assignment %}<a href="{{ url_for('org.employee_detail', emp_id=a.current_assignment.employee_id) }}">{{ a.current_assignment.employee.name }}</a>{% else %}—{% endif %}</td>
+      <td>{{ a.location.path if a.location else "—" }}</td>
+      <td>{{ a.department.name if a.department else "—" }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+{% if has_perm("assets.manage") %}
+<div class="actions-row no-print">
+  <span class="muted">Bulk action for selected:</span>
+  <select name="action" style="width:auto">
+    <option value="labels">Print labels</option>
+    {% for s in statuses %}<option value="status:{{ s }}">Set status: {{ s }}</option>{% endfor %}
+    <option value="delete">Delete</option>
+  </select>
+  <button class="btn secondary" type="submit" data-confirm="Apply this bulk action to the selected assets?">Apply</button>
+</div>
+{% endif %}
+</form>
 {% else %}
-<p class="muted">No assets found.</p>
+<p class="empty">No assets found.</p>
 {% endif %}
 {% endblock %}

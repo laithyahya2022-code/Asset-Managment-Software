@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}New purchase request{% endblock %}
+{% block content %}
+<div class="page-head"><h1>New purchase request</h1></div>
+<div class="card">
+  <form method="post">
+    <div class="form-grid">
+      <div class="full"><label for="po-desc">What are you buying? *</label>
+        <input id="po-desc" name="description" required placeholder='Dell Latitude 5550 laptop'></div>
+      <div><label for="po-vendor">Vendor</label>
+        <select id="po-vendor" name="vendor_id"><option value="">—</option>
+          {% for v in vendors %}<option value="{{ v.id }}">{{ v.name }}</option>{% endfor %}
+        </select></div>
+      <div><label for="po-cat">{{ t("Category") }} (for received assets)</label>
+        <select id="po-cat" name="category_id"><option value="">—</option>
+          {% for c in categories %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}
+        </select></div>
+      <div><label for="po-qty">Quantity *</label>
+        <input id="po-qty" name="qty" type="number" min="1" value="1" required></div>
+      <div><label for="po-cost">Unit cost</label>
+        <input id="po-cost" name="unit_cost" type="number" step="0.01" min="0"></div>
+      <div><label for="po-date">Expected date</label>
+        <input id="po-date" name="expected_date" type="date"></div>
+      <div class="full"><label for="po-notes">Notes</label>
+        <textarea id="po-notes" name="notes" rows="2"></textarea></div>
+    </div>
+    <div class="form-actions">
+      <button class="btn" type="submit">Submit request</button>
+      <a class="btn secondary" href="{{ url_for('org.procurement') }}">{{ t("Cancel") }}</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

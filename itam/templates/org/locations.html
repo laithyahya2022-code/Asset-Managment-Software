@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}{{ t("Locations") }}{% endblock %}
+{% block content %}
+<div class="page-head"><h1>{{ t("Locations") }}</h1></div>
+
+{% if has_perm("org.manage") %}
+<div class="card no-print">
+  <form method="post" class="filters" style="margin:0">
+    <input name="name" placeholder="Location name" required>
+    <select name="kind">{% for k in kinds %}<option>{{ k }}</option>{% endfor %}</select>
+    <select name="parent_id"><option value="">No parent (top level)</option>
+      {% for l in rows %}<option value="{{ l.id }}">{{ l.path }}</option>{% endfor %}
+    </select>
+    <button class="btn" type="submit">Add location</button>
+  </form>
+  <p class="muted" style="margin:0.5rem 0 0">Build a hierarchy: Branch → Building → Floor → Room → Storage Area.</p>
+</div>
+{% endif %}
+
+{% if rows %}
+<div class="card table-wrap"><table>
+  <tr><th>Path</th><th>Kind</th><th>{{ t("Assets") }}</th><th></th></tr>
+  {% for l in rows | sort(attribute="path") %}
+  <tr>
+    <td>{{ l.path }}</td>
+    <td><span class="chip">{{ l.kind }}</span></td>
+    <td><a href="{{ url_for('assets.list_', location=l.id) }}">{{ l.assets | length }}</a></td>
+    <td class="no-print">
+      {% if has_perm("org.manage") and not l.assets and not l.children %}
+      <form class="inline" method="post" action="{{ url_for('org.location_delete', loc_id=l.id) }}">
+        <button class="btn danger sm" type="submit">{{ t("Delete") }}</button>
+      </form>
+      {% endif %}
+    </td>
+  </tr>
+  {% endfor %}
+</table></div>
+{% else %}<p class="empty">No locations yet.</p>{% endif %}
+{% endblock %}

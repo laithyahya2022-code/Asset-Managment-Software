@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Categories{% endblock %}
+{% block content %}
+<div class="page-head"><h1>Asset categories</h1></div>
+{% if has_perm("assets.manage") %}
+<div class="card no-print">
+  <form method="post" class="filters" style="margin:0">
+    <input name="name" placeholder="New category name" required>
+    <button class="btn" type="submit">Add category</button>
+  </form>
+</div>
+{% endif %}
+{% if rows %}
+<div class="card table-wrap"><table>
+  <tr><th>{{ t("Name") }}</th><th>{{ t("Assets") }}</th><th></th></tr>
+  {% for c in rows %}
+  <tr>
+    <td>{{ c.name }}</td>
+    <td><a href="{{ url_for('assets.list_', category=c.id) }}">{{ c.assets | length }}</a></td>
+    <td class="no-print">
+      {% if has_perm("assets.manage") and not c.assets %}
+      <form class="inline" method="post" action="{{ url_for('assets.category_delete', cat_id=c.id) }}">
+        <button class="btn danger sm" type="submit">{{ t("Delete") }}</button>
+      </form>
+      {% endif %}
+    </td>
+  </tr>
+  {% endfor %}
+</table></div>
+{% else %}<p class="empty">No categories yet.</p>{% endif %}
+{% endblock %}

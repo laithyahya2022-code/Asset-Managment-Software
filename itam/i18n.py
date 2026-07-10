@@ -1,0 +1,72 @@
+from flask import g
+
+AR = {
+    "Dashboard": "لوحة التحكم",
+    "Assets": "الأصول",
+    "Checkouts": "الإعارات",
+    "Licenses": "التراخيص",
+    "Maintenance": "الصيانة",
+    "Inventory": "الجرد",
+    "Locations": "المواقع",
+    "Employees": "الموظفون",
+    "Departments": "الأقسام",
+    "Vendors": "الموردون",
+    "Procurement": "المشتريات",
+    "QR Scanner": "ماسح QR",
+    "Reports": "التقارير",
+    "Analytics": "التحليلات",
+    "Users": "المستخدمون",
+    "Activity": "سجل النشاط",
+    "Settings": "الإعدادات",
+    "Notifications": "الإشعارات",
+    "Search": "بحث",
+    "Log in": "تسجيل الدخول",
+    "Log out": "تسجيل الخروج",
+    "Profile": "الملف الشخصي",
+    "Total Assets": "إجمالي الأصول",
+    "Checked Out": "معار",
+    "Under Maintenance": "قيد الصيانة",
+    "Expiring Warranties": "ضمانات على وشك الانتهاء",
+    "Total Asset Value": "القيمة الإجمالية للأصول",
+    "Active Licenses": "التراخيص الفعالة",
+    "Available Assets": "الأصول المتاحة",
+    "Retired / Disposed": "مستبعد / متخلص منه",
+    "Assets by Category": "الأصول حسب الفئة",
+    "Assets by Status": "الأصول حسب الحالة",
+    "Recent Activity": "النشاط الأخير",
+    "Quick Actions": "إجراءات سريعة",
+    "Add Asset": "إضافة أصل",
+    "New Asset": "أصل جديد",
+    "Check Out": "إعارة",
+    "Check In": "إرجاع",
+    "Available": "متاح",
+    "Reserved": "محجوز",
+    "Retired": "مستبعد",
+    "Missing": "مفقود",
+    "Name": "الاسم",
+    "Status": "الحالة",
+    "Category": "الفئة",
+    "Location": "الموقع",
+    "Department": "القسم",
+    "Employee": "الموظف",
+    "Save": "حفظ",
+    "Cancel": "إلغاء",
+    "Delete": "حذف",
+    "Edit": "تعديل",
+    "Actions": "إجراءات",
+    "Overdue": "متأخر",
+    "Backups": "النسخ الاحتياطية",
+    "Roles": "الأدوار",
+    "Print": "طباعة",
+    "Export CSV": "تصدير CSV",
+    "Import": "استيراد",
+}
+
+LANGS = {"en": "English", "ar": "العربية"}
+
+
+def t(text):
+    lang = getattr(g, "lang", "en")
+    if lang == "ar":
+        return AR.get(text, text)
+    return text

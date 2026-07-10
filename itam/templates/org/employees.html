@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}{{ t("Employees") }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ t("Employees") }}</h1>
+  {% if has_perm("people.manage") %}
+  <a class="btn no-print" href="{{ url_for('org.employee_form') }}">+ New employee</a>
+  {% endif %}
+</div>
+{% if rows %}
+<div class="card table-wrap"><table>
+  <tr><th>{{ t("Name") }}</th><th>Email</th><th>Title</th><th>{{ t("Department") }}</th><th>Assets held</th><th>Active</th></tr>
+  {% for e in rows %}
+  <tr>
+    <td><a href="{{ url_for('org.employee_detail', emp_id=e.id) }}">{{ e.name }}</a></td>
+    <td>{{ e.email }}</td>
+    <td>{{ e.title or "—" }}</td>
+    <td>{{ e.department.name if e.department else "—" }}</td>
+    <td>{{ e.current_assets | length }}</td>
+    <td>{{ "Yes" if e.active else "No" }}</td>
+  </tr>
+  {% endfor %}
+</table></div>
+{% else %}<p class="empty">No employees yet.</p>{% endif %}
+{% endblock %}

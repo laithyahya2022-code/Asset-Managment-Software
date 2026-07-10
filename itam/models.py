@@ -1,61 +1,191 @@
+import json
 from datetime import datetime, date
 
 from flask_sqlalchemy import SQLAlchemy
+from werkzeug.security import check_password_hash, generate_password_hash
 
 db = SQLAlchemy()
 
-ASSET_STATUSES = ["Available", "Assigned", "In Repair", "Retired"]
+ASSET_STATUSES = ["Available", "Checked Out", "Under Maintenance", "Reserved", "Retired", "Missing"]
+ASSET_CONDITIONS = ["New", "Good", "Fair", "Poor", "Broken"]
+ROLES = ["admin", "manager", "technician", "viewer"]
+LOCATION_KINDS = ["Branch", "Building", "Floor", "Room", "Storage Area"]
+MAINTENANCE_KINDS = ["Preventive", "Corrective"]
+MAINTENANCE_STATUSES = ["Scheduled", "In Progress", "Completed", "Cancelled"]
+PO_STATUSES = ["Requested", "Approved", "Ordered", "Received", "Cancelled"]
+
+PERMISSIONS = [
+    "assets.view", "assets.manage", "checkout.manage", "maintenance.manage",
+    "licenses.manage", "people.manage", "org.manage", "procurement.manage",
+    "inventory.manage", "reports.view", "admin.users", "admin.settings", "api.access",
+]
+
+DEFAULT_ROLE_PERMS = {
+    "admin": PERMISSIONS,
+    "manager": [p for p in PERMISSIONS if not p.startswith("admin.")],
+    "technician": ["assets.view", "assets.manage", "checkout.manage",
+                   "maintenance.manage", "inventory.manage", "reports.view"],
+    "viewer": ["assets.view", "reports.view"],
+}
+
+
+class User(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(60), unique=True, nullable=False)
+    name = db.Column(db.String(120), nullable=False)
+    email = db.Column(db.String(120), unique=True, nullable=False)
+    password_hash = db.Column(db.String(255), nullable=False)
+    role = db.Column(db.String(20), nullable=False, default="viewer")
+    active = db.Column(db.Boolean, nullable=False, default=True)
+    language = db.Column(db.String(5), nullable=False, default="en")
+    api_key = db.Column(db.String(64), unique=True)
+    reset_token = db.Column(db.String(64))
+    reset_expires = db.Column(db.DateTime)
+    last_login = db.Column(db.DateTime)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    def set_password(self, pw):
+        self.password_hash = generate_password_hash(pw)
+
+    def check_password(self, pw):
+        return check_password_hash(self.password_hash, pw)
+
+
+class RolePermission(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    role = db.Column(db.String(20), nullable=False)
+    permission = db.Column(db.String(40), nullable=False)
+    __table_args__ = (db.UniqueConstraint("role", "permission"),)
+
+
+class Setting(db.Model):
+    key = db.Column(db.String(60), primary_key=True)
+    value = db.Column(db.Text)
+
+
+class ActivityLog(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"))
+    action = db.Column(db.String(40), nullable=False)
+    entity_type = db.Column(db.String(40))
+    entity_id = db.Column(db.Integer)
+    details = db.Column(db.Text)
+    ip = db.Column(db.String(45))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    user = db.relationship("User")
+
+
+class Notification(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    kind = db.Column(db.String(30), nullable=False)
+    message = db.Column(db.String(255), nullable=False)
+    link = db.Column(db.String(255))
+    dedupe_key = db.Column(db.String(120), unique=True)
+    read = db.Column(db.Boolean, nullable=False, default=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
 
 class Category(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(80), unique=True, nullable=False)
-
     assets = db.relationship("Asset", back_populates="category")
 
-    def __repr__(self):
-        return f"<Category {self.name}>"
+
+class Department(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(80), unique=True, nullable=False)
+    cost_center = db.Column(db.String(40))
+    assets = db.relationship("Asset", back_populates="department")
+    employees = db.relationship("Employee", back_populates="department")
+
+
+class Location(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(120), nullable=False)
+    kind = db.Column(db.String(20), nullable=False, default="Room")
+    parent_id = db.Column(db.Integer, db.ForeignKey("location.id"))
+    parent = db.relationship("Location", remote_side=[id], backref="children")
+    assets = db.relationship("Asset", back_populates="location")
+
+    @property
+    def path(self):
+        parts, node, seen = [], self, set()
+        while node and node.id not in seen:
+            seen.add(node.id)
+            parts.append(node.name)
+            node = node.parent
+        return " / ".join(reversed(parts))
+
+
+class Vendor(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(120), unique=True, nullable=False)
+    contact_name = db.Column(db.String(120))
+    email = db.Column(db.String(120))
+    phone = db.Column(db.String(40))
+    website = db.Column(db.String(160))
+    notes = db.Column(db.Text)
+    assets = db.relationship("Asset", back_populates="vendor")
+    licenses = db.relationship("License", back_populates="vendor")
+    orders = db.relationship("PurchaseOrder", back_populates="vendor")
 
 
 class Employee(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(120), nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
-    department = db.Column(db.String(80))
+    phone = db.Column(db.String(40))
+    title = db.Column(db.String(80))
+    department_id = db.Column(db.Integer, db.ForeignKey("department.id"))
+    active = db.Column(db.Boolean, nullable=False, default=True)
 
+    department = db.relationship("Department", back_populates="employees")
     assignments = db.relationship("Assignment", back_populates="employee")
 
     @property
     def current_assets(self):
         return [a.asset for a in self.assignments if a.returned_at is None]
 
-    def __repr__(self):
-        return f"<Employee {self.email}>"
-
 
 class Asset(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    asset_tag = db.Column(db.String(40), unique=True, nullable=False)
+    tag = db.Column(db.String(40), unique=True, nullable=False)
     name = db.Column(db.String(120), nullable=False)
     category_id = db.Column(db.Integer, db.ForeignKey("category.id"))
-    serial_number = db.Column(db.String(120))
+    asset_type = db.Column(db.String(60))
+    serial = db.Column(db.String(120))
     manufacturer = db.Column(db.String(80))
     model = db.Column(db.String(120))
-    status = db.Column(db.String(20), nullable=False, default="Available")
-    location = db.Column(db.String(120))
+    status = db.Column(db.String(25), nullable=False, default="Available")
+    condition = db.Column(db.String(15), nullable=False, default="Good")
+    location_id = db.Column(db.Integer, db.ForeignKey("location.id"))
+    department_id = db.Column(db.Integer, db.ForeignKey("department.id"))
+    vendor_id = db.Column(db.Integer, db.ForeignKey("vendor.id"))
     purchase_date = db.Column(db.Date)
     purchase_cost = db.Column(db.Numeric(12, 2))
+    depreciation_years = db.Column(db.Integer, default=5)
     warranty_expiry = db.Column(db.Date)
     notes = db.Column(db.Text)
+    custom_fields = db.Column(db.Text)  # JSON dict
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     category = db.relationship("Category", back_populates="assets")
-    assignments = db.relationship(
-        "Assignment",
-        back_populates="asset",
-        order_by="Assignment.assigned_at.desc()",
-        cascade="all, delete-orphan",
-    )
+    location = db.relationship("Location", back_populates="assets")
+    department = db.relationship("Department", back_populates="assets")
+    vendor = db.relationship("Vendor", back_populates="assets")
+    assignments = db.relationship("Assignment", back_populates="asset",
+                                  order_by="Assignment.assigned_at.desc()",
+                                  cascade="all, delete-orphan")
+    maintenance = db.relationship("Maintenance", back_populates="asset",
+                                  order_by="Maintenance.created_at.desc()",
+                                  cascade="all, delete-orphan")
+    files = db.relationship("AssetFile", back_populates="asset", cascade="all, delete-orphan")
+    transfers = db.relationship("Transfer", back_populates="asset",
+                                order_by="Transfer.at.desc()", cascade="all, delete-orphan")
+    reservations = db.relationship("Reservation", back_populates="asset",
+                                   cascade="all, delete-orphan")
 
     @property
     def current_assignment(self):
@@ -68,20 +198,184 @@ class Asset(db.Model):
     def warranty_expired(self):
         return self.warranty_expiry is not None and self.warranty_expiry < date.today()
 
-    def __repr__(self):
-        return f"<Asset {self.asset_tag}>"
+    @property
+    def custom(self):
+        try:
+            return json.loads(self.custom_fields or "{}")
+        except ValueError:
+            return {}
+
+    @property
+    def current_value(self):
+        if self.purchase_cost is None:
+            return None
+        years = self.depreciation_years or 5
+        if not self.purchase_date or years <= 0:
+            return float(self.purchase_cost)
+        age = (date.today() - self.purchase_date).days / 365.25
+        return round(float(self.purchase_cost) * max(0.0, 1 - age / years), 2)
+
+
+class AssetFile(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    asset_id = db.Column(db.Integer, db.ForeignKey("asset.id"), nullable=False)
+    stored_name = db.Column(db.String(160), nullable=False)
+    orig_name = db.Column(db.String(160), nullable=False)
+    kind = db.Column(db.String(20), nullable=False, default="document")
+    uploaded_by = db.Column(db.Integer, db.ForeignKey("user.id"))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    asset = db.relationship("Asset", back_populates="files")
 
 
 class Assignment(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     asset_id = db.Column(db.Integer, db.ForeignKey("asset.id"), nullable=False)
     employee_id = db.Column(db.Integer, db.ForeignKey("employee.id"), nullable=False)
+    assigned_by = db.Column(db.Integer, db.ForeignKey("user.id"))
     assigned_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    due_at = db.Column(db.Date)
     returned_at = db.Column(db.DateTime)
     notes = db.Column(db.Text)
-
     asset = db.relationship("Asset", back_populates="assignments")
     employee = db.relationship("Employee", back_populates="assignments")
 
-    def __repr__(self):
-        return f"<Assignment asset={self.asset_id} employee={self.employee_id}>"
+    @property
+    def overdue(self):
+        return self.returned_at is None and self.due_at is not None and self.due_at < date.today()
+
+
+class Reservation(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    asset_id = db.Column(db.Integer, db.ForeignKey("asset.id"), nullable=False)
+    employee_id = db.Column(db.Integer, db.ForeignKey("employee.id"), nullable=False)
+    start_date = db.Column(db.Date, nullable=False)
+    end_date = db.Column(db.Date, nullable=False)
+    status = db.Column(db.String(15), nullable=False, default="Active")
+    notes = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    asset = db.relationship("Asset", back_populates="reservations")
+    employee = db.relationship("Employee")
+
+
+class Transfer(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    asset_id = db.Column(db.Integer, db.ForeignKey("asset.id"), nullable=False)
+    from_location_id = db.Column(db.Integer, db.ForeignKey("location.id"))
+    to_location_id = db.Column(db.Integer, db.ForeignKey("location.id"))
+    by_user = db.Column(db.Integer, db.ForeignKey("user.id"))
+    at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    notes = db.Column(db.Text)
+    asset = db.relationship("Asset", back_populates="transfers")
+    from_location = db.relationship("Location", foreign_keys=[from_location_id])
+    to_location = db.relationship("Location", foreign_keys=[to_location_id])
+
+
+class Maintenance(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    asset_id = db.Column(db.Integer, db.ForeignKey("asset.id"), nullable=False)
+    kind = db.Column(db.String(15), nullable=False, default="Corrective")
+    title = db.Column(db.String(160), nullable=False)
+    description = db.Column(db.Text)
+    status = db.Column(db.String(15), nullable=False, default="Scheduled")
+    scheduled_for = db.Column(db.Date)
+    completed_at = db.Column(db.DateTime)
+    technician_id = db.Column(db.Integer, db.ForeignKey("user.id"))
+    cost = db.Column(db.Numeric(12, 2))
+    parts = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    asset = db.relationship("Asset", back_populates="maintenance")
+    technician = db.relationship("User")
+
+
+class License(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(120), nullable=False)
+    vendor_id = db.Column(db.Integer, db.ForeignKey("vendor.id"))
+    key = db.Column(db.String(255))
+    seats = db.Column(db.Integer, nullable=False, default=1)
+    purchase_date = db.Column(db.Date)
+    expiry_date = db.Column(db.Date)
+    cost = db.Column(db.Numeric(12, 2))
+    notes = db.Column(db.Text)
+    vendor = db.relationship("Vendor", back_populates="licenses")
+    assignments = db.relationship("LicenseAssignment", back_populates="license",
+                                  cascade="all, delete-orphan")
+
+    @property
+    def seats_used(self):
+        return len([a for a in self.assignments if a.revoked_at is None])
+
+    @property
+    def compliant(self):
+        return self.seats_used <= self.seats
+
+    @property
+    def expired(self):
+        return self.expiry_date is not None and self.expiry_date < date.today()
+
+
+class LicenseAssignment(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    license_id = db.Column(db.Integer, db.ForeignKey("license.id"), nullable=False)
+    asset_id = db.Column(db.Integer, db.ForeignKey("asset.id"))
+    employee_id = db.Column(db.Integer, db.ForeignKey("employee.id"))
+    assigned_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    revoked_at = db.Column(db.DateTime)
+    license = db.relationship("License", back_populates="assignments")
+    asset = db.relationship("Asset")
+    employee = db.relationship("Employee")
+
+
+class PurchaseOrder(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    number = db.Column(db.String(30), unique=True, nullable=False)
+    vendor_id = db.Column(db.Integer, db.ForeignKey("vendor.id"))
+    status = db.Column(db.String(15), nullable=False, default="Requested")
+    description = db.Column(db.String(200), nullable=False)
+    category_id = db.Column(db.Integer, db.ForeignKey("category.id"))
+    qty = db.Column(db.Integer, nullable=False, default=1)
+    unit_cost = db.Column(db.Numeric(12, 2))
+    expected_date = db.Column(db.Date)
+    requested_by = db.Column(db.Integer, db.ForeignKey("user.id"))
+    notes = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    received_at = db.Column(db.DateTime)
+    vendor = db.relationship("Vendor", back_populates="orders")
+    category = db.relationship("Category")
+    requester = db.relationship("User")
+
+    @property
+    def total(self):
+        if self.unit_cost is None:
+            return None
+        return float(self.unit_cost) * self.qty
+
+
+class InventoryAudit(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(120), nullable=False)
+    started_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    completed_at = db.Column(db.DateTime)
+    by_user = db.Column(db.Integer, db.ForeignKey("user.id"))
+    checks = db.relationship("InventoryCheck", back_populates="audit",
+                             cascade="all, delete-orphan")
+    user = db.relationship("User")
+
+    @property
+    def verified_count(self):
+        return len([c for c in self.checks if c.status == "Verified"])
+
+    @property
+    def missing_count(self):
+        return len([c for c in self.checks if c.status == "Missing"])
+
+
+class InventoryCheck(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    audit_id = db.Column(db.Integer, db.ForeignKey("inventory_audit.id"), nullable=False)
+    asset_id = db.Column(db.Integer, db.ForeignKey("asset.id"), nullable=False)
+    status = db.Column(db.String(10), nullable=False)  # Verified | Missing
+    checked_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    audit = db.relationship("InventoryAudit", back_populates="checks")
+    asset = db.relationship("Asset")
+    __table_args__ = (db.UniqueConstraint("audit_id", "asset_id"),)

@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}{{ t("Activity") }}{% endblock %}
+{% block content %}
+<div class="page-head"><h1>{{ t("Activity") }} & audit log</h1></div>
+<form class="filters no-print" method="get">
+  <select name="action" onchange="this.form.submit()">
+    <option value="">All actions</option>
+    {% for a in actions %}<option value="{{ a }}" {{ 'selected' if action == a }}>{{ a | replace("_", " ") }}</option>{% endfor %}
+  </select>
+</form>
+{% if logs %}
+<div class="card table-wrap"><table>
+  <tr><th>When</th><th>User</th><th>Action</th><th>Entity</th><th>Details</th><th>IP</th></tr>
+  {% for log in logs %}
+  <tr>
+    <td>{{ log.created_at.strftime("%Y-%m-%d %H:%M:%S") }}</td>
+    <td>{{ log.user.name if log.user else "system" }}</td>
+    <td><span class="chip">{{ log.action | replace("_", " ") }}</span></td>
+    <td>{{ log.entity_type or "" }}{{ " #" ~ log.entity_id if log.entity_id }}</td>
+    <td>{{ log.details or "" }}</td>
+    <td class="muted">{{ log.ip or "" }}</td>
+  </tr>
+  {% endfor %}
+</table></div>
+{% else %}<p class="empty">No activity recorded.</p>{% endif %}
+{% endblock %}

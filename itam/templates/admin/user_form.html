@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}{{ "Edit " ~ user.username if user else "New user" }}{% endblock %}
+{% block content %}
+<div class="page-head"><h1>{{ "Edit user" if user else "Register new user" }}</h1></div>
+<div class="card">
+  <form method="post">
+    <div class="form-grid">
+      <div><label for="u-user">Username *</label>
+        <input id="u-user" name="username" required value="{{ user.username if user else '' }}"></div>
+      <div><label for="u-name">Full name *</label>
+        <input id="u-name" name="name" required value="{{ user.name if user else '' }}"></div>
+      <div><label for="u-email">Email *</label>
+        <input id="u-email" name="email" type="email" required value="{{ user.email if user else '' }}"></div>
+      <div><label for="u-role">Role</label>
+        <select id="u-role" name="role">
+          {% for r in roles %}<option {{ 'selected' if user and user.role == r }}>{{ r }}</option>{% endfor %}
+        </select></div>
+      <div><label for="u-pass">{{ "New password (leave blank to keep)" if user else "Password * (8+ characters)" }}</label>
+        <input id="u-pass" name="password" type="password" {{ 'required minlength=8' if not user }} autocomplete="new-password"></div>
+      <div><label>&nbsp;</label>
+        <label style="display:flex;gap:0.4rem;align-items:center;margin:0">
+          <input type="checkbox" name="active" value="1" {{ 'checked' if not user or user.active }}> Active (can log in)</label></div>
+    </div>
+    <div class="form-actions">
+      <button class="btn" type="submit">{{ t("Save") }}</button>
+      <a class="btn secondary" href="{{ url_for('admin.users') }}">{{ t("Cancel") }}</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

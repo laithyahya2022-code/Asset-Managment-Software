@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}{{ t("Vendors") }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ t("Vendors") }}</h1>
+  {% if has_perm("org.manage") %}
+  <a class="btn no-print" href="{{ url_for('org.vendor_form') }}">+ New vendor</a>
+  {% endif %}
+</div>
+{% if rows %}
+<div class="card table-wrap"><table>
+  <tr><th>{{ t("Name") }}</th><th>Contact</th><th>Email</th><th>Phone</th><th>{{ t("Assets") }}</th><th>{{ t("Licenses") }}</th><th>Orders</th></tr>
+  {% for v in rows %}
+  <tr>
+    <td><a href="{{ url_for('org.vendor_detail', vendor_id=v.id) }}">{{ v.name }}</a></td>
+    <td>{{ v.contact_name or "—" }}</td>
+    <td>{{ v.email or "—" }}</td>
+    <td>{{ v.phone or "—" }}</td>
+    <td>{{ v.assets | length }}</td>
+    <td>{{ v.licenses | length }}</td>
+    <td>{{ v.orders | length }}</td>
+  </tr>
+  {% endfor %}
+</table></div>
+{% else %}<p class="empty">No vendors yet.</p>{% endif %}
+{% endblock %}

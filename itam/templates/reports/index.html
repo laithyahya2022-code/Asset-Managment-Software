@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}{{ t("Reports") }}{% endblock %}
+{% block content %}
+<div class="page-head"><h1>{{ t("Reports") }}</h1></div>
+<div class="kpi-grid">
+  {% for name, title in reports.items() %}
+  <a class="kpi" href="{{ url_for('reports.show', name=name) }}">
+    <span class="tile green">{{ icon("report") }}</span>
+    <div><span class="k-label">{{ title }}</span>
+      <span class="k-sub">View · {{ t("Print") }} · {{ t("Export CSV") }}</span></div>
+  </a>
+  {% endfor %}
+</div>
+{% endblock %}

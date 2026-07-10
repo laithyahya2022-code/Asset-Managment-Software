@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}{{ vendor.name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ vendor.name }}</h1>
+  {% if has_perm("org.manage") %}
+  <div class="actions-row no-print">
+    <a class="btn secondary" href="{{ url_for('org.vendor_form', vendor_id=vendor.id) }}">{{ t("Edit") }}</a>
+    <form class="inline" method="post" action="{{ url_for('org.vendor_delete', vendor_id=vendor.id) }}">
+      <button class="btn danger" type="submit" data-confirm="Delete this vendor?">{{ t("Delete") }}</button>
+    </form>
+  </div>
+  {% endif %}
+</div>
+
+<div class="card">
+  <dl class="props">
+    <dt>Contact</dt><dd>{{ vendor.contact_name or "—" }}</dd>
+    <dt>Email</dt><dd>{{ vendor.email or "—" }}</dd>
+    <dt>Phone</dt><dd>{{ vendor.phone or "—" }}</dd>
+    <dt>Website</dt><dd>{% if vendor.website %}<a href="{{ vendor.website }}" rel="noopener" target="_blank">{{ vendor.website }}</a>{% else %}—{% endif %}</dd>
+    <dt>Notes</dt><dd>{{ vendor.notes or "—" }}</dd>
+  </dl>
+</div>
+
+<div class="card">
+  <p class="eyebrow">Purchase history — assets ({{ vendor.assets | length }})</p>
+  {% if vendor.assets %}
+  <div class="table-wrap"><table>
+    <tr><th>Tag</th><th>{{ t("Name") }}</th><th>Purchase date</th><th>Cost</th></tr>
+    {% for a in vendor.assets %}
+    <tr><td><a href="{{ url_for('assets.detail', asset_id=a.id) }}">{{ a.tag }}</a></td>
+        <td>{{ a.name }}</td><td>{{ a.purchase_date or "—" }}</td>
+        <td>{{ "$%.2f" | format(a.purchase_cost) if a.purchase_cost else "—" }}</td></tr>
+    {% endfor %}
+  </table></div>
+  {% else %}<p class="empty">No assets from this vendor.</p>{% endif %}
+</div>
+
+<div class="card">
+  <p class="eyebrow">Purchase orders ({{ vendor.orders | length }})</p>
+  {% if vendor.orders %}
+  <div class="table-wrap"><table>
+    <tr><th>Number</th><th>Description</th><th>Qty</th><th>Total</th><th>{{ t("Status") }}</th></tr>
+    {% for po in vendor.orders %}
+    <tr><td>{{ po.number }}</td><td>{{ po.description }}</td><td>{{ po.qty }}</td>
+        <td>{{ "$%.2f" | format(po.total) if po.total is not none else "—" }}</td><td>{{ po.status }}</td></tr>
+    {% endfor %}
+  </table></div>
+  {% else %}<p class="empty">No purchase orders.</p>{% endif %}
+</div>
+{% endblock %}

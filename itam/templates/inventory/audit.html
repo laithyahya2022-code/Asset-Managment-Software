@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}{{ audit.name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ audit.name }}</h1>
+  <div class="actions-row no-print">
+    <span class="muted">{{ audit.verified_count }} verified · {{ audit.missing_count }} missing
+      · {{ assets | length - checked | length }} unchecked</span>
+    {% if not audit.completed_at and has_perm("inventory.manage") %}
+    <form class="inline" method="post" action="{{ url_for('ops.inventory_complete', audit_id=audit.id) }}">
+      <button class="btn" type="submit" data-confirm="Complete this audit?">Complete audit</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card table-wrap"><table>
+  <tr><th>Tag</th><th>{{ t("Name") }}</th><th>{{ t("Location") }}</th><th>Result</th><th></th></tr>
+  {% for a in assets %}
+  <tr>
+    <td><a href="{{ url_for('assets.detail', asset_id=a.id) }}">{{ a.tag }}</a></td>
+    <td>{{ a.name }}</td>
+    <td>{{ a.location.path if a.location else "—" }}</td>
+    <td>
+      {% if checked.get(a.id) == "Verified" %}<span class="badge s-available">Verified</span>
+      {% elif checked.get(a.id) == "Missing" %}<span class="badge s-missing">{{ t("Missing") }}</span>
+      {% else %}<span class="muted">—</span>{% endif %}
+    </td>
+    <td class="no-print">
+      {% if not audit.completed_at and has_perm("inventory.manage") %}
+      <form class="inline" method="post" action="{{ url_for('ops.inventory_check', audit_id=audit.id) }}">
+        <input type="hidden" name="asset_id" value="{{ a.id }}">
+        <button class="btn secondary sm" name="result" value="verified" type="submit">Found</button>
+        <button class="btn danger sm" name="result" value="missing" type="submit">{{ t("Missing") }}</button>
+      </form>
+      {% endif %}
+    </td>
+  </tr>
+  {% endfor %}
+</table></div>
+{% endblock %}

@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}{{ t("Maintenance") }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ t("Maintenance") }}</h1>
+  {% if has_perm("maintenance.manage") %}
+  <a class="btn no-print" href="{{ url_for('ops.maintenance_new') }}">+ New task</a>
+  {% endif %}
+</div>
+
+<div class="filters no-print">
+  <a class="btn {{ 'secondary' if status }}" href="{{ url_for('ops.maintenance_list') }}">All</a>
+  {% for s in statuses %}
+  <a class="btn {{ 'secondary' if status != s }}" href="{{ url_for('ops.maintenance_list', status=s) }}">{{ s }}</a>
+  {% endfor %}
+</div>
+
+{% if rows %}
+<div class="card table-wrap"><table>
+  <tr><th>Asset</th><th>Title</th><th>Kind</th><th>{{ t("Status") }}</th><th>Scheduled</th>
+      <th>Technician</th><th>Cost</th><th></th></tr>
+  {% for m in rows %}
+  <tr>
+    <td><a href="{{ url_for('assets.detail', asset_id=m.asset_id) }}">{{ m.asset.tag }}</a></td>
+    <td>{{ m.title }}{% if m.parts %} <span class="muted">(parts: {{ m.parts }})</span>{% endif %}</td>
+    <td><span class="chip">{{ m.kind }}</span></td>
+    <td>{{ m.status }}{% if m.status == "Scheduled" and m.scheduled_for and m.scheduled_for < today %} <span class="red">late</span>{% endif %}</td>
+    <td>{{ m.scheduled_for or "—" }}</td>
+    <td>{{ m.technician.name if m.technician else "—" }}</td>
+    <td>{{ "$%.2f" | format(m.cost) if m.cost else "—" }}</td>
+    <td class="no-print">
+      {% if has_perm("maintenance.manage") and m.status not in ("Completed", "Cancelled") %}
+      <form class="inline" method="post" action="{{ url_for('ops.maintenance_status', mid=m.id) }}">
+        {% if m.status == "Scheduled" %}
+        <button class="btn secondary sm" name="status" value="In Progress" type="submit">Start</button>
+        {% endif %}
+        <button class="btn sm" name="status" value="Completed" type="submit">Complete</button>
+        <button class="btn secondary sm" name="status" value="Cancelled" type="submit">{{ t("Cancel") }}</button>
+      </form>
+      {% endif %}
+    </td>
+  </tr>
+  {% endfor %}
+</table></div>
+{% else %}<p class="empty">No maintenance tasks.</p>{% endif %}
+{% endblock %}

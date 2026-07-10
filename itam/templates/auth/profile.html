@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}{{ t("Profile") }}{% endblock %}
+{% block content %}
+<div class="page-head"><h1>{{ t("Profile") }}</h1></div>
+<div class="two-col">
+  <div class="card">
+    <p class="eyebrow">Account</p>
+    <form method="post">
+      <input type="hidden" name="form" value="profile">
+      <label for="p-name">Name</label>
+      <input id="p-name" name="name" required value="{{ g.user.name }}">
+      <label for="p-email">Email</label>
+      <input id="p-email" name="email" type="email" required value="{{ g.user.email }}">
+      <p class="muted">Username: <strong>{{ g.user.username }}</strong> · Role: <strong>{{ g.user.role }}</strong>
+      {% if g.user.last_login %}· Last login {{ g.user.last_login.strftime("%Y-%m-%d %H:%M") }}{% endif %}</p>
+      <button class="btn" type="submit">{{ t("Save") }}</button>
+    </form>
+  </div>
+  <div class="card">
+    <p class="eyebrow">Change password</p>
+    <form method="post">
+      <input type="hidden" name="form" value="password">
+      <label for="c-cur">Current password</label>
+      <input id="c-cur" name="current" type="password" required>
+      <label for="c-new">New password (8+ characters)</label>
+      <input id="c-new" name="password" type="password" required minlength="8">
+      <label for="c-conf">Confirm new password</label>
+      <input id="c-conf" name="confirm" type="password" required minlength="8">
+      <button class="btn" type="submit">Change password</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

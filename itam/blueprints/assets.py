@@ -1,0 +1,460 @@
+import csv
+import io
+import json
+import os
+import uuid
+from datetime import date, datetime, timedelta
+
+from flask import (Blueprint, Response, current_app, flash, g, redirect,
+                   render_template, request, send_from_directory, url_for)
+from sqlalchemy import or_
+from werkzeug.utils import secure_filename
+
+from ..models import (ASSET_CONDITIONS, ASSET_STATUSES, Asset, Assignment,
+                      Category, Department, Employee, Location, Reservation,
+                      Transfer, Vendor, db)
+from ..security import has_perm, login_required, perm_required
+from ..utils import (barcode_svg, csv_response, custom_field_names, get_setting,
+                     log_activity, parse_date, qr_svg)
+
+bp = Blueprint("assets", __name__, url_prefix="/assets")
+
+IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"}
+ALLOWED_EXTS = IMAGE_EXTS | {".pdf", ".doc", ".docx", ".xls", ".xlsx", ".txt", ".csv"}
+
+
+def _lookups():
+    return dict(
+        categories=db.session.scalars(db.select(Category).order_by(Category.name)).all(),
+        departments=db.session.scalars(db.select(Department).order_by(Department.name)).all(),
+        locations=db.session.scalars(db.select(Location).order_by(Location.name)).all(),
+        vendors=db.session.scalars(db.select(Vendor).order_by(Vendor.name)).all(),
+        employees=db.session.scalars(db.select(Employee).where(Employee.active)
+                                     .order_by(Employee.name)).all(),
+        statuses=ASSET_STATUSES, conditions=ASSET_CONDITIONS,
+        custom_names=custom_field_names(),
+    )
+
+
+def _from_form(a, form):
+    a.tag = form["tag"].strip()
+    a.name = form["name"].strip()
+    a.category_id = int(form["category_id"]) if form.get("category_id") else None
+    a.asset_type = form.get("asset_type", "").strip() or None
+    a.serial = form.get("serial", "").strip() or None
+    a.manufacturer = form.get("manufacturer", "").strip() or None
+    a.model = form.get("model", "").strip() or None
+    if form.get("status") in ASSET_STATUSES:
+        a.status = form["status"]
+    if form.get("condition") in ASSET_CONDITIONS:
+        a.condition = form["condition"]
+    a.location_id = int(form["location_id"]) if form.get("location_id") else None
+    a.department_id = int(form["department_id"]) if form.get("department_id") else None
+    a.vendor_id = int(form["vendor_id"]) if form.get("vendor_id") else None
+    a.purchase_date = parse_date(form.get("purchase_date"))
+    a.purchase_cost = form.get("purchase_cost") or None
+    a.depreciation_years = int(form.get("depreciation_years") or 5)
+    a.warranty_expiry = parse_date(form.get("warranty_expiry"))
+    a.notes = form.get("notes", "").strip() or None
+    custom = {name: form.get(f"custom_{i}", "").strip()
+              for i, name in enumerate(custom_field_names())}
+    a.custom_fields = json.dumps({k: v for k, v in custom.items() if v})
+
+
+def _filtered_assets(args):
+    stmt = db.select(Asset).order_by(Asset.tag)
+    q = args.get("q", "").strip()
+    if q:
+        like = f"%{q}%"
+        stmt = stmt.where(or_(Asset.tag.ilike(like), Asset.name.ilike(like),
+                              Asset.serial.ilike(like), Asset.manufacturer.ilike(like),
+                              Asset.model.ilike(like), Asset.asset_type.ilike(like)))
+    if args.get("status"):
+        stmt = stmt.where(Asset.status == args["status"])
+    if args.get("category"):
+        stmt = stmt.where(Asset.category_id == int(args["category"]))
+    if args.get("department"):
+        stmt = stmt.where(Asset.department_id == int(args["department"]))
+    if args.get("location"):
+        stmt = stmt.where(Asset.location_id == int(args["location"]))
+    if args.get("condition"):
+        stmt = stmt.where(Asset.condition == args["condition"])
+    return db.session.scalars(stmt).all()
+
+
+@bp.route("/")
+@perm_required("assets.view")
+def list_():
+    return render_template("assets/list.html", assets=_filtered_assets(request.args),
+                           args=request.args, **_lookups())
+
+
+@bp.route("/export.csv")
+@perm_required("assets.view")
+def export_csv():
+    rows = [(a.tag, a.name, a.category.name if a.category else "", a.asset_type or "",
+             a.serial or "", a.manufacturer or "", a.model or "", a.status, a.condition,
+             a.location.path if a.location else "", a.department.name if a.department else "",
+             a.vendor.name if a.vendor else "", a.purchase_date or "", a.purchase_cost or "",
+             a.warranty_expiry or "", a.current_value or "", a.notes or "")
+            for a in _filtered_assets(request.args)]
+    return csv_response(
+        ["Tag", "Name", "Category", "Type", "Serial", "Manufacturer", "Model", "Status",
+         "Condition", "Location", "Department", "Vendor", "Purchase Date", "Purchase Cost",
+         "Warranty Expiry", "Current Value", "Notes"], rows, "assets.csv")
+
+
+@bp.route("/new", methods=["GET", "POST"])
+@perm_required("assets.manage")
+def new():
+    source = None
+    if request.args.get("clone"):
+        source = db.session.get(Asset, int(request.args["clone"]))
+    if request.method == "POST":
+        tag = request.form["tag"].strip()
+        if db.session.scalar(db.select(Asset).where(Asset.tag == tag)):
+            flash(f'Asset tag "{tag}" already exists.', "error")
+        else:
+            a = Asset()
+            _from_form(a, request.form)
+            db.session.add(a)
+            db.session.flush()
+            log_activity("created", "asset", a.id, f"{a.tag} — {a.name}")
+            db.session.commit()
+            flash(f"Asset {a.tag} created.", "success")
+            return redirect(url_for("assets.detail", asset_id=a.id))
+    return render_template("assets/form.html", asset=None, source=source, **_lookups())
+
+
+@bp.route("/<int:asset_id>")
+@perm_required("assets.view")
+def detail(asset_id):
+    a = db.get_or_404(Asset, asset_id)
+    return render_template("assets/detail.html", asset=a, today=date.today(),
+                           default_due=(date.today() + timedelta(
+                               days=int(get_setting("checkout_days") or 30))),
+                           image_exts=IMAGE_EXTS, **_lookups())
+
+
+@bp.route("/<int:asset_id>/edit", methods=["GET", "POST"])
+@perm_required("assets.manage")
+def edit(asset_id):
+    a = db.get_or_404(Asset, asset_id)
+    if request.method == "POST":
+        tag = request.form["tag"].strip()
+        other = db.session.scalar(db.select(Asset).where(Asset.tag == tag))
+        if other and other.id != a.id:
+            flash(f'Asset tag "{tag}" already exists.', "error")
+        else:
+            _from_form(a, request.form)
+            log_activity("updated", "asset", a.id, a.tag)
+            db.session.commit()
+            flash(f"Asset {a.tag} updated.", "success")
+            return redirect(url_for("assets.detail", asset_id=a.id))
+    return render_template("assets/form.html", asset=a, source=None, **_lookups())
+
+
+@bp.post("/<int:asset_id>/delete")
+@perm_required("assets.manage")
+def delete(asset_id):
+    a = db.get_or_404(Asset, asset_id)
+    log_activity("deleted", "asset", a.id, a.tag)
+    db.session.delete(a)
+    db.session.commit()
+    flash(f"Asset {a.tag} deleted.", "success")
+    return redirect(url_for("assets.list_"))
+
+
+# ----------------------------------------------------------------- categories
+
+@bp.route("/categories", methods=["GET", "POST"])
+@perm_required("assets.view")
+def categories():
+    if request.method == "POST":
+        if not has_perm("assets.manage"):
+            flash("You do not have permission to do that.", "error")
+            return redirect(url_for("assets.categories"))
+        name = request.form["name"].strip()
+        if name and not db.session.scalar(db.select(Category).where(Category.name == name)):
+            db.session.add(Category(name=name))
+            log_activity("category_created", "category", None, name)
+            db.session.commit()
+            flash(f'Category "{name}" created.', "success")
+        else:
+            flash("Category name is empty or already exists.", "error")
+        return redirect(url_for("assets.categories"))
+    rows = db.session.scalars(db.select(Category).order_by(Category.name)).all()
+    return render_template("assets/categories.html", rows=rows)
+
+
+@bp.post("/categories/<int:cat_id>/delete")
+@perm_required("assets.manage")
+def category_delete(cat_id):
+    cat = db.get_or_404(Category, cat_id)
+    if cat.assets:
+        flash("Category is in use by assets.", "error")
+    else:
+        db.session.delete(cat)
+        db.session.commit()
+        flash("Category deleted.", "success")
+    return redirect(url_for("assets.categories"))
+
+
+# ------------------------------------------------------------ lifecycle ops
+
+@bp.post("/<int:asset_id>/checkout")
+@perm_required("checkout.manage")
+def checkout(asset_id):
+    a = db.get_or_404(Asset, asset_id)
+    if a.current_assignment or a.status in ("Retired", "Missing"):
+        flash("This asset cannot be checked out.", "error")
+        return redirect(url_for("assets.detail", asset_id=a.id))
+    emp = db.get_or_404(Employee, int(request.form["employee_id"]))
+    db.session.add(Assignment(asset=a, employee=emp, assigned_by=g.user.id,
+                              due_at=parse_date(request.form.get("due_at")),
+                              notes=request.form.get("notes", "").strip() or None))
+    a.status = "Checked Out"
+    log_activity("checked_out", "asset", a.id, f"{a.tag} → {emp.name}")
+    db.session.commit()
+    flash(f"Checked out to {emp.name}.", "success")
+    return redirect(url_for("assets.detail", asset_id=a.id))
+
+
+@bp.post("/<int:asset_id>/checkin")
+@perm_required("checkout.manage")
+def checkin(asset_id):
+    a = db.get_or_404(Asset, asset_id)
+    asg = a.current_assignment
+    if not asg:
+        flash("Asset is not checked out.", "error")
+        return redirect(url_for("assets.detail", asset_id=a.id))
+    asg.returned_at = datetime.utcnow()
+    a.status = "Available"
+    log_activity("checked_in", "asset", a.id, f"{a.tag} ← {asg.employee.name}")
+    db.session.commit()
+    flash(f"Checked in from {asg.employee.name}.", "success")
+    return redirect(url_for("assets.detail", asset_id=a.id))
+
+
+@bp.post("/<int:asset_id>/transfer")
+@perm_required("checkout.manage")
+def transfer(asset_id):
+    a = db.get_or_404(Asset, asset_id)
+    to_id = int(request.form["location_id"])
+    db.session.add(Transfer(asset=a, from_location_id=a.location_id,
+                            to_location_id=to_id, by_user=g.user.id,
+                            notes=request.form.get("notes", "").strip() or None))
+    a.location_id = to_id
+    log_activity("transferred", "asset", a.id, a.tag)
+    db.session.commit()
+    flash("Asset transferred.", "success")
+    return redirect(url_for("assets.detail", asset_id=a.id))
+
+
+@bp.post("/<int:asset_id>/reserve")
+@perm_required("checkout.manage")
+def reserve(asset_id):
+    a = db.get_or_404(Asset, asset_id)
+    start = parse_date(request.form["start_date"])
+    end = parse_date(request.form["end_date"])
+    if not start or not end or end < start:
+        flash("Enter a valid reservation period.", "error")
+        return redirect(url_for("assets.detail", asset_id=a.id))
+    db.session.add(Reservation(asset=a, employee_id=int(request.form["employee_id"]),
+                               start_date=start, end_date=end,
+                               notes=request.form.get("notes", "").strip() or None))
+    log_activity("reserved", "asset", a.id, a.tag)
+    db.session.commit()
+    flash("Reservation created.", "success")
+    return redirect(url_for("assets.detail", asset_id=a.id))
+
+
+# ------------------------------------------------------------------ files
+
+@bp.post("/<int:asset_id>/files")
+@perm_required("assets.manage")
+def upload_file(asset_id):
+    a = db.get_or_404(Asset, asset_id)
+    f = request.files.get("file")
+    if not f or not f.filename:
+        flash("Choose a file to upload.", "error")
+        return redirect(url_for("assets.detail", asset_id=a.id))
+    ext = os.path.splitext(f.filename)[1].lower()
+    if ext not in ALLOWED_EXTS:
+        flash(f"File type {ext} is not allowed.", "error")
+        return redirect(url_for("assets.detail", asset_id=a.id))
+    stored = f"{uuid.uuid4().hex}{ext}"
+    f.save(os.path.join(current_app.config["UPLOAD_FOLDER"], stored))
+    from ..models import AssetFile
+    db.session.add(AssetFile(asset=a, stored_name=stored,
+                             orig_name=secure_filename(f.filename) or f"file{ext}",
+                             kind=request.form.get("kind", "document"),
+                             uploaded_by=g.user.id))
+    log_activity("file_uploaded", "asset", a.id, f.filename)
+    db.session.commit()
+    flash("File uploaded.", "success")
+    return redirect(url_for("assets.detail", asset_id=a.id))
+
+
+@bp.route("/files/<int:file_id>")
+@perm_required("assets.view")
+def get_file(file_id):
+    from ..models import AssetFile
+    af = db.get_or_404(AssetFile, file_id)
+    return send_from_directory(current_app.config["UPLOAD_FOLDER"], af.stored_name,
+                               download_name=af.orig_name,
+                               as_attachment=request.args.get("dl") == "1")
+
+
+@bp.post("/files/<int:file_id>/delete")
+@perm_required("assets.manage")
+def delete_file(file_id):
+    from ..models import AssetFile
+    af = db.get_or_404(AssetFile, file_id)
+    asset_id = af.asset_id
+    try:
+        os.remove(os.path.join(current_app.config["UPLOAD_FOLDER"], af.stored_name))
+    except OSError:
+        pass
+    db.session.delete(af)
+    db.session.commit()
+    flash("File deleted.", "success")
+    return redirect(url_for("assets.detail", asset_id=asset_id))
+
+
+# ------------------------------------------------------------ QR / barcode
+
+@bp.route("/<int:asset_id>/qr.svg")
+@perm_required("assets.view")
+def qr(asset_id):
+    a = db.get_or_404(Asset, asset_id)
+    return Response(qr_svg(get_setting("qr_prefix") + a.tag), mimetype="image/svg+xml")
+
+
+@bp.route("/<int:asset_id>/barcode.svg")
+@perm_required("assets.view")
+def barcode(asset_id):
+    a = db.get_or_404(Asset, asset_id)
+    return Response(barcode_svg(a.tag), mimetype="image/svg+xml")
+
+
+@bp.route("/labels")
+@perm_required("assets.view")
+def labels():
+    ids = request.args.getlist("id", type=int)
+    stmt = db.select(Asset).order_by(Asset.tag)
+    if ids:
+        stmt = stmt.where(Asset.id.in_(ids))
+    return render_template("assets/labels.html",
+                           assets=db.session.scalars(stmt).all())
+
+
+# ------------------------------------------------------------------ bulk
+
+@bp.post("/bulk")
+@perm_required("assets.manage")
+def bulk():
+    ids = request.form.getlist("id", type=int)
+    action = request.form.get("action")
+    if not ids:
+        flash("Select at least one asset.", "error")
+        return redirect(url_for("assets.list_"))
+    if action == "labels":
+        return redirect(url_for("assets.labels", id=ids))
+    assets = db.session.scalars(db.select(Asset).where(Asset.id.in_(ids))).all()
+    if action == "delete":
+        for a in assets:
+            log_activity("deleted", "asset", a.id, a.tag)
+            db.session.delete(a)
+        flash(f"{len(assets)} assets deleted.", "success")
+    elif action and action.startswith("status:"):
+        status = action.split(":", 1)[1]
+        if status in ASSET_STATUSES:
+            for a in assets:
+                a.status = status
+                log_activity("updated", "asset", a.id, f"{a.tag} status → {status}")
+            flash(f"{len(assets)} assets set to {status}.", "success")
+    db.session.commit()
+    return redirect(url_for("assets.list_"))
+
+
+# ------------------------------------------------------------ import (CSV)
+
+IMPORT_COLS = ["tag", "name", "category", "type", "serial", "manufacturer", "model",
+               "status", "condition", "purchase_date", "purchase_cost", "warranty_expiry"]
+
+
+@bp.route("/import", methods=["GET", "POST"])
+@perm_required("assets.manage")
+def import_():
+    preview, errors, token = None, [], None
+    if request.method == "POST" and "file" in request.files:
+        f = request.files["file"]
+        raw = f.read().decode("utf-8-sig", errors="replace")
+        token = f"import-{uuid.uuid4().hex}.csv"
+        with open(os.path.join(current_app.config["UPLOAD_FOLDER"], token), "w",
+                  encoding="utf-8") as out:
+            out.write(raw)
+        preview, errors = _validate_import(raw)
+    elif request.method == "POST" and request.form.get("token"):
+        token_name = os.path.basename(request.form["token"])
+        path = os.path.join(current_app.config["UPLOAD_FOLDER"], token_name)
+        with open(path, encoding="utf-8") as fh:
+            raw = fh.read()
+        rows, errors = _validate_import(raw)
+        created = 0
+        for r in rows:
+            if r["_error"]:
+                continue
+            a = Asset(tag=r["tag"], name=r["name"], serial=r["serial"] or None,
+                      asset_type=r["type"] or None, manufacturer=r["manufacturer"] or None,
+                      model=r["model"] or None,
+                      status=r["status"] if r["status"] in ASSET_STATUSES else "Available",
+                      condition=r["condition"] if r["condition"] in ASSET_CONDITIONS else "Good",
+                      purchase_date=r["_pdate"], purchase_cost=r["purchase_cost"] or None,
+                      warranty_expiry=r["_wdate"], category_id=r["_cat_id"])
+            db.session.add(a)
+            created += 1
+        log_activity("imported", "asset", None, f"{created} assets from CSV")
+        db.session.commit()
+        os.remove(path)
+        flash(f"Imported {created} assets ({len([r for r in rows if r['_error']])} rows skipped).",
+              "success")
+        return redirect(url_for("assets.list_"))
+    return render_template("assets/import.html", preview=preview, errors=errors,
+                           token=token, cols=IMPORT_COLS)
+
+
+def _validate_import(raw):
+    errors = []
+    reader = csv.DictReader(io.StringIO(raw))
+    field_map = { (fn or "").strip().lower().replace(" ", "_"): fn
+                  for fn in (reader.fieldnames or []) }
+    if "tag" not in field_map or "name" not in field_map:
+        return [], ['CSV must include at least "tag" and "name" columns.']
+    cats = {c.name.lower(): c.id for c in db.session.scalars(db.select(Category))}
+    existing = {t.lower() for (t,) in db.session.execute(db.select(Asset.tag)).all()}
+    seen, rows = set(), []
+    for i, rec in enumerate(reader, start=2):
+        row = {c: (rec.get(field_map.get(c, ""), "") or "").strip() for c in IMPORT_COLS}
+        err = None
+        if not row["tag"] or not row["name"]:
+            err = "missing tag or name"
+        elif row["tag"].lower() in existing or row["tag"].lower() in seen:
+            err = "duplicate tag"
+        row["_pdate"] = row["_wdate"] = None
+        try:
+            row["_pdate"] = parse_date(row["purchase_date"])
+            row["_wdate"] = parse_date(row["warranty_expiry"])
+        except ValueError:
+            err = err or "bad date (use YYYY-MM-DD)"
+        row["_cat_id"] = cats.get(row["category"].lower()) if row["category"] else None
+        if row["category"] and row["_cat_id"] is None:
+            err = err or f'unknown category "{row["category"]}"'
+        row["_line"], row["_error"] = i, err
+        if err:
+            errors.append(f"Row {i}: {err}")
+        else:
+            seen.add(row["tag"].lower())
+        rows.append(row)
+    return rows, errors

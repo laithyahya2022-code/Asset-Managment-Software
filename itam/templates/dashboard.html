@@ -1,73 +1,96 @@
 {% extends "base.html" %}
-{% block title %}Dashboard{% endblock %}
+{% from "_icons.html" import icon %}
+{% block title %}{{ t("Dashboard") }}{% endblock %}
 {% block content %}
-<h1>Dashboard</h1>
-
-<div class="stat-grid">
-  <div class="stat"><div class="value">{{ total }}</div><div class="label">Total assets</div></div>
-  {% for s in statuses %}
-  <div class="stat"><div class="value">{{ by_status.get(s, 0) }}</div><div class="label">{{ s }}</div></div>
-  {% endfor %}
+<div class="page-head">
+  <h1>{{ t("Dashboard") }}</h1>
+  <div class="actions-row no-print">
+    {% if has_perm("assets.manage") %}<a class="btn" href="{{ url_for('assets.new') }}">+ {{ t("Add Asset") }}</a>{% endif %}
+    <a class="btn secondary" href="{{ url_for('main.scanner') }}">{{ t("QR Scanner") }}</a>
+    {% if has_perm("reports.view") %}<a class="btn secondary" href="{{ url_for('reports.index') }}">{{ t("Reports") }}</a>{% endif %}
+  </div>
 </div>
 
-<div class="card">
-  <h2 style="margin-top:0">Assets by category</h2>
-  {% if by_category %}
-  <table>
-    <tr><th>Category</th><th>Assets</th></tr>
-    {% for name, count in by_category %}
-    <tr><td>{{ name }}</td><td>{{ count }}</td></tr>
-    {% endfor %}
-  </table>
-  {% else %}<p class="muted">No categorized assets yet.</p>{% endif %}
+<div class="kpi-grid">
+  <a class="kpi" href="{{ url_for('assets.list_') }}">
+    <span class="tile green">{{ icon("asset") }}</span>
+    <div><span class="k-label">{{ t("Total Assets") }}</span><span class="k-value">{{ total }}</span>
+    <span class="k-sub">{{ added_month }} added this month</span></div>
+  </a>
+  <a class="kpi" href="{{ url_for('ops.checkouts') }}">
+    <span class="tile blue">{{ icon("checkout") }}</span>
+    <div><span class="k-label">{{ t("Checked Out") }}</span><span class="k-value">{{ counts.get("Checked Out", 0) }}</span>
+    <span class="k-sub {{ 'red' if overdue }}">{{ overdue }} {{ t("Overdue") | lower }}</span></div>
+  </a>
+  <a class="kpi" href="{{ url_for('ops.maintenance_list') }}">
+    <span class="tile orange">{{ icon("wrench") }}</span>
+    <div><span class="k-label">{{ t("Under Maintenance") }}</span><span class="k-value">{{ counts.get("Under Maintenance", 0) }}</span>
+    <span class="k-sub">{{ scheduled }} tasks scheduled</span></div>
+  </a>
+  <a class="kpi" href="{{ url_for('reports.show', name='warranty') }}">
+    <span class="tile red">{{ icon("alert") }}</span>
+    <div><span class="k-label">{{ t("Expiring Warranties") }}</span><span class="k-value">{{ expiring }}</span>
+    <span class="k-sub red">in the next 90 days</span></div>
+  </a>
+  <a class="kpi" href="{{ url_for('reports.show', name='financial') }}">
+    <span class="tile deepgreen">{{ icon("dollar") }}</span>
+    <div><span class="k-label">{{ t("Total Asset Value") }}</span><span class="k-value">{{ value_short }}</span>
+    <span class="k-sub">{{ counts.get("Available", 0) }} assets available</span></div>
+  </a>
+  <a class="kpi" href="{{ url_for('ops.licenses') }}">
+    <span class="tile purple">{{ icon("license") }}</span>
+    <div><span class="k-label">{{ t("Active Licenses") }}</span><span class="k-value">{{ active_lic }}</span>
+    <span class="k-sub">{{ lic_soon }} expiring soon</span></div>
+  </a>
+  <a class="kpi" href="{{ url_for('assets.list_', status='Available') }}">
+    <span class="tile teal">{{ icon("check") }}</span>
+    <div><span class="k-label">{{ t("Available Assets") }}</span><span class="k-value">{{ counts.get("Available", 0) }}</span>
+    <span class="k-sub">Ready for checkout</span></div>
+  </a>
+  <a class="kpi" href="{{ url_for('assets.list_', status='Retired') }}">
+    <span class="tile grey">{{ icon("box") }}</span>
+    <div><span class="k-label">{{ t("Retired / Disposed") }}</span><span class="k-value">{{ counts.get("Retired", 0) }}</span>
+    <span class="k-sub">End of life assets</span></div>
+  </a>
 </div>
 
-<div class="card">
-  <h2 style="margin-top:0">Upcoming / expired warranties</h2>
-  {% if expiring %}
-  <table>
-    <tr><th>Asset</th><th>Warranty expiry</th></tr>
-    {% for asset in expiring %}
-    <tr>
-      <td><a href="{{ url_for('itam.asset_detail', asset_id=asset.id) }}">{{ asset.asset_tag }}</a> — {{ asset.name }}</td>
-      <td>{% if asset.warranty_expiry < today %}<span class="warn">{{ asset.warranty_expiry }} (expired)</span>{% else %}{{ asset.warranty_expiry }}{% endif %}</td>
-    </tr>
-    {% endfor %}
-  </table>
-  {% else %}<p class="muted">No warranty data.</p>{% endif %}
+<div class="two-col">
+  <div class="card">
+    <p class="eyebrow">{{ t("Assets by Category") }}</p>
+    {{ cat_chart }}
+  </div>
+  <div class="card">
+    <p class="eyebrow">{{ t("Assets by Status") }}</p>
+    {{ donut }}
+  </div>
 </div>
 
+{% if alerts %}
 <div class="card">
-  <h2 style="margin-top:0">Recently added assets</h2>
-  {% if recent_assets %}
-  <table>
-    <tr><th>Tag</th><th>Name</th><th>Status</th><th>Added</th></tr>
-    {% for asset in recent_assets %}
-    <tr>
-      <td><a href="{{ url_for('itam.asset_detail', asset_id=asset.id) }}">{{ asset.asset_tag }}</a></td>
-      <td>{{ asset.name }}</td>
-      <td><span class="badge badge-{{ asset.status|lower|replace(' ', '-') }}">{{ asset.status }}</span></td>
-      <td>{{ asset.created_at.strftime("%Y-%m-%d") }}</td>
-    </tr>
+  <p class="eyebrow">{{ t("Notifications") }}</p>
+  <ul class="alert-list">
+    {% for n in alerts %}
+    <li><span class="badge b-{{ n.kind | lower }}">{{ n.kind }}</span>
+      {% if n.link %}<a href="{{ n.link }}">{{ n.message }}</a>{% else %}{{ n.message }}{% endif %}
+      <span class="muted">{{ n.created_at.strftime("%Y-%m-%d") }}</span></li>
     {% endfor %}
-  </table>
-  {% else %}<p class="muted">No assets yet. <a href="{{ url_for('itam.asset_new') }}">Add one</a>.</p>{% endif %}
+  </ul>
+  <a class="muted" href="{{ url_for('main.notifications') }}">View all →</a>
 </div>
+{% endif %}
 
 <div class="card">
-  <h2 style="margin-top:0">Recent assignments</h2>
-  {% if recent_assignments %}
-  <table>
-    <tr><th>Asset</th><th>Employee</th><th>Checked out</th><th>Returned</th></tr>
-    {% for a in recent_assignments %}
-    <tr>
-      <td><a href="{{ url_for('itam.asset_detail', asset_id=a.asset.id) }}">{{ a.asset.asset_tag }}</a></td>
-      <td><a href="{{ url_for('itam.employee_detail', employee_id=a.employee.id) }}">{{ a.employee.name }}</a></td>
-      <td>{{ a.assigned_at.strftime("%Y-%m-%d %H:%M") }}</td>
-      <td>{{ a.returned_at.strftime("%Y-%m-%d %H:%M") if a.returned_at else "—" }}</td>
-    </tr>
+  <p class="eyebrow">{{ t("Recent Activity") }}</p>
+  {% if recent %}
+  <ul class="feed">
+    {% for log in recent %}
+    <li>
+      <span class="chip">{{ log.action | replace("_", " ") }}</span>
+      <span>{{ log.details or (log.entity_type ~ " #" ~ log.entity_id if log.entity_type else "") }}</span>
+      <span class="muted">{{ log.user.name if log.user else "system" }} · {{ log.created_at.strftime("%Y-%m-%d %H:%M") }}</span>
+    </li>
     {% endfor %}
-  </table>
-  {% else %}<p class="muted">No assignments yet.</p>{% endif %}
+  </ul>
+  {% else %}<p class="empty">Nothing yet.</p>{% endif %}
 </div>
 {% endblock %}

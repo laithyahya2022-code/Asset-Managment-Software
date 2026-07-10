@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ title }}</h1>
+  <div class="actions-row no-print">
+    <a class="btn secondary" href="{{ url_for('reports.show', name=name, format='csv') }}">{{ t("Export CSV") }}</a>
+    <button class="btn secondary" onclick="window.print()">{{ t("Print") }}</button>
+    <a class="btn secondary" href="{{ url_for('reports.index') }}">← {{ t("Reports") }}</a>
+  </div>
+</div>
+<div class="card table-wrap">
+  <table>
+    <tr>{% for h in headers %}<th>{{ h }}</th>{% endfor %}</tr>
+    {% for row in rows %}
+    <tr>{% for cell in row %}<td>{{ cell }}</td>{% endfor %}</tr>
+    {% else %}
+    <tr><td colspan="{{ headers | length }}" class="empty">No data.</td></tr>
+    {% endfor %}
+  </table>
+</div>
+<p class="muted">{{ rows | length }} rows · generated {{ now.strftime("%Y-%m-%d %H:%M") }} UTC</p>
+{% endblock %}

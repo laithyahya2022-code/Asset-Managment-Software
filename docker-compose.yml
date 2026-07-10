@@ -1,0 +1,27 @@
+services:
+  web:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
+      DATABASE_URL: postgresql://itam:${DB_PASSWORD:-itam}@db:5432/itam
+    volumes:
+      - uploads:/app/instance
+    depends_on:
+      - db
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: itam
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-itam}
+      POSTGRES_DB: itam
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+
+volumes:
+  uploads:
+  pgdata:

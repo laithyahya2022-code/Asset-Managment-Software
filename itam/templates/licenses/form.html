@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}{{ "Edit " ~ lic.name if lic else "New license" }}{% endblock %}
+{% block content %}
+<div class="page-head"><h1>{{ "Edit license" if lic else "New license" }}</h1></div>
+<div class="card">
+  <form method="post">
+    <div class="form-grid">
+      <div><label for="l-name">{{ t("Name") }} *</label>
+        <input id="l-name" name="name" required value="{{ lic.name if lic else '' }}" placeholder="Microsoft 365 Business"></div>
+      <div><label for="l-vendor">Vendor</label>
+        <select id="l-vendor" name="vendor_id"><option value="">—</option>
+          {% for v in vendors %}<option value="{{ v.id }}" {{ 'selected' if lic and lic.vendor_id == v.id }}>{{ v.name }}</option>{% endfor %}
+        </select></div>
+      <div><label for="l-key">License key</label>
+        <input id="l-key" name="key" value="{{ lic.key or '' if lic else '' }}"></div>
+      <div><label for="l-seats">Seats *</label>
+        <input id="l-seats" name="seats" type="number" min="1" required value="{{ lic.seats if lic else 1 }}"></div>
+      <div><label for="l-pdate">Purchase date</label>
+        <input id="l-pdate" name="purchase_date" type="date" value="{{ lic.purchase_date or '' if lic else '' }}"></div>
+      <div><label for="l-edate">Expiry / renewal date</label>
+        <input id="l-edate" name="expiry_date" type="date" value="{{ lic.expiry_date or '' if lic else '' }}"></div>
+      <div><label for="l-cost">Cost</label>
+        <input id="l-cost" name="cost" type="number" step="0.01" min="0" value="{{ lic.cost or '' if lic else '' }}"></div>
+      <div class="full"><label for="l-notes">Notes</label>
+        <textarea id="l-notes" name="notes" rows="2">{{ lic.notes or '' if lic else '' }}</textarea></div>
+    </div>
+    <div class="form-actions">
+      <button class="btn" type="submit">{{ t("Save") }}</button>
+      <a class="btn secondary" href="{{ url_for('ops.licenses') }}">{{ t("Cancel") }}</a>
+    </div>
+  </form>
+</div>
+{% endblock %}
