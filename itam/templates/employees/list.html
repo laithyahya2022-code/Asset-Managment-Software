@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Employees{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>Employees</h1>
+  <a class="btn" href="{{ url_for('itam.employee_new') }}">+ New employee</a>
+</div>
+
+{% if employees %}
+<table>
+  <tr><th>Name</th><th>Email</th><th>Department</th><th>Assets checked out</th></tr>
+  {% for e in employees %}
+  <tr>
+    <td><a href="{{ url_for('itam.employee_detail', employee_id=e.id) }}">{{ e.name }}</a></td>
+    <td>{{ e.email }}</td>
+    <td>{{ e.department or "—" }}</td>
+    <td>{{ e.current_assets|length }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}
+<p class="muted">No employees yet.</p>
+{% endif %}
+{% endblock %}

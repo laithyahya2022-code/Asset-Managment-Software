@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}{{ asset.asset_tag }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ asset.asset_tag }} — {{ asset.name }}</h1>
+  <div>
+    <a class="btn btn-secondary" href="{{ url_for('itam.asset_edit', asset_id=asset.id) }}">Edit</a>
+    <form class="inline" method="post" action="{{ url_for('itam.asset_delete', asset_id=asset.id) }}"
+          onsubmit="return confirm('Delete this asset and its assignment history?');">
+      <button class="btn btn-danger" type="submit">Delete</button>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <dl class="props">
+    <dt>Status</dt><dd><span class="badge badge-{{ asset.status|lower|replace(' ', '-') }}">{{ asset.status }}</span></dd>
+    <dt>Category</dt><dd>{{ asset.category.name if asset.category else "—" }}</dd>
+    <dt>Serial number</dt><dd>{{ asset.serial_number or "—" }}</dd>
+    <dt>Manufacturer</dt><dd>{{ asset.manufacturer or "—" }}</dd>
+    <dt>Model</dt><dd>{{ asset.model or "—" }}</dd>
+    <dt>Location</dt><dd>{{ asset.location or "—" }}</dd>
+    <dt>Purchase date</dt><dd>{{ asset.purchase_date or "—" }}</dd>
+    <dt>Purchase cost</dt><dd>{{ asset.purchase_cost or "—" }}</dd>
+    <dt>Warranty expiry</dt>
+    <dd>{% if asset.warranty_expiry %}{{ asset.warranty_expiry }}{% if asset.warranty_expired %} <span class="warn">(expired)</span>{% endif %}{% else %}—{% endif %}</dd>
+    <dt>Notes</dt><dd>{{ asset.notes or "—" }}</dd>
+    <dt>Added</dt><dd>{{ asset.created_at.strftime("%Y-%m-%d %H:%M") }}</dd>
+  </dl>
+</div>
+
+<div class="card">
+  <h2 style="margin-top:0">Assignment</h2>
+  {% if asset.current_assignment %}
+    <p>Checked out to
+      <a href="{{ url_for('itam.employee_detail', employee_id=asset.current_assignment.employee.id) }}">{{ asset.current_assignment.employee.name }}</a>
+      since {{ asset.current_assignment.assigned_at.strftime("%Y-%m-%d %H:%M") }}.
+    </p>
+    <form method="post" action="{{ url_for('itam.asset_checkin', asset_id=asset.id) }}">
+      <button class="btn" type="submit">Check in</button>
+    </form>
+  {% elif asset.status == "Retired" %}
+    <p class="muted">This asset is retired and cannot be checked out.</p>
+  {% elif employees %}
+    <form method="post" action="{{ url_for('itam.asset_checkout', asset_id=asset.id) }}">
+      <div class="form-grid">
+        <div>
+          <label for="employee_id">Employee</label>
+          <select id="employee_id" name="employee_id" required>
+            {% for e in employees %}
+            <option value="{{ e.id }}">{{ e.name }} ({{ e.department or "no dept." }})</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label for="notes">Notes</label>
+          <input id="notes" name="notes" placeholder="Optional">
+        </div>
+      </div>
+      <div class="form-actions">
+        <button class="btn" type="submit">Check out</button>
+      </div>
+    </form>
+  {% else %}
+    <p class="muted">No employees yet. <a href="{{ url_for('itam.employee_new') }}">Add one</a> to check this asset out.</p>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h2 style="margin-top:0">History</h2>
+  {% if asset.assignments %}
+  <table>
+    <tr><th>Employee</th><th>Checked out</th><th>Returned</th><th>Notes</th></tr>
+    {% for a in asset.assignments %}
+    <tr>
+      <td><a href="{{ url_for('itam.employee_detail', employee_id=a.employee.id) }}">{{ a.employee.name }}</a></td>
+      <td>{{ a.assigned_at.strftime("%Y-%m-%d %H:%M") }}</td>
+      <td>{{ a.returned_at.strftime("%Y-%m-%d %H:%M") if a.returned_at else "—" }}</td>
+      <td>{{ a.notes or "—" }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}<p class="muted">Never assigned.</p>{% endif %}
+</div>
+{% endblock %}

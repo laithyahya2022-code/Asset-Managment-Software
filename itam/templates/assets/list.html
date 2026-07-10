@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Assets{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>Assets</h1>
+  <a class="btn" href="{{ url_for('itam.asset_new') }}">+ New asset</a>
+</div>
+
+<form class="filters" method="get">
+  <input type="text" name="q" value="{{ q }}" placeholder="Search tag, name, serial…">
+  <select name="status">
+    <option value="">All statuses</option>
+    {% for s in statuses %}
+    <option value="{{ s }}" {% if status == s %}selected{% endif %}>{{ s }}</option>
+    {% endfor %}
+  </select>
+  <select name="category">
+    <option value="">All categories</option>
+    {% for c in categories %}
+    <option value="{{ c.id }}" {% if category_id == c.id|string %}selected{% endif %}>{{ c.name }}</option>
+    {% endfor %}
+  </select>
+  <button class="btn btn-secondary" type="submit">Filter</button>
+  {% if q or status or category_id %}<a class="btn btn-secondary" href="{{ url_for('itam.asset_list') }}">Clear</a>{% endif %}
+</form>
+
+{% if assets %}
+<table>
+  <tr><th>Tag</th><th>Name</th><th>Category</th><th>Status</th><th>Assigned to</th><th>Location</th></tr>
+  {% for asset in assets %}
+  <tr>
+    <td><a href="{{ url_for('itam.asset_detail', asset_id=asset.id) }}">{{ asset.asset_tag }}</a></td>
+    <td>{{ asset.name }}</td>
+    <td>{{ asset.category.name if asset.category else "—" }}</td>
+    <td><span class="badge badge-{{ asset.status|lower|replace(' ', '-') }}">{{ asset.status }}</span></td>
+    <td>{% if asset.current_assignment %}<a href="{{ url_for('itam.employee_detail', employee_id=asset.current_assignment.employee.id) }}">{{ asset.current_assignment.employee.name }}</a>{% else %}—{% endif %}</td>
+    <td>{{ asset.location or "—" }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}
+<p class="muted">No assets found.</p>
+{% endif %}
+{% endblock %}

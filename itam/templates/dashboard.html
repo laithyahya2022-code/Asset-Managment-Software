@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+<h1>Dashboard</h1>
+
+<div class="stat-grid">
+  <div class="stat"><div class="value">{{ total }}</div><div class="label">Total assets</div></div>
+  {% for s in statuses %}
+  <div class="stat"><div class="value">{{ by_status.get(s, 0) }}</div><div class="label">{{ s }}</div></div>
+  {% endfor %}
+</div>
+
+<div class="card">
+  <h2 style="margin-top:0">Assets by category</h2>
+  {% if by_category %}
+  <table>
+    <tr><th>Category</th><th>Assets</th></tr>
+    {% for name, count in by_category %}
+    <tr><td>{{ name }}</td><td>{{ count }}</td></tr>
+    {% endfor %}
+  </table>
+  {% else %}<p class="muted">No categorized assets yet.</p>{% endif %}
+</div>
+
+<div class="card">
+  <h2 style="margin-top:0">Upcoming / expired warranties</h2>
+  {% if expiring %}
+  <table>
+    <tr><th>Asset</th><th>Warranty expiry</th></tr>
+    {% for asset in expiring %}
+    <tr>
+      <td><a href="{{ url_for('itam.asset_detail', asset_id=asset.id) }}">{{ asset.asset_tag }}</a> — {{ asset.name }}</td>
+      <td>{% if asset.warranty_expiry < today %}<span class="warn">{{ asset.warranty_expiry }} (expired)</span>{% else %}{{ asset.warranty_expiry }}{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}<p class="muted">No warranty data.</p>{% endif %}
+</div>
+
+<div class="card">
+  <h2 style="margin-top:0">Recently added assets</h2>
+  {% if recent_assets %}
+  <table>
+    <tr><th>Tag</th><th>Name</th><th>Status</th><th>Added</th></tr>
+    {% for asset in recent_assets %}
+    <tr>
+      <td><a href="{{ url_for('itam.asset_detail', asset_id=asset.id) }}">{{ asset.asset_tag }}</a></td>
+      <td>{{ asset.name }}</td>
+      <td><span class="badge badge-{{ asset.status|lower|replace(' ', '-') }}">{{ asset.status }}</span></td>
+      <td>{{ asset.created_at.strftime("%Y-%m-%d") }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}<p class="muted">No assets yet. <a href="{{ url_for('itam.asset_new') }}">Add one</a>.</p>{% endif %}
+</div>
+
+<div class="card">
+  <h2 style="margin-top:0">Recent assignments</h2>
+  {% if recent_assignments %}
+  <table>
+    <tr><th>Asset</th><th>Employee</th><th>Checked out</th><th>Returned</th></tr>
+    {% for a in recent_assignments %}
+    <tr>
+      <td><a href="{{ url_for('itam.asset_detail', asset_id=a.asset.id) }}">{{ a.asset.asset_tag }}</a></td>
+      <td><a href="{{ url_for('itam.employee_detail', employee_id=a.employee.id) }}">{{ a.employee.name }}</a></td>
+      <td>{{ a.assigned_at.strftime("%Y-%m-%d %H:%M") }}</td>
+      <td>{{ a.returned_at.strftime("%Y-%m-%d %H:%M") if a.returned_at else "—" }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}<p class="muted">No assignments yet.</p>{% endif %}
+</div>
+{% endblock %}

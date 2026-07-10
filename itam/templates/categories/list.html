@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Categories{% endblock %}
+{% block content %}
+<h1>Categories</h1>
+
+<div class="card">
+  <form method="post" class="filters" style="margin-bottom:0">
+    <input type="text" name="name" placeholder="New category name" required>
+    <button class="btn" type="submit">Add category</button>
+  </form>
+</div>
+
+{% if categories %}
+<table>
+  <tr><th>Name</th><th>Assets</th><th></th></tr>
+  {% for c in categories %}
+  <tr>
+    <td>{{ c.name }}</td>
+    <td><a href="{{ url_for('itam.asset_list', category=c.id) }}">{{ c.assets|length }}</a></td>
+    <td>
+      {% if not c.assets %}
+      <form class="inline" method="post" action="{{ url_for('itam.category_delete', category_id=c.id) }}">
+        <button class="btn btn-danger btn-sm" type="submit">Delete</button>
+      </form>
+      {% endif %}
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}
+<p class="muted">No categories yet.</p>
+{% endif %}
+{% endblock %}
