@@ -6,3 +6,4 @@ gunicorn>=21.2
 pytest>=8.0
 # Uncomment for PostgreSQL deployments:
 # psycopg2-binary>=2.9
+waitress>=3.0
