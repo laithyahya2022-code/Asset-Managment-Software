@@ -7,3 +7,4 @@ pytest>=8.0
 # Uncomment for PostgreSQL deployments:
 # psycopg2-binary>=2.9
 waitress>=3.0
+openpyxl>=3.1

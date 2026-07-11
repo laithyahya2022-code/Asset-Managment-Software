@@ -378,10 +378,54 @@ def bulk():
     return redirect(url_for("assets.list_"))
 
 
-# ------------------------------------------------------------ import (CSV)
+# ------------------------------------------------------- import (Excel/CSV)
 
 IMPORT_COLS = ["tag", "name", "category", "type", "serial", "manufacturer", "model",
                "status", "condition", "purchase_date", "purchase_cost", "warranty_expiry"]
+
+
+def _xlsx_to_csv(file_storage):
+    """Convert the first sheet of an .xlsx upload to a CSV string."""
+    from openpyxl import load_workbook
+    wb = load_workbook(file_storage, read_only=True, data_only=True)
+    ws = wb.active
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    for row in ws.iter_rows(values_only=True):
+        w.writerow(["" if v is None else
+                    (v.strftime("%Y-%m-%d") if hasattr(v, "strftime") else v)
+                    for v in row])
+    wb.close()
+    return buf.getvalue()
+
+
+@bp.route("/export.xlsx")
+@perm_required("assets.view")
+def export_xlsx():
+    from openpyxl import Workbook
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Assets"
+    ws.append(["Tag", "Name", "Category", "Type", "Serial", "Manufacturer", "Model",
+               "Status", "Condition", "Location", "Department", "Vendor",
+               "Purchase Date", "Purchase Cost", "Warranty Expiry", "Current Value",
+               "Notes"])
+    for a in _filtered_assets(request.args):
+        ws.append([a.tag, a.name, a.category.name if a.category else "",
+                   a.asset_type or "", a.serial or "", a.manufacturer or "",
+                   a.model or "", a.status, a.condition,
+                   a.location.path if a.location else "",
+                   a.department.name if a.department else "",
+                   a.vendor.name if a.vendor else "",
+                   a.purchase_date, float(a.purchase_cost) if a.purchase_cost else None,
+                   a.warranty_expiry, a.current_value, a.notes or ""])
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    from flask import send_file
+    return send_file(buf, download_name="assets.xlsx", as_attachment=True,
+                     mimetype="application/vnd.openxmlformats-officedocument"
+                              ".spreadsheetml.sheet")
 
 
 @bp.route("/import", methods=["GET", "POST"])
@@ -390,7 +434,15 @@ def import_():
     preview, errors, token = None, [], None
     if request.method == "POST" and "file" in request.files:
         f = request.files["file"]
-        raw = f.read().decode("utf-8-sig", errors="replace")
+        if (f.filename or "").lower().endswith((".xlsx", ".xlsm")):
+            try:
+                raw = _xlsx_to_csv(f)
+            except Exception:
+                flash("Could not read that Excel file — is it a valid .xlsx?", "error")
+                return render_template("assets/import.html", preview=None, errors=[],
+                                       token=None, cols=IMPORT_COLS)
+        else:
+            raw = f.read().decode("utf-8-sig", errors="replace")
         token = f"import-{uuid.uuid4().hex}.csv"
         with open(os.path.join(current_app.config["UPLOAD_FOLDER"], token), "w",
                   encoding="utf-8") as out:

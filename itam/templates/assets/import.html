@@ -1,16 +1,17 @@
 {% extends "base.html" %}
 {% block title %}Import assets{% endblock %}
 {% block content %}
-<div class="page-head"><h1>Import assets from CSV</h1></div>
+<div class="page-head"><h1>Import assets from Excel or CSV</h1></div>
 
 {% if preview is none %}
 <div class="card">
-  <p>Upload a CSV file (Excel can save as CSV). Recognized columns:</p>
+  <p>Upload an <strong>Excel file (.xlsx)</strong> or a CSV file. The first row must be
+     column headers. Recognized columns:</p>
   <p><code>{{ cols | join(", ") }}</code></p>
-  <p class="muted">Only <strong>tag</strong> and <strong>name</strong> are required. Dates use YYYY-MM-DD.
-     Duplicate tags are detected and skipped automatically.</p>
+  <p class="muted">Only <strong>tag</strong> and <strong>name</strong> are required. Dates use YYYY-MM-DD
+     (Excel date cells are converted automatically). Duplicate tags are detected and skipped.</p>
   <form method="post" enctype="multipart/form-data" class="filters">
-    <input type="file" name="file" accept=".csv,text/csv" required>
+    <input type="file" name="file" accept=".xlsx,.xlsm,.csv,text/csv" required>
     <button class="btn" type="submit">Upload & preview</button>
   </form>
 </div>

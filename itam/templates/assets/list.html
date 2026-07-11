@@ -7,8 +7,9 @@
   <div class="actions-row no-print">
     {% if has_perm("assets.manage") %}
     <a class="btn" href="{{ url_for('assets.new') }}">+ {{ t("New Asset") }}</a>
-    <a class="btn secondary" href="{{ url_for('assets.import_') }}">{{ t("Import") }} CSV</a>
+    <a class="btn secondary" href="{{ url_for('assets.import_') }}">{{ t("Import") }} Excel/CSV</a>
     {% endif %}
+    <a class="btn secondary" href="{{ url_for('assets.export_xlsx', **request.args) }}">Export Excel</a>
     <a class="btn secondary" href="{{ url_for('assets.export_csv', **request.args) }}">{{ t("Export CSV") }}</a>
     <a class="btn secondary" href="{{ url_for('assets.labels') }}">Labels</a>
     <a class="btn secondary" href="{{ url_for('assets.categories') }}">Categories</a>

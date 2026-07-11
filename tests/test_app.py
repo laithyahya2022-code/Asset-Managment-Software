@@ -161,6 +161,40 @@ def test_api_requires_token(client, app):
     assert isinstance(resp.get_json(), list)
 
 
+def test_excel_import_and_export(client, app):
+    import io
+    from openpyxl import Workbook, load_workbook
+    login(client)
+    wb = Workbook()
+    ws = wb.active
+    ws.append(["tag", "name", "category", "status", "purchase_cost"])
+    ws.append(["XL-0001", "Excel Laptop", "Laptops", "Available", 999.5])
+    ws.append(["XL-0001", "Duplicate row", "", "", ""])   # dup: skipped
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+
+    resp = client.post("/assets/import",
+                       data={"file": (buf, "assets.xlsx")},
+                       content_type="multipart/form-data")
+    assert b"Import preview" in resp.data
+    assert b"duplicate tag" in resp.data
+    import re
+    token = re.search(rb'name="token" value="([^"]+)"', resp.data).group(1).decode()
+    client.post("/assets/import", data={"token": token}, follow_redirects=True)
+    with app.app_context():
+        a = db.session.scalar(db.select(Asset).where(Asset.tag == "XL-0001"))
+        assert a is not None and a.name == "Excel Laptop"
+        assert float(a.purchase_cost) == 999.5
+        assert a.category.name == "Laptops"
+
+    resp = client.get("/assets/export.xlsx")
+    assert resp.status_code == 200
+    out = load_workbook(io.BytesIO(resp.data))
+    tags = [row[0].value for row in out.active.iter_rows(min_row=2)]
+    assert "XL-0001" in tags
+
+
 def test_search_page(client, app):
     login(client)
     client.post("/assets/new", data={
