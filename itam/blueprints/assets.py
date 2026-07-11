@@ -85,8 +85,39 @@ def _filtered_assets(args):
 @bp.route("/")
 @perm_required("assets.view")
 def list_():
+    from ..models import SavedSearch
+    searches = db.session.scalars(db.select(SavedSearch)
+                                  .where(SavedSearch.user_id == g.user.id)
+                                  .order_by(SavedSearch.name)).all()
     return render_template("assets/list.html", assets=_filtered_assets(request.args),
-                           args=request.args, **_lookups())
+                           args=request.args, searches=searches, **_lookups())
+
+
+@bp.post("/searches")
+@perm_required("assets.view")
+def search_save():
+    from ..models import SavedSearch
+    name = request.form.get("name", "").strip()
+    query = request.form.get("query", "").strip()
+    if not name or not query:
+        flash("Apply some filters first, then give the search a name.", "error")
+    else:
+        db.session.add(SavedSearch(user_id=g.user.id, name=name[:80], query=query[:500]))
+        db.session.commit()
+        flash(f'Search "{name}" saved.', "success")
+    return redirect(url_for("assets.list_") + ("?" + query if query else ""))
+
+
+@bp.post("/searches/<int:search_id>/delete")
+@perm_required("assets.view")
+def search_delete(search_id):
+    from ..models import SavedSearch
+    s = db.get_or_404(SavedSearch, search_id)
+    if s.user_id == g.user.id:
+        db.session.delete(s)
+        db.session.commit()
+        flash("Saved search removed.", "success")
+    return redirect(url_for("assets.list_"))
 
 
 @bp.route("/export.csv")

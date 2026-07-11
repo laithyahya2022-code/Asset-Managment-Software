@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Custom report{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>Custom report builder</h1>
+  <div class="actions-row no-print">
+    <a class="btn secondary" href="{{ url_for('reports.custom', format='csv', **args) }}">{{ t("Export CSV") }}</a>
+    <button class="btn secondary" onclick="window.print()">{{ t("Print") }}</button>
+    <a class="btn secondary" href="{{ url_for('reports.index') }}">← {{ t("Reports") }}</a>
+  </div>
+</div>
+
+<div class="card no-print">
+  <form method="get">
+    <p class="eyebrow">1 — Choose columns</p>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:0.3rem">
+      {% for key, (label, _) in all_cols.items() %}
+      <label style="display:flex;gap:0.4rem;align-items:center;margin:0;font-weight:400">
+        <input type="checkbox" name="col" value="{{ key }}" {{ 'checked' if key in cols }}> {{ label }}</label>
+      {% endfor %}
+    </div>
+    <p class="eyebrow" style="margin-top:1rem">2 — Filters (optional)</p>
+    <div class="filters" style="margin:0">
+      <select name="status"><option value="">Any status</option>
+        {% for s in statuses %}<option value="{{ s }}" {{ 'selected' if args.get('status') == s }}>{{ s }}</option>{% endfor %}
+      </select>
+      <select name="category"><option value="">Any category</option>
+        {% for c in categories %}<option value="{{ c.id }}" {{ 'selected' if args.get('category') == c.id|string }}>{{ c.name }}</option>{% endfor %}
+      </select>
+      <select name="department"><option value="">Any department</option>
+        {% for d in departments %}<option value="{{ d.id }}" {{ 'selected' if args.get('department') == d.id|string }}>{{ d.name }}</option>{% endfor %}
+      </select>
+      <select name="condition"><option value="">Any condition</option>
+        {% for c in conditions %}<option value="{{ c }}" {{ 'selected' if args.get('condition') == c }}>{{ c }}</option>{% endfor %}
+      </select>
+      <button class="btn" type="submit">Run report</button>
+    </div>
+  </form>
+</div>
+
+<div class="card table-wrap">
+  <table>
+    <tr>{% for h in headers %}<th>{{ h }}</th>{% endfor %}</tr>
+    {% for row in rows %}
+    <tr>{% for cell in row %}<td>{{ cell }}</td>{% endfor %}</tr>
+    {% else %}
+    <tr><td colspan="{{ headers | length }}" class="empty">No assets match these filters.</td></tr>
+    {% endfor %}
+  </table>
+</div>
+<p class="muted">{{ rows | length }} rows</p>
+{% endblock %}

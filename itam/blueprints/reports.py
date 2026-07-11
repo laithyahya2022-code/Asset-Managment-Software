@@ -2,8 +2,9 @@ from datetime import date
 
 from flask import Blueprint, render_template, request
 
-from ..models import (Asset, Assignment, Department, Employee, InventoryAudit,
-                      License, Maintenance, db)
+from ..models import (ASSET_CONDITIONS, ASSET_STATUSES, Asset, Assignment,
+                      Category, Department, Employee, InventoryAudit, License,
+                      Location, Maintenance, db)
 from ..security import perm_required
 from ..utils import csv_response
 
@@ -98,6 +99,59 @@ def index():
         "licenses": db.session.scalar(db.select(db.func.count(License.id))) or 0,
     }
     return render_template("reports/index.html", reports=REPORTS, stats=stats)
+
+
+# ------------------------------------------------------ custom report builder
+
+CUSTOM_COLS = {
+    "tag": ("Tag", lambda a: a.tag),
+    "name": ("Name", lambda a: a.name),
+    "category": ("Category", lambda a: a.category.name if a.category else ""),
+    "type": ("Type", lambda a: a.asset_type or ""),
+    "serial": ("Serial", lambda a: a.serial or ""),
+    "manufacturer": ("Manufacturer", lambda a: a.manufacturer or ""),
+    "model": ("Model", lambda a: a.model or ""),
+    "status": ("Status", lambda a: a.status),
+    "condition": ("Condition", lambda a: a.condition),
+    "location": ("Location", lambda a: a.location.path if a.location else ""),
+    "department": ("Department", lambda a: a.department.name if a.department else ""),
+    "vendor": ("Vendor", lambda a: a.vendor.name if a.vendor else ""),
+    "assigned_to": ("Assigned To", lambda a: a.current_assignment.employee.name
+                    if a.current_assignment else ""),
+    "purchase_date": ("Purchase Date", lambda a: a.purchase_date or ""),
+    "purchase_cost": ("Purchase Cost", lambda a: a.purchase_cost or ""),
+    "current_value": ("Current Value",
+                      lambda a: f"{a.current_value:,.2f}" if a.current_value is not None else ""),
+    "warranty_expiry": ("Warranty Expiry", lambda a: a.warranty_expiry or ""),
+    "notes": ("Notes", lambda a: a.notes or ""),
+}
+DEFAULT_COLS = ["tag", "name", "category", "status", "assigned_to"]
+
+
+@bp.route("/custom")
+@perm_required("reports.view")
+def custom():
+    cols = [c for c in request.args.getlist("col") if c in CUSTOM_COLS] or DEFAULT_COLS
+    stmt = db.select(Asset).order_by(Asset.tag)
+    if request.args.get("status"):
+        stmt = stmt.where(Asset.status == request.args["status"])
+    if request.args.get("category"):
+        stmt = stmt.where(Asset.category_id == int(request.args["category"]))
+    if request.args.get("department"):
+        stmt = stmt.where(Asset.department_id == int(request.args["department"]))
+    if request.args.get("condition"):
+        stmt = stmt.where(Asset.condition == request.args["condition"])
+    assets = db.session.scalars(stmt).all()
+    headers = [CUSTOM_COLS[c][0] for c in cols]
+    rows = [[CUSTOM_COLS[c][1](a) for c in cols] for a in assets]
+    if request.args.get("format") == "csv":
+        return csv_response(headers, rows, "report-custom.csv")
+    return render_template(
+        "reports/custom.html", headers=headers, rows=rows, cols=cols,
+        all_cols=CUSTOM_COLS, statuses=ASSET_STATUSES, conditions=ASSET_CONDITIONS,
+        categories=db.session.scalars(db.select(Category).order_by(Category.name)).all(),
+        departments=db.session.scalars(db.select(Department).order_by(Department.name)).all(),
+        args=request.args)
 
 
 @bp.route("/<name>")

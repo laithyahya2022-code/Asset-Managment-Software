@@ -48,6 +48,7 @@ def create_app(test_config=None):
     def before():
         load_user()
         g.lang = session.get("lang") or (g.user.language if g.user else "en")
+        _auto_backup(app)
 
     @app.get("/lang/<code>")
     def set_lang(code):
@@ -81,6 +82,40 @@ def create_app(test_config=None):
         print("Database seeded. Login: admin / admin123")
 
     return app
+
+
+_last_backup_check = [0.0]
+
+
+def _auto_backup(app, keep=14):
+    """Daily automatic SQLite backup, checked at most once per hour."""
+    import time
+    now = time.time()
+    if now - _last_backup_check[0] < 3600:
+        return
+    _last_backup_check[0] = now
+    try:
+        if get_setting("backup_auto") != "1":
+            return
+        uri = app.config["SQLALCHEMY_DATABASE_URI"]
+        if not uri.startswith("sqlite:///"):
+            return
+        src = uri.replace("sqlite:///", "")
+        if not os.path.exists(src):
+            return
+        folder = app.config["BACKUP_FOLDER"]
+        backups = sorted(f for f in os.listdir(folder)
+                         if f.startswith("auto-") and f.endswith(".sqlite"))
+        newest_age = (now - os.path.getmtime(os.path.join(folder, backups[-1]))
+                      if backups else 1e12)
+        if newest_age < 24 * 3600:
+            return
+        name = f"auto-{datetime.utcnow():%Y%m%d-%H%M%S}.sqlite"
+        shutil.copy2(src, os.path.join(folder, name))
+        for old in backups[:max(0, len(backups) + 1 - keep)]:
+            os.remove(os.path.join(folder, old))
+    except Exception:
+        pass  # backups must never break a request
 
 
 def _ensure_defaults():

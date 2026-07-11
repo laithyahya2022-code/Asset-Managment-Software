@@ -38,16 +38,19 @@ maintenance, licenses, procurement, reports, Arabic/RTL support, and a REST API.
   the received assets).
 - **Financial** — purchase cost, straight-line depreciation, current value,
   cost analysis by department.
-- **Reports** — 8 built-in reports, all printable and exportable to CSV
+- **Reports** — 8 built-in reports plus a **custom report builder**
+  (pick your own columns and filters), all printable and exportable to CSV
   (Excel-compatible, UTF-8 with BOM so Arabic opens correctly).
-- **Search** — global search across assets, employees, licenses, vendors, POs.
+- **Search** — global search across assets, employees, licenses, vendors, POs,
+  plus per-user **saved searches** on the asset list.
 - **Notifications** — in-app alerts (warranty, license, maintenance, overdue)
   with optional SMTP email.
 - **Multi-language** — English + Arabic with full right-to-left layout and a
   one-click switcher.
 - **Mobile & PWA** — responsive layout, installable as an app
   (Add to Home Screen), works on iPhone/Android/tablets.
-- **Backup & recovery** — one-click SQLite backup, download, restore, delete.
+- **Backup & recovery** — one-click SQLite backup, download, restore, delete,
+  plus **automatic daily backups** (keeps the newest 14, toggle in Settings).
 - **REST API** — `/api/v1/assets`, `/api/v1/employees`, `/api/v1/licenses`
   with per-user Bearer API keys.
 - **Deployment** — SQLite by default, PostgreSQL via `DATABASE_URL`, Docker +

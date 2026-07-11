@@ -204,6 +204,55 @@ def test_search_page(client, app):
     assert b"SRCH-1" in resp.data
 
 
+def test_saved_searches(client, app):
+    login(client)
+    client.post("/assets/searches", data={"name": "My laptops", "q": "",
+                                          "query": "status=Available&category=1"})
+    resp = client.get("/assets/")
+    assert "My laptops".encode() in resp.data
+    from itam.models import SavedSearch
+    with app.app_context():
+        s = db.session.scalar(db.select(SavedSearch))
+        assert s.query == "status=Available&category=1"
+        sid = s.id
+    client.post(f"/assets/searches/{sid}/delete")
+    resp = client.get("/assets/")
+    assert "My laptops".encode() not in resp.data
+
+
+def test_custom_report_builder(client, app):
+    login(client)
+    client.post("/assets/new", data={
+        "tag": "CR-1", "name": "Report Machine", "category_id": "1",
+        "status": "Available", "condition": "Good", "depreciation_years": "5"})
+    resp = client.get("/reports/custom?col=tag&col=name&col=condition&status=Available")
+    assert b"CR-1" in resp.data and b"Report Machine" in resp.data
+    resp = client.get("/reports/custom?col=tag&status=Available&format=csv")
+    assert resp.status_code == 200 and b"CR-1" in resp.data
+    # unavailable filter excludes it
+    resp = client.get("/reports/custom?col=tag&status=Retired")
+    assert b"CR-1" not in resp.data
+
+
+def test_auto_backup(tmp_path):
+    import itam as itam_pkg
+    dbfile = tmp_path / "live.sqlite"
+    app = create_app({
+        "TESTING": True,
+        "SQLALCHEMY_DATABASE_URI": f"sqlite:///{dbfile}",
+        "UPLOAD_FOLDER": str(tmp_path / "up"),
+        "BACKUP_FOLDER": str(tmp_path / "bk"),
+    })
+    client = app.test_client()
+    itam_pkg._last_backup_check[0] = 0.0          # force the hourly check
+    client.get("/login")
+    backups = list((tmp_path / "bk").glob("auto-*.sqlite"))
+    assert len(backups) == 1
+    # second request within the hour must not create another
+    client.get("/login")
+    assert len(list((tmp_path / "bk").glob("auto-*.sqlite"))) == 1
+
+
 def test_arabic_language_switch(client):
     login(client)
     resp = client.get("/lang/ar", follow_redirects=True)

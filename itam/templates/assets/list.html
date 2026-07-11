@@ -37,6 +37,24 @@
   {% if args %}<a class="btn secondary" href="{{ url_for('assets.list_') }}">Clear</a>{% endif %}
 </form>
 
+<div class="filters no-print">
+  {% if args and request.query_string %}
+  <form class="inline" method="post" action="{{ url_for('assets.search_save') }}" style="display:flex;gap:0.4rem">
+    <input type="hidden" name="query" value="{{ request.query_string.decode() }}">
+    <input name="name" placeholder="Name this search…" required style="max-width:180px">
+    <button class="btn secondary sm" type="submit">Save search</button>
+  </form>
+  {% endif %}
+  {% for s in searches %}
+  <span style="display:inline-flex;align-items:center;gap:2px">
+    <a class="btn secondary sm" href="{{ url_for('assets.list_') }}?{{ s.query }}">★ {{ s.name }}</a>
+    <form class="inline" method="post" action="{{ url_for('assets.search_delete', search_id=s.id) }}">
+      <button class="btn secondary sm" type="submit" title="Remove saved search">×</button>
+    </form>
+  </span>
+  {% endfor %}
+</div>
+
 {% if assets %}
 <form method="post" action="{{ url_for('assets.bulk') }}">
 <div class="card table-wrap">
