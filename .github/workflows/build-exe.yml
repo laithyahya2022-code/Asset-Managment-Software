@@ -29,6 +29,7 @@ jobs:
       - name: Build ITAM.exe
         run: >
           pyinstaller --onefile --name ITAM --console
+          --icon itam/static/app.ico
           --add-data "itam/templates;itam/templates"
           --add-data "itam/static;itam/static"
           --collect-submodules sqlalchemy.dialects.sqlite
