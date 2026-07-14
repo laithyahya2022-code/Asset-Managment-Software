@@ -10,9 +10,10 @@ from flask import (Blueprint, Response, current_app, flash, g, redirect,
 from sqlalchemy import or_
 from werkzeug.utils import secure_filename
 
-from ..models import (ASSET_CONDITIONS, ASSET_STATUSES, Asset, Assignment,
-                      Category, Department, Employee, Location, Reservation,
-                      Transfer, Vendor, db)
+from ..models import (ASSET_CONDITIONS, ASSET_STATUSES,
+                      BLOCKED_CHECKOUT_STATUSES, Asset, Assignment, Category,
+                      Department, Employee, Location, Reservation, Transfer,
+                      Vendor, db)
 from ..security import has_perm, login_required, perm_required
 from ..utils import (barcode_svg, csv_response, custom_field_names, get_setting,
                      log_activity, parse_date, qr_svg)
@@ -31,19 +32,39 @@ def _lookups():
         vendors=db.session.scalars(db.select(Vendor).order_by(Vendor.name)).all(),
         employees=db.session.scalars(db.select(Employee).where(Employee.active)
                                      .order_by(Employee.name)).all(),
+        parents=db.session.scalars(db.select(Asset).order_by(Asset.tag)).all(),
         statuses=ASSET_STATUSES, conditions=ASSET_CONDITIONS,
         custom_names=custom_field_names(),
     )
 
 
+def next_tag(category):
+    """Sequential per-category tag, e.g. PC-000001 (spec section 10)."""
+    prefix = category.tag_prefix if category else "AST"
+    top = 0
+    for (tag,) in db.session.execute(
+            db.select(Asset.tag).where(Asset.tag.like(f"{prefix}-%"))).all():
+        suffix = tag.rsplit("-", 1)[-1]
+        if suffix.isdigit():
+            top = max(top, int(suffix))
+    return f"{prefix}-{top + 1:06d}"
+
+
 def _from_form(a, form):
-    a.tag = form["tag"].strip()
     a.name = form["name"].strip()
     a.category_id = int(form["category_id"]) if form.get("category_id") else None
+    tag = form.get("tag", "").strip()
+    a.tag = tag or next_tag(db.session.get(Category, a.category_id)
+                            if a.category_id else None)
     a.asset_type = form.get("asset_type", "").strip() or None
     a.serial = form.get("serial", "").strip() or None
     a.manufacturer = form.get("manufacturer", "").strip() or None
     a.model = form.get("model", "").strip() or None
+    for field in ("os_name", "os_version", "cpu", "ram", "storage", "gpu",
+                  "hostname", "mac_address", "ip_address", "invoice_number"):
+        setattr(a, field, form.get(field, "").strip() or None)
+    parent = form.get("parent_id")
+    a.parent_id = int(parent) if parent and (not a.id or int(parent) != a.id) else None
     if form.get("status") in ASSET_STATUSES:
         a.status = form["status"]
     if form.get("condition") in ASSET_CONDITIONS:
@@ -68,7 +89,9 @@ def _filtered_assets(args):
         like = f"%{q}%"
         stmt = stmt.where(or_(Asset.tag.ilike(like), Asset.name.ilike(like),
                               Asset.serial.ilike(like), Asset.manufacturer.ilike(like),
-                              Asset.model.ilike(like), Asset.asset_type.ilike(like)))
+                              Asset.model.ilike(like), Asset.asset_type.ilike(like),
+                              Asset.hostname.ilike(like), Asset.mac_address.ilike(like),
+                              Asset.ip_address.ilike(like), Asset.os_name.ilike(like)))
     if args.get("status"):
         stmt = stmt.where(Asset.status == args["status"])
     if args.get("category"):
@@ -125,14 +148,18 @@ def search_delete(search_id):
 def export_csv():
     rows = [(a.tag, a.name, a.category.name if a.category else "", a.asset_type or "",
              a.serial or "", a.manufacturer or "", a.model or "", a.status, a.condition,
+             a.os_name or "", a.cpu or "", a.ram or "", a.storage or "",
+             a.hostname or "", a.mac_address or "", a.ip_address or "",
              a.location.path if a.location else "", a.department.name if a.department else "",
              a.vendor.name if a.vendor else "", a.purchase_date or "", a.purchase_cost or "",
-             a.warranty_expiry or "", a.current_value or "", a.notes or "")
+             a.invoice_number or "", a.warranty_expiry or "", a.current_value or "",
+             a.notes or "")
             for a in _filtered_assets(request.args)]
     return csv_response(
         ["Tag", "Name", "Category", "Type", "Serial", "Manufacturer", "Model", "Status",
-         "Condition", "Location", "Department", "Vendor", "Purchase Date", "Purchase Cost",
-         "Warranty Expiry", "Current Value", "Notes"], rows, "assets.csv")
+         "Condition", "OS", "CPU", "RAM", "Storage", "Hostname", "MAC", "IP",
+         "Location", "Department", "Vendor", "Purchase Date", "Purchase Cost",
+         "Invoice", "Warranty Expiry", "Current Value", "Notes"], rows, "assets.csv")
 
 
 @bp.route("/new", methods=["GET", "POST"])
@@ -142,8 +169,8 @@ def new():
     if request.args.get("clone"):
         source = db.session.get(Asset, int(request.args["clone"]))
     if request.method == "POST":
-        tag = request.form["tag"].strip()
-        if db.session.scalar(db.select(Asset).where(Asset.tag == tag)):
+        tag = request.form.get("tag", "").strip()
+        if tag and db.session.scalar(db.select(Asset).where(Asset.tag == tag)):
             flash(f'Asset tag "{tag}" already exists.', "error")
         else:
             a = Asset()
@@ -160,8 +187,17 @@ def new():
 @bp.route("/<int:asset_id>")
 @perm_required("assets.view")
 def detail(asset_id):
+    from ..models import ActivityLog, InventoryCheck
     a = db.get_or_404(Asset, asset_id)
+    timeline = db.session.scalars(
+        db.select(ActivityLog)
+        .where(ActivityLog.entity_type == "asset", ActivityLog.entity_id == a.id)
+        .order_by(ActivityLog.created_at.desc()).limit(12)).all()
+    last_check = db.session.scalars(
+        db.select(InventoryCheck).where(InventoryCheck.asset_id == a.id)
+        .order_by(InventoryCheck.checked_at.desc()).limit(1)).first()
     return render_template("assets/detail.html", asset=a, today=date.today(),
+                           timeline=timeline, last_check=last_check,
                            default_due=(date.today() + timedelta(
                                days=int(get_setting("checkout_days") or 30))),
                            image_exts=IMAGE_EXTS, **_lookups())
@@ -206,8 +242,9 @@ def categories():
             flash("You do not have permission to do that.", "error")
             return redirect(url_for("assets.categories"))
         name = request.form["name"].strip()
+        prefix = request.form.get("prefix", "").strip().upper() or None
         if name and not db.session.scalar(db.select(Category).where(Category.name == name)):
-            db.session.add(Category(name=name))
+            db.session.add(Category(name=name, prefix=prefix))
             log_activity("category_created", "category", None, name)
             db.session.commit()
             flash(f'Category "{name}" created.', "success")
@@ -237,7 +274,7 @@ def category_delete(cat_id):
 @perm_required("checkout.manage")
 def checkout(asset_id):
     a = db.get_or_404(Asset, asset_id)
-    if a.current_assignment or a.status in ("Retired", "Missing"):
+    if a.current_assignment or a.status in BLOCKED_CHECKOUT_STATUSES:
         flash("This asset cannot be checked out.", "error")
         return redirect(url_for("assets.detail", asset_id=a.id))
     emp = db.get_or_404(Employee, int(request.form["employee_id"]))
@@ -260,7 +297,15 @@ def checkin(asset_id):
         flash("Asset is not checked out.", "error")
         return redirect(url_for("assets.detail", asset_id=a.id))
     asg.returned_at = datetime.utcnow()
-    a.status = "Available"
+    # return inspection (spec section 16)
+    condition = request.form.get("return_condition", "")
+    if condition in ASSET_CONDITIONS and condition != a.condition:
+        log_activity("condition_changed", "asset", a.id,
+                     f"{a.tag}: {a.condition} → {condition} on return")
+        a.condition = condition
+        asg.return_condition = condition
+    asg.return_notes = request.form.get("return_notes", "").strip() or None
+    a.status = "Damaged" if condition == "Damaged" else "Available"
     log_activity("checked_in", "asset", a.id, f"{a.tag} ← {asg.employee.name}")
     db.session.commit()
     flash(f"Checked in from {asg.employee.name}.", "success")
@@ -405,6 +450,28 @@ def bulk():
                 a.status = status
                 log_activity("updated", "asset", a.id, f"{a.tag} status → {status}")
             flash(f"{len(assets)} assets set to {status}.", "success")
+    elif action == "assign" and request.form.get("employee_id"):
+        emp = db.get_or_404(Employee, int(request.form["employee_id"]))
+        done = skipped = 0
+        for a in assets:
+            if a.current_assignment or a.status in BLOCKED_CHECKOUT_STATUSES:
+                skipped += 1
+                continue
+            db.session.add(Assignment(asset=a, employee=emp, assigned_by=g.user.id))
+            a.status = "Checked Out"
+            log_activity("checked_out", "asset", a.id, f"{a.tag} → {emp.name} (bulk)")
+            done += 1
+        flash(f"Assigned {done} assets to {emp.name}"
+              + (f" ({skipped} skipped)." if skipped else "."), "success")
+    elif action == "transfer" and request.form.get("location_id"):
+        loc_id = int(request.form["location_id"])
+        for a in assets:
+            db.session.add(Transfer(asset=a, from_location_id=a.location_id,
+                                    to_location_id=loc_id, by_user=g.user.id,
+                                    notes="Bulk transfer"))
+            a.location_id = loc_id
+            log_activity("transferred", "asset", a.id, f"{a.tag} (bulk)")
+        flash(f"{len(assets)} assets transferred.", "success")
     db.session.commit()
     return redirect(url_for("assets.list_"))
 
@@ -412,7 +479,8 @@ def bulk():
 # ------------------------------------------------------- import (Excel/CSV)
 
 IMPORT_COLS = ["tag", "name", "category", "type", "serial", "manufacturer", "model",
-               "status", "condition", "purchase_date", "purchase_cost", "warranty_expiry"]
+               "status", "condition", "purchase_date", "purchase_cost", "warranty_expiry",
+               "os", "cpu", "ram", "storage", "hostname", "mac_address"]
 
 
 def _xlsx_to_csv(file_storage):
@@ -495,7 +563,11 @@ def import_():
                       status=r["status"] if r["status"] in ASSET_STATUSES else "Available",
                       condition=r["condition"] if r["condition"] in ASSET_CONDITIONS else "Good",
                       purchase_date=r["_pdate"], purchase_cost=r["purchase_cost"] or None,
-                      warranty_expiry=r["_wdate"], category_id=r["_cat_id"])
+                      warranty_expiry=r["_wdate"], category_id=r["_cat_id"],
+                      os_name=r["os"] or None, cpu=r["cpu"] or None,
+                      ram=r["ram"] or None, storage=r["storage"] or None,
+                      hostname=r["hostname"] or None,
+                      mac_address=r["mac_address"] or None)
             db.session.add(a)
             created += 1
         log_activity("imported", "asset", None, f"{created} assets from CSV")

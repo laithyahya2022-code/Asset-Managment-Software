@@ -28,6 +28,17 @@
         <dt>Serial number</dt><dd>{{ asset.serial or "—" }}</dd>
         <dt>Manufacturer</dt><dd>{{ asset.manufacturer or "—" }}</dd>
         <dt>Model</dt><dd>{{ asset.model or "—" }}</dd>
+        {% if asset.os_name %}<dt>Operating system</dt><dd>{{ asset.os_name }}{{ " " ~ asset.os_version if asset.os_version }}</dd>{% endif %}
+        {% if asset.cpu %}<dt>CPU</dt><dd>{{ asset.cpu }}</dd>{% endif %}
+        {% if asset.ram %}<dt>RAM</dt><dd>{{ asset.ram }}</dd>{% endif %}
+        {% if asset.storage %}<dt>Storage</dt><dd>{{ asset.storage }}</dd>{% endif %}
+        {% if asset.gpu %}<dt>Graphics card</dt><dd>{{ asset.gpu }}</dd>{% endif %}
+        {% if asset.hostname %}<dt>Hostname</dt><dd>{{ asset.hostname }}</dd>{% endif %}
+        {% if asset.mac_address %}<dt>MAC address</dt><dd style="font-family:ui-monospace,monospace">{{ asset.mac_address }}</dd>{% endif %}
+        {% if asset.ip_address %}<dt>IP address</dt><dd style="font-family:ui-monospace,monospace">{{ asset.ip_address }}</dd>{% endif %}
+        {% if asset.invoice_number %}<dt>Invoice number</dt><dd>{{ asset.invoice_number }}</dd>{% endif %}
+        {% if asset.parent %}<dt>Part of</dt><dd><a href="{{ url_for('assets.detail', asset_id=asset.parent_id) }}">{{ asset.parent.tag }} — {{ asset.parent.name }}</a></dd>{% endif %}
+        {% if last_check %}<dt>Last inventory</dt><dd>{{ last_check.checked_at.strftime("%Y-%m-%d") }} — {{ last_check.status }}</dd>{% endif %}
         <dt>{{ t("Location") }}</dt><dd>{{ asset.location.path if asset.location else "—" }}</dd>
         <dt>{{ t("Department") }}</dt><dd>{{ asset.department.name if asset.department else "—" }}</dd>
         <dt>Vendor</dt><dd>{% if asset.vendor %}<a href="{{ url_for('org.vendor_detail', vendor_id=asset.vendor_id) }}">{{ asset.vendor.name }}</a>{% else %}—{% endif %}</dd>
@@ -54,10 +65,19 @@
           {% if cur.due_at %} · due {{ cur.due_at }}{% if cur.overdue %} <span class="red">({{ t("Overdue") }})</span>{% endif %}{% endif %}</p>
         {% if has_perm("checkout.manage") %}
         <form method="post" action="{{ url_for('assets.checkin', asset_id=asset.id) }}">
-          <button class="btn" type="submit">{{ t("Check In") }}</button>
+          <div class="form-grid">
+            <div><label for="ci-cond">Condition after return</label>
+              <select id="ci-cond" name="return_condition">
+                <option value="">Unchanged ({{ asset.condition }})</option>
+                {% for c in conditions %}<option>{{ c }}</option>{% endfor %}
+              </select></div>
+            <div><label for="ci-notes">Inspection / damage notes</label>
+              <input id="ci-notes" name="return_notes" placeholder="Optional"></div>
+          </div>
+          <div class="form-actions"><button class="btn" type="submit">{{ t("Check In") }}</button></div>
         </form>
         {% endif %}
-      {% elif asset.status in ("Retired", "Missing") %}
+      {% elif asset.status in ("Retired", "Disposed", "Lost", "Missing") %}
         <p class="empty">This asset is {{ asset.status | lower }} and cannot be checked out.</p>
       {% elif has_perm("checkout.manage") and employees %}
         <form method="post" action="{{ url_for('assets.checkout', asset_id=asset.id) }}">
@@ -154,6 +174,29 @@
         {% endfor %}
       </ul>
       {% else %}<p class="empty">No maintenance history.</p>{% endif %}
+    </div>
+
+    {% if asset.components %}
+    <div class="card">
+      <p class="eyebrow">Attached components</p>
+      <ul class="feed">
+        {% for c in asset.components %}
+        <li><a href="{{ url_for('assets.detail', asset_id=c.id) }}">{{ c.tag }}</a> {{ c.name }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+
+    <div class="card">
+      <p class="eyebrow">Timeline</p>
+      {% if timeline %}
+      <ul class="feed">
+        {% for log in timeline %}
+        <li><span class="chip">{{ log.action | replace("_", " ") }}</span>
+          <span class="muted">{{ log.user.name if log.user else "system" }} · {{ log.created_at.strftime("%Y-%m-%d %H:%M") }}</span></li>
+        {% endfor %}
+      </ul>
+      {% else %}<p class="empty">No recorded events.</p>{% endif %}
     </div>
   </div>
 </div>

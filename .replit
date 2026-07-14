@@ -1,0 +1,9 @@
+entrypoint = "run_server.py"
+run = ["sh", "-c", "pip install -q -r requirements.txt && ITAM_NO_BROWSER=1 PORT=8080 python run_server.py"]
+
+[env]
+ITAM_NO_BROWSER = "1"
+
+[[ports]]
+localPort = 8080
+externalPort = 80

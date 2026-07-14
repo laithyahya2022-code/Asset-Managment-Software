@@ -47,9 +47,19 @@
     <div><span class="k-label">{{ t("Available Assets") }}</span><span class="k-value">{{ counts.get("Available", 0) }}</span>
     <span class="k-sub">Ready for checkout</span></div>
   </a>
+  <a class="kpi" href="{{ url_for('assets.list_', status='Lost') }}">
+    <span class="tile red">{{ icon("alert") }}</span>
+    <div><span class="k-label">{{ t("Lost") }}</span><span class="k-value">{{ counts.get("Lost", 0) + counts.get("Missing", 0) }}</span>
+    <span class="k-sub">Lost or missing assets</span></div>
+  </a>
+  <a class="kpi" href="{{ url_for('assets.list_', status='Damaged') }}">
+    <span class="tile orange">{{ icon("wrench") }}</span>
+    <div><span class="k-label">{{ t("Damaged") }}</span><span class="k-value">{{ counts.get("Damaged", 0) }}</span>
+    <span class="k-sub">Need repair or disposal</span></div>
+  </a>
   <a class="kpi" href="{{ url_for('assets.list_', status='Retired') }}">
     <span class="tile grey">{{ icon("box") }}</span>
-    <div><span class="k-label">{{ t("Retired / Disposed") }}</span><span class="k-value">{{ counts.get("Retired", 0) }}</span>
+    <div><span class="k-label">{{ t("Retired / Disposed") }}</span><span class="k-value">{{ counts.get("Retired", 0) + counts.get("Disposed", 0) }}</span>
     <span class="k-sub">End of life assets</span></div>
   </a>
 </div>
@@ -62,6 +72,28 @@
   <div class="card">
     <p class="eyebrow">{{ t("Assets by Status") }}</p>
     {{ donut }}
+  </div>
+</div>
+
+<div class="two-col">
+  <div class="card">
+    <p class="eyebrow">Assets by Department</p>
+    {{ dept_chart }}
+  </div>
+  <div class="card">
+    <p class="eyebrow">Assets due for return</p>
+    {% if due_soon %}
+    <div class="table-wrap"><table>
+      <tr><th>Asset</th><th>{{ t("Employee") }}</th><th>Due</th></tr>
+      {% for x in due_soon %}
+      <tr>
+        <td><a href="{{ url_for('assets.detail', asset_id=x.asset_id) }}">{{ x.asset.tag }}</a></td>
+        <td>{{ x.employee.name }}</td>
+        <td>{{ x.due_at }}{% if x.due_at < today %} <span class="red">{{ t("Overdue") }}</span>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </table></div>
+    {% else %}<p class="empty">Nothing due in the next 7 days.</p>{% endif %}
   </div>
 </div>
 

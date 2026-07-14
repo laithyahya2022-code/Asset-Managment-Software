@@ -35,6 +35,8 @@ def employee_form(emp_id=None):
                 emp = Employee()
                 db.session.add(emp)
             emp.name = request.form["name"].strip()
+            emp.emp_code = request.form.get("emp_code", "").strip() or None
+            emp.emp_type = request.form.get("emp_type", "").strip() or None
             emp.email = email
             emp.phone = request.form.get("phone", "").strip() or None
             emp.title = request.form.get("title", "").strip() or None
@@ -46,8 +48,10 @@ def employee_form(emp_id=None):
             db.session.commit()
             flash(f"Employee {emp.name} saved.", "success")
             return redirect(url_for("org.employee_detail", emp_id=emp.id))
+    from ..models import EMPLOYEE_TYPES
     departments = db.session.scalars(db.select(Department).order_by(Department.name)).all()
-    return render_template("org/employee_form.html", emp=emp, departments=departments)
+    return render_template("org/employee_form.html", emp=emp, departments=departments,
+                           emp_types=EMPLOYEE_TYPES)
 
 
 @bp.route("/employees/<int:emp_id>")

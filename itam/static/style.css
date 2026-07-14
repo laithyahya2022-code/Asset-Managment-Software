@@ -167,6 +167,11 @@ td a:hover { text-decoration: underline; }
 .s-reserved { background: #e9e2fa; color: #4b3591; }
 .s-retired { background: #e7eaee; color: #454e5b; }
 .s-missing { background: #f9dee5; color: #8f2343; }
+.s-in-use { background: #e3e6fb; color: #35409a; }
+.s-in-storage { background: #d8f0ee; color: #0f5f5a; }
+.s-lost { background: #f9dee5; color: #8f2343; }
+.s-damaged { background: #fbe3dc; color: #8a3016; }
+.s-disposed { background: #dfe2e6; color: #3c434c; }
 .b-warranty, .b-license { background: #fbeecb; color: #7c5310; }
 .b-maintenance { background: #dfe9fc; color: #1d3f8f; }
 .b-assignment { background: #f9dee5; color: #8f2343; }

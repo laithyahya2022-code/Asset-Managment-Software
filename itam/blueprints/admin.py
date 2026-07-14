@@ -115,6 +115,7 @@ def roles():
 
 SETTING_GROUPS = {
     "General": ["app_name", "qr_prefix", "custom_asset_fields", "checkout_days"],
+    "Alerts": ["warranty_alert_days", "license_alert_days"],
     "Email": ["email_enabled", "smtp_host", "smtp_port", "smtp_user",
               "smtp_password", "smtp_from"],
     "Backup & Audit": ["backup_auto", "audit_retention_days"],

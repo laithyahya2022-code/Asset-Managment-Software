@@ -8,29 +8,41 @@ from ..models import (ASSET_STATUSES, ActivityLog, Asset, Assignment, Category,
                       Employee, License, Maintenance, Notification,
                       PurchaseOrder, Vendor, db)
 from ..security import login_required, perm_required
-from ..utils import bar_chart, donut_chart, line_chart, month_key, notify
+from ..models import Department
+from ..utils import (bar_chart, donut_chart, get_setting, line_chart,
+                     month_key, notify)
 
 bp = Blueprint("main", __name__)
 
 STATUS_COLORS = {
-    "Available": "#22a04a", "Checked Out": "#2f6fed", "Under Maintenance": "#e8a13c",
-    "Reserved": "#7c5cd6", "Retired": "#8a929e", "Missing": "#d05574",
+    "Available": "#22a04a", "Checked Out": "#2f6fed", "In Use": "#4c5fd6",
+    "Reserved": "#7c5cd6", "In Storage": "#18a8a0", "Under Maintenance": "#e8a13c",
+    "Lost": "#d05574", "Damaged": "#c2452f", "Missing": "#a83252",
+    "Retired": "#8a929e", "Disposed": "#5c636e",
 }
+
+
+def _alert_days(key, default):
+    try:
+        return int(get_setting(key) or default)
+    except ValueError:
+        return default
 
 
 def _generate_alerts():
     """Create in-app notifications for warranty/license/maintenance/overdue items."""
     today = date.today()
-    horizon = today + timedelta(days=90)
+    horizon = today + timedelta(days=_alert_days("warranty_alert_days", 90))
+    lic_horizon = today + timedelta(days=_alert_days("license_alert_days", 90))
     for a in db.session.scalars(db.select(Asset).where(
             Asset.warranty_expiry.isnot(None), Asset.warranty_expiry <= horizon,
-            Asset.status != "Retired")):
+            Asset.status.notin_(["Retired", "Disposed"]))):
         state = "expired" if a.warranty_expiry < today else "expires soon"
         notify("Warranty", f"Warranty for {a.tag} ({a.name}) {state} ({a.warranty_expiry})",
                link=url_for("assets.detail", asset_id=a.id),
                dedupe_key=f"warr-{a.id}-{a.warranty_expiry}")
     for lic in db.session.scalars(db.select(License).where(
-            License.expiry_date.isnot(None), License.expiry_date <= horizon)):
+            License.expiry_date.isnot(None), License.expiry_date <= lic_horizon)):
         state = "expired" if lic.expiry_date < today else "expires soon"
         notify("License", f"License {lic.name} {state} ({lic.expiry_date})",
                link=url_for("ops.license_detail", license_id=lic.id),
@@ -82,6 +94,17 @@ def dashboard():
         .group_by(Category.name).order_by(func.count(Asset.id).desc())).all()
     cat_chart = bar_chart([(n, c) for n, c in by_cat])
     donut = donut_chart([(s, counts.get(s, 0), STATUS_COLORS[s]) for s in ASSET_STATUSES])
+    by_dept = db.session.execute(
+        db.select(Department.name, func.count(Asset.id))
+        .join(Asset, Asset.department_id == Department.id)
+        .group_by(Department.name).order_by(func.count(Asset.id).desc())).all()
+    dept_chart = bar_chart([(n, c) for n, c in by_dept], color="#2f6fed")
+
+    due_soon = db.session.scalars(
+        db.select(Assignment).where(
+            Assignment.returned_at.is_(None), Assignment.due_at.isnot(None),
+            Assignment.due_at <= today + timedelta(days=7))
+        .order_by(Assignment.due_at).limit(8)).all()
 
     recent = db.session.scalars(
         db.select(ActivityLog).order_by(ActivityLog.created_at.desc()).limit(8)).all()
@@ -95,7 +118,8 @@ def dashboard():
         "dashboard.html", total=total, counts=counts, overdue=overdue,
         scheduled=scheduled, expiring=expiring, active_lic=active_lic,
         lic_soon=lic_soon, added_month=added_month, value_short=value_short,
-        cat_chart=cat_chart, donut=donut, recent=recent, alerts=alerts)
+        cat_chart=cat_chart, donut=donut, dept_chart=dept_chart,
+        due_soon=due_soon, today=today, recent=recent, alerts=alerts)
 
 
 @bp.route("/analytics")

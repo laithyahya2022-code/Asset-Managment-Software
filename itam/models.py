@@ -6,9 +6,16 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 db = SQLAlchemy()
 
-ASSET_STATUSES = ["Available", "Checked Out", "Under Maintenance", "Reserved", "Retired", "Missing"]
-ASSET_CONDITIONS = ["New", "Good", "Fair", "Poor", "Broken"]
-ROLES = ["admin", "manager", "technician", "viewer"]
+ASSET_STATUSES = ["Available", "Checked Out", "In Use", "Reserved", "In Storage",
+                  "Under Maintenance", "Lost", "Damaged", "Missing", "Retired", "Disposed"]
+BLOCKED_CHECKOUT_STATUSES = ("Retired", "Disposed", "Lost", "Missing")
+ASSET_CONDITIONS = ["New", "Excellent", "Good", "Fair", "Poor", "Damaged", "Broken"]
+ROLES = ["superadmin", "admin", "it_manager", "it_staff", "asset_manager",
+         "inventory_manager", "data_entry", "dept_manager", "employee",
+         "viewer", "auditor",
+         # kept for compatibility with earlier installs
+         "manager", "technician"]
+EMPLOYEE_TYPES = ["Administrative Staff", "Teacher"]
 LOCATION_KINDS = ["Branch", "Building", "Floor", "Room", "Storage Area"]
 MAINTENANCE_KINDS = ["Preventive", "Corrective"]
 MAINTENANCE_STATUSES = ["Scheduled", "In Progress", "Completed", "Cancelled"]
@@ -20,12 +27,26 @@ PERMISSIONS = [
     "inventory.manage", "reports.view", "admin.users", "admin.settings", "api.access",
 ]
 
+_OPS = [p for p in PERMISSIONS if not p.startswith("admin.")]
 DEFAULT_ROLE_PERMS = {
+    "superadmin": PERMISSIONS,
     "admin": PERMISSIONS,
-    "manager": [p for p in PERMISSIONS if not p.startswith("admin.")],
+    "it_manager": _OPS,
+    "it_staff": ["assets.view", "assets.manage", "checkout.manage",
+                 "maintenance.manage", "inventory.manage", "reports.view"],
+    "asset_manager": ["assets.view", "assets.manage", "checkout.manage",
+                      "licenses.manage", "procurement.manage", "org.manage",
+                      "people.manage", "reports.view"],
+    "inventory_manager": ["assets.view", "inventory.manage", "checkout.manage",
+                          "reports.view"],
+    "data_entry": ["assets.view", "assets.manage"],
+    "dept_manager": ["assets.view", "reports.view"],
+    "employee": ["assets.view"],
+    "viewer": ["assets.view", "reports.view"],
+    "auditor": ["assets.view", "reports.view"],
+    "manager": _OPS,
     "technician": ["assets.view", "assets.manage", "checkout.manage",
                    "maintenance.manage", "inventory.manage", "reports.view"],
-    "viewer": ["assets.view", "reports.view"],
 }
 
 
@@ -97,7 +118,14 @@ class SavedSearch(db.Model):
 class Category(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(80), unique=True, nullable=False)
+    prefix = db.Column(db.String(10))  # auto-numbering prefix, e.g. PC -> PC-000001
     assets = db.relationship("Asset", back_populates="category")
+
+    @property
+    def tag_prefix(self):
+        if self.prefix:
+            return self.prefix.upper()
+        return "".join(c for c in self.name.upper() if c.isalnum())[:3] or "AST"
 
 
 class Department(db.Model):
@@ -142,6 +170,8 @@ class Vendor(db.Model):
 class Employee(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(120), nullable=False)
+    emp_code = db.Column(db.String(40))          # Employee ID badge number
+    emp_type = db.Column(db.String(30))          # Administrative Staff | Teacher
     email = db.Column(db.String(120), unique=True, nullable=False)
     phone = db.Column(db.String(40))
     title = db.Column(db.String(80))
@@ -165,6 +195,18 @@ class Asset(db.Model):
     serial = db.Column(db.String(120))
     manufacturer = db.Column(db.String(80))
     model = db.Column(db.String(120))
+    # technical specifications
+    os_name = db.Column(db.String(60))
+    os_version = db.Column(db.String(60))
+    cpu = db.Column(db.String(80))
+    ram = db.Column(db.String(40))
+    storage = db.Column(db.String(60))
+    gpu = db.Column(db.String(80))
+    hostname = db.Column(db.String(80))
+    mac_address = db.Column(db.String(40))
+    ip_address = db.Column(db.String(45))
+    invoice_number = db.Column(db.String(60))
+    parent_id = db.Column(db.Integer, db.ForeignKey("asset.id"))
     status = db.Column(db.String(25), nullable=False, default="Available")
     condition = db.Column(db.String(15), nullable=False, default="Good")
     location_id = db.Column(db.Integer, db.ForeignKey("location.id"))
@@ -180,6 +222,7 @@ class Asset(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     category = db.relationship("Category", back_populates="assets")
+    parent = db.relationship("Asset", remote_side="Asset.id", backref="components")
     location = db.relationship("Location", back_populates="assets")
     department = db.relationship("Department", back_populates="assets")
     vendor = db.relationship("Vendor", back_populates="assets")
@@ -244,6 +287,8 @@ class Assignment(db.Model):
     due_at = db.Column(db.Date)
     returned_at = db.Column(db.DateTime)
     notes = db.Column(db.Text)
+    return_condition = db.Column(db.String(15))   # condition observed at check-in
+    return_notes = db.Column(db.Text)             # damage / inspection notes
     asset = db.relationship("Asset", back_populates="assignments")
     employee = db.relationship("Employee", back_populates="assignments")
 
@@ -284,6 +329,7 @@ class Maintenance(db.Model):
     kind = db.Column(db.String(15), nullable=False, default="Corrective")
     title = db.Column(db.String(160), nullable=False)
     description = db.Column(db.Text)
+    solution = db.Column(db.Text)
     status = db.Column(db.String(15), nullable=False, default="Scheduled")
     scheduled_for = db.Column(db.Date)
     completed_at = db.Column(db.DateTime)

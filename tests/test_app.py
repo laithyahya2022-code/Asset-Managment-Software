@@ -262,6 +262,60 @@ def test_auto_backup(tmp_path):
     assert len(list((tmp_path / "bk").glob("auto-*.sqlite"))) == 1
 
 
+def test_auto_asset_numbering(client, app):
+    login(client)
+    with app.app_context():
+        cat = db.session.scalar(db.select(Category))
+        cat.prefix = "LPT"
+        db.session.commit()
+        cat_id = cat.id
+    for _ in range(2):
+        client.post("/assets/new", data={
+            "tag": "", "name": "Auto Laptop", "category_id": str(cat_id),
+            "status": "Available", "condition": "Good", "depreciation_years": "5"})
+    with app.app_context():
+        tags = sorted(t for (t,) in db.session.execute(
+            db.select(Asset.tag).where(Asset.tag.like("LPT-%"))).all())
+        assert tags == ["LPT-000001", "LPT-000002"]
+
+
+def test_return_inspection(client, app):
+    login(client)
+    client.post("/assets/new", data={
+        "tag": "RI-1", "name": "Loaner", "status": "Available",
+        "condition": "Good", "depreciation_years": "5"})
+    with app.app_context():
+        asset_id = db.session.scalar(db.select(Asset.id).where(Asset.tag == "RI-1"))
+        emp_id = db.session.scalar(db.select(Employee.id))
+    client.post(f"/assets/{asset_id}/checkout", data={"employee_id": emp_id})
+    client.post(f"/assets/{asset_id}/checkin",
+                data={"return_condition": "Damaged", "return_notes": "cracked lid"})
+    with app.app_context():
+        a = db.session.get(Asset, asset_id)
+        assert a.condition == "Damaged"
+        assert a.status == "Damaged"
+        assert a.assignments[0].return_notes == "cracked lid"
+
+
+def test_new_roles_have_permissions(app):
+    from itam.models import RolePermission
+    with app.app_context():
+        auditor_perms = {p.permission for p in db.session.scalars(
+            db.select(RolePermission).where(RolePermission.role == "auditor"))}
+        assert "reports.view" in auditor_perms
+        assert "assets.manage" not in auditor_perms
+        superadmin_perms = {p.permission for p in db.session.scalars(
+            db.select(RolePermission).where(RolePermission.role == "superadmin"))}
+        assert "admin.settings" in superadmin_perms
+
+
+def test_lifecycle_and_movement_reports(client):
+    login(client)
+    assert client.get("/reports/lifecycle").status_code == 200
+    assert client.get("/reports/movement").status_code == 200
+    assert client.get("/reports/locations").status_code == 200
+
+
 def test_arabic_language_switch(client):
     login(client)
     resp = client.get("/lang/ar", follow_redirects=True)

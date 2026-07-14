@@ -17,8 +17,9 @@ DEFAULT_SETTINGS = {
     "smtp_host": "", "smtp_port": "587", "smtp_user": "", "smtp_password": "",
     "smtp_from": "", "email_enabled": "0",
     "backup_auto": "1", "audit_retention_days": "365",
-    "custom_asset_fields": "MAC Address, OS",
+    "custom_asset_fields": "",
     "checkout_days": "30",
+    "warranty_alert_days": "90", "license_alert_days": "90",
 }
 
 

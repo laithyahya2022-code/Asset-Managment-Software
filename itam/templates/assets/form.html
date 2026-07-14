@@ -6,8 +6,9 @@
 <div class="card">
   <form method="post">
     <div class="form-grid">
-      <div><label for="f-tag">Asset tag *</label>
-        <input id="f-tag" name="tag" required value="{{ asset.tag if asset else '' }}"></div>
+      <div><label for="f-tag">Asset tag {{ "*" if asset else "(leave blank to auto-number)" }}</label>
+        <input id="f-tag" name="tag" {{ "required" if asset }} value="{{ asset.tag if asset else '' }}"
+               placeholder="Auto: PC-000001"></div>
       <div><label for="f-name">{{ t("Name") }} *</label>
         <input id="f-name" name="name" required value="{{ a.name if a else '' }}"></div>
       <div><label for="f-cat">{{ t("Category") }}</label>
@@ -50,6 +51,31 @@
         <input id="f-dep" name="depreciation_years" type="number" min="0" max="50" value="{{ a.depreciation_years or 5 if a else 5 }}"></div>
       <div><label for="f-warr">Warranty expiry</label>
         <input id="f-warr" name="warranty_expiry" type="date" value="{{ a.warranty_expiry or '' if a else '' }}"></div>
+      <div><label for="f-invoice">Invoice number</label>
+        <input id="f-invoice" name="invoice_number" value="{{ a.invoice_number or '' if a else '' }}"></div>
+      <div><label for="f-parent">Part of (parent asset)</label>
+        <select id="f-parent" name="parent_id"><option value="">—</option>
+          {% for p in parents %}{% if not asset or p.id != asset.id %}<option value="{{ p.id }}" {{ 'selected' if a and a.parent_id == p.id }}>{{ p.tag }} — {{ p.name }}</option>{% endif %}{% endfor %}
+        </select></div>
+      <div class="full"><p class="eyebrow" style="margin:1rem 0 0">Technical specifications</p></div>
+      <div><label for="f-os">Operating system</label>
+        <input id="f-os" name="os_name" value="{{ a.os_name or '' if a else '' }}" placeholder="Windows 11 Pro"></div>
+      <div><label for="f-osv">OS version</label>
+        <input id="f-osv" name="os_version" value="{{ a.os_version or '' if a else '' }}" placeholder="23H2"></div>
+      <div><label for="f-cpu">CPU</label>
+        <input id="f-cpu" name="cpu" value="{{ a.cpu or '' if a else '' }}" placeholder="Intel Core i5-1335U"></div>
+      <div><label for="f-ram">RAM</label>
+        <input id="f-ram" name="ram" value="{{ a.ram or '' if a else '' }}" placeholder="16 GB"></div>
+      <div><label for="f-storage">Storage</label>
+        <input id="f-storage" name="storage" value="{{ a.storage or '' if a else '' }}" placeholder="512 GB SSD"></div>
+      <div><label for="f-gpu">Graphics card</label>
+        <input id="f-gpu" name="gpu" value="{{ a.gpu or '' if a else '' }}"></div>
+      <div><label for="f-host">Device name / hostname</label>
+        <input id="f-host" name="hostname" value="{{ a.hostname or '' if a else '' }}"></div>
+      <div><label for="f-mac">MAC address</label>
+        <input id="f-mac" name="mac_address" value="{{ a.mac_address or '' if a else '' }}"></div>
+      <div><label for="f-ip">IP address</label>
+        <input id="f-ip" name="ip_address" value="{{ a.ip_address or '' if a else '' }}"></div>
       {% for name in custom_names %}
       <div><label for="f-cust{{ loop.index0 }}">{{ name }}</label>
         <input id="f-cust{{ loop.index0 }}" name="custom_{{ loop.index0 }}" value="{{ a.custom.get(name, '') if a else '' }}"></div>

@@ -29,19 +29,36 @@ def seed():
     viewer.set_password("viewer123")
     db.session.add_all([tech, viewer])
 
-    # org structure
-    cats = {n: Category(name=n) for n in
-            ["Laptops", "Desktops", "Monitors", "Phones", "Printers", "Networking",
-             "Peripherals"]}
+    # org structure (spec sections 6, 10 and 12)
+    cat_defs = [
+        ("Desktop Computers", "PC"), ("Laptops", "LPT"), ("Tablets", "TAB"),
+        ("Monitors", "MON"), ("Printers", "PR"), ("Projectors", "DS"),
+        ("Servers", "SRV"), ("Switches", "SW"), ("Routers", "RTR"),
+        ("Firewalls", "FW"), ("Access Points", "AP"), ("UPS Devices", "UPS"),
+        ("CCTV", "CCTV"), ("Telephones", "TEL"), ("Accessories", "ACC"),
+        ("Peripherals", "PER"), ("Software Licenses", "SWL"),
+        # kept for the sample data below
+        ("Desktops", "DT"), ("Phones", "PH"), ("Networking", "NW"),
+    ]
+    cats = {n: Category(name=n, prefix=p) for n, p in cat_defs}
     deps = {n: Department(name=n, cost_center=cc) for n, cc in
-            [("IT", "CC-100"), ("Administration", "CC-200"), ("Science Lab", "CC-300"),
-             ("Library", "CC-400")]}
-    branch = Location(name="Main Campus", kind="Branch")
-    bldg = Location(name="Building A", kind="Building", parent=branch)
+            [("Admissions & Registration", "CC-100"), ("Accounting", "CC-200"),
+             ("Secretariat", "CC-300"), ("Information Technology", "CC-400"),
+             ("International Section", "CC-500"),
+             ("National Section – Primary", "CC-600"),
+             ("National Section – Secondary", "CC-700"),
+             # kept for the sample data below
+             ("IT", "CC-401"), ("Administration", "CC-201"),
+             ("Science Lab", "CC-800"), ("Library", "CC-900")]}
+    mada2 = Location(name="Mada 2", kind="Branch")
+    mada3 = Location(name="Mada 3", kind="Branch")
+    branch = Location(name="Mada 1", kind="Branch")
+    bldg = Location(name="Building 1", kind="Building", parent=branch)
     floor1 = Location(name="Floor 1", kind="Floor", parent=bldg)
     lab = Location(name="Computer Lab", kind="Room", parent=floor1)
     office = Location(name="Admin Office", kind="Room", parent=floor1)
     storage = Location(name="IT Storage", kind="Storage Area", parent=floor1)
+    db.session.add_all([mada2, mada3])
     vend = {
         "Dell": Vendor(name="Dell Technologies", contact_name="Sales Team",
                        email="sales@dell.com", website="https://dell.com"),
@@ -57,13 +74,17 @@ def seed():
 
     emps = [
         Employee(name="Alice Hart", email="alice.hart@example.com",
+                 emp_code="EMP-1001", emp_type="Teacher",
                  title="Teacher", department=deps["Science Lab"]),
         Employee(name="Omar Khalil", email="omar.khalil@example.com",
-                 title="Accountant", department=deps["Administration"]),
+                 emp_code="EMP-1002", emp_type="Administrative Staff",
+                 title="Accountant", department=deps["Accounting"]),
         Employee(name="Dana Reyes", email="dana.reyes@example.com",
+                 emp_code="EMP-1003", emp_type="Administrative Staff",
                  title="Librarian", department=deps["Library"]),
         Employee(name="Yousef Haddad", email="yousef.haddad@example.com",
-                 title="IT Support", department=deps["IT"]),
+                 emp_code="EMP-1004", emp_type="Administrative Staff",
+                 title="IT Support", department=deps["Information Technology"]),
     ]
     db.session.add_all(emps)
 

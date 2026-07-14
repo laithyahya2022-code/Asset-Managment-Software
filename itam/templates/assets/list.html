@@ -84,8 +84,18 @@
   <span class="muted">Bulk action for selected:</span>
   <select name="action" style="width:auto">
     <option value="labels">Print labels</option>
+    <option value="assign">Assign to employee →</option>
+    <option value="transfer">Transfer to location →</option>
     {% for s in statuses %}<option value="status:{{ s }}">Set status: {{ s }}</option>{% endfor %}
     <option value="delete">Delete</option>
+  </select>
+  <select name="employee_id" style="width:auto">
+    <option value="">(employee…)</option>
+    {% for e in employees %}<option value="{{ e.id }}">{{ e.name }}</option>{% endfor %}
+  </select>
+  <select name="location_id" style="width:auto">
+    <option value="">(location…)</option>
+    {% for l in locations %}<option value="{{ l.id }}">{{ l.path }}</option>{% endfor %}
   </select>
   <button class="btn secondary" type="submit" data-confirm="Apply this bulk action to the selected assets?">Apply</button>
 </div>

@@ -7,6 +7,12 @@
     <div class="form-grid">
       <div><label for="e-name">{{ t("Name") }} *</label>
         <input id="e-name" name="name" required value="{{ emp.name if emp else '' }}"></div>
+      <div><label for="e-code">Employee ID</label>
+        <input id="e-code" name="emp_code" value="{{ emp.emp_code or '' if emp else '' }}" placeholder="EMP-1001"></div>
+      <div><label for="e-type">Employee type</label>
+        <select id="e-type" name="emp_type"><option value="">—</option>
+          {% for tp in emp_types %}<option {{ 'selected' if emp and emp.emp_type == tp }}>{{ tp }}</option>{% endfor %}
+        </select></div>
       <div><label for="e-email">Email *</label>
         <input id="e-email" name="email" type="email" required value="{{ emp.email if emp else '' }}"></div>
       <div><label for="e-phone">Phone</label>

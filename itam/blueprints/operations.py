@@ -68,6 +68,7 @@ def maintenance_new():
             kind=request.form.get("kind", "Corrective"),
             title=request.form["title"].strip(),
             description=request.form.get("description", "").strip() or None,
+            solution=request.form.get("solution", "").strip() or None,
             scheduled_for=parse_date(request.form.get("scheduled_for")),
             technician_id=int(request.form["technician_id"]) if request.form.get("technician_id") else None,
             cost=request.form.get("cost") or None,
@@ -99,6 +100,8 @@ def maintenance_status(mid):
             m.completed_at = datetime.utcnow()
             if request.form.get("cost"):
                 m.cost = request.form["cost"]
+            if request.form.get("solution"):
+                m.solution = request.form["solution"].strip()
             if m.asset.status == "Under Maintenance":
                 m.asset.status = "Available"
         elif status == "In Progress":

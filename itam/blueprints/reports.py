@@ -4,7 +4,7 @@ from flask import Blueprint, render_template, request
 
 from ..models import (ASSET_CONDITIONS, ASSET_STATUSES, Asset, Assignment,
                       Category, Department, Employee, InventoryAudit, License,
-                      Location, Maintenance, db)
+                      Location, Maintenance, User, db)
 from ..security import perm_required
 from ..utils import csv_response
 
@@ -13,12 +13,15 @@ bp = Blueprint("reports", __name__, url_prefix="/reports")
 REPORTS = {
     "assets": "Asset Register",
     "departments": "Assets by Department",
+    "locations": "Assets by Branch / Building",
     "employees": "Employee Assignments",
     "maintenance": "Maintenance Log",
     "warranty": "Warranty Status",
     "licenses": "License Compliance",
     "financial": "Financial / Depreciation",
     "inventory": "Inventory & Missing Assets",
+    "movement": "Asset Movement / Transfers",
+    "lifecycle": "Lifecycle & End-of-Life",
 }
 
 
@@ -75,6 +78,44 @@ def _report_data(name, args):
                  a.depreciation_years or 5,
                  f"{a.current_value:,.2f}" if a.current_value is not None else ""]
                 for a in db.session.scalars(db.select(Asset).order_by(Asset.tag))]
+    elif name == "locations":
+        headers = ["Location", "Kind", "Assets", "Purchase Cost"]
+        rows = []
+        for loc in db.session.scalars(db.select(Location)):
+            if not loc.assets:
+                continue
+            cost = sum(float(a.purchase_cost or 0) for a in loc.assets)
+            rows.append([loc.path, loc.kind, len(loc.assets), f"{cost:,.2f}"])
+        rows.sort(key=lambda r: r[0])
+    elif name == "movement":
+        from ..models import Transfer
+        headers = ["Asset", "From", "To", "When", "By", "Notes"]
+        rows = []
+        for tr in db.session.scalars(db.select(Transfer)
+                                     .order_by(Transfer.at.desc()).limit(500)):
+            by = db.session.get(User, tr.by_user) if tr.by_user else None
+            rows.append([tr.asset.tag,
+                         tr.from_location.path if tr.from_location else "",
+                         tr.to_location.path if tr.to_location else "",
+                         tr.at.strftime("%Y-%m-%d %H:%M"),
+                         by.name if by else "", tr.notes or ""])
+    elif name == "lifecycle":
+        headers = ["Tag", "Name", "Age (years)", "Depreciation (yrs)",
+                   "Warranty", "Recommendation"]
+        rows = []
+        for a in db.session.scalars(db.select(Asset)
+                                    .where(Asset.status.notin_(["Retired", "Disposed"]))
+                                    .order_by(Asset.tag)):
+            age = ((today - a.purchase_date).days / 365.25) if a.purchase_date else None
+            dep = a.depreciation_years or 5
+            end_of_life = (age is not None and age >= dep) or a.warranty_expired
+            rows.append([a.tag, a.name,
+                         f"{age:.1f}" if age is not None else "unknown", dep,
+                         "expired" if a.warranty_expired
+                         else (a.warranty_expiry or "—"),
+                         "REPLACE — end of life" if end_of_life
+                         else ("plan replacement soon"
+                               if age is not None and age >= dep - 1 else "OK")])
     elif name == "inventory":
         headers = ["Audit", "Started", "Completed", "Verified", "Missing"]
         rows = [[au.name, au.started_at.date(),

@@ -9,12 +9,13 @@
 </div>
 {% if rows %}
 <div class="card table-wrap"><table>
-  <tr><th>{{ t("Name") }}</th><th>Email</th><th>Title</th><th>{{ t("Department") }}</th><th>Assets held</th><th>Active</th></tr>
+  <tr><th>{{ t("Name") }}</th><th>Employee ID</th><th>Type</th><th>Email</th><th>{{ t("Department") }}</th><th>Assets held</th><th>Active</th></tr>
   {% for e in rows %}
   <tr>
     <td><a href="{{ url_for('org.employee_detail', emp_id=e.id) }}">{{ e.name }}</a></td>
+    <td>{{ e.emp_code or "—" }}</td>
+    <td>{{ e.emp_type or "—" }}</td>
     <td>{{ e.email }}</td>
-    <td>{{ e.title or "—" }}</td>
     <td>{{ e.department.name if e.department else "—" }}</td>
     <td>{{ e.current_assets | length }}</td>
     <td>{{ "Yes" if e.active else "No" }}</td>

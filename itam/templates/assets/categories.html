@@ -6,16 +6,20 @@
 <div class="card no-print">
   <form method="post" class="filters" style="margin:0">
     <input name="name" placeholder="New category name" required>
+    <input name="prefix" placeholder="Tag prefix (e.g. PC)" maxlength="10" style="max-width:150px">
     <button class="btn" type="submit">Add category</button>
   </form>
+  <p class="muted" style="margin:0.5rem 0 0">New assets are numbered automatically per category:
+     PC-000001, LPT-000001, PR-000001…</p>
 </div>
 {% endif %}
 {% if rows %}
 <div class="card table-wrap"><table>
-  <tr><th>{{ t("Name") }}</th><th>{{ t("Assets") }}</th><th></th></tr>
+  <tr><th>{{ t("Name") }}</th><th>Tag prefix</th><th>{{ t("Assets") }}</th><th></th></tr>
   {% for c in rows %}
   <tr>
     <td>{{ c.name }}</td>
+    <td><span class="chip">{{ c.tag_prefix }}-</span></td>
     <td><a href="{{ url_for('assets.list_', category=c.id) }}">{{ c.assets | length }}</a></td>
     <td class="no-print">
       {% if has_perm("assets.manage") and not c.assets %}
