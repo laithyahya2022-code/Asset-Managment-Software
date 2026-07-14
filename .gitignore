@@ -5,3 +5,7 @@ venv/
 instance/
 *.sqlite
 .pytest_cache/
+build/
+dist/
+*.spec
+

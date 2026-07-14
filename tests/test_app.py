@@ -234,6 +234,15 @@ def test_custom_report_builder(client, app):
     assert b"CR-1" not in resp.data
 
 
+def test_custom_instance_path(tmp_path):
+    custom = tmp_path / "portable-instance"
+    app = create_app({"TESTING": True}, instance_path=str(custom))
+    assert app.instance_path == str(custom)
+    assert custom.exists()
+    assert (custom / "itam.sqlite").exists() or app.config["SQLALCHEMY_DATABASE_URI"].endswith(
+        "itam.sqlite")
+
+
 def test_auto_backup(tmp_path):
     import itam as itam_pkg
     dbfile = tmp_path / "live.sqlite"

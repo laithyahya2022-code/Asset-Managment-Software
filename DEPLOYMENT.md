@@ -9,14 +9,52 @@ logs in, and works on **one shared database**.
 
 Pick the section for your server:
 
-- [A. Windows Server](#a-windows-server)
-- [B. Linux server (Ubuntu/Debian)](#b-linux-server-ubuntudebian)
-- [C. Docker (any OS, with PostgreSQL)](#c-docker-any-os)
+- [A. Windows — ready-made ITAM.exe (no Python needed)](#a-windows--ready-made-itamexe-easiest)
+- [B. Windows Server (from source)](#b-windows-server-from-source)
+- [C. Linux server (Ubuntu/Debian)](#c-linux-server-ubuntudebian)
+- [D. Docker (any OS, with PostgreSQL)](#d-docker-any-os)
 - [After installation](#after-installation) — first login, backups, updates
 
 ---
 
-## A. Windows Server
+## A. Windows — ready-made ITAM.exe (easiest)
+
+Every update to this project automatically builds a Windows executable —
+no Python, no `pip install`, no command line. This is the fastest way to
+get the system onto a Windows server or PC.
+
+1. Open the repository on GitHub → the **Actions** tab →
+   **Build Windows executable** → click the newest successful run (green ✓).
+2. Under **Artifacts**, download **ITAM-windows-exe** (a small zip)
+   and extract it — you get **`ITAM.exe`**.
+3. Copy `ITAM.exe` to a folder on the server, e.g. `C:\ITAM\ITAM.exe`.
+4. Double-click it. A console window opens showing:
+   ```
+   On this computer:   http://localhost:8080
+   On the network:     http://192.168.1.50:8080
+   ```
+   Your browser opens automatically. Share the **network** address with
+   your team — that's the shared link everyone on the school network uses.
+5. The database, uploads, and backups are created automatically in an
+   `instance` folder next to `ITAM.exe`. Keep that folder — it **is** your
+   data. Back up that folder the same way you'd back up any important file.
+
+**To start it automatically on boot:** put a shortcut to `ITAM.exe` in the
+Windows **Startup** folder (`Win+R` → `shell:startup`), or set it up as a
+scheduled task the same way as the "start on boot" step in Section B below,
+just pointing at `ITAM.exe` instead of a `.bat` file.
+
+**Updating:** download the newest `ITAM.exe` from Actions the same way and
+replace the old file — your `instance` folder (all your data) is untouched.
+
+**Windows SmartScreen:** since the file isn't code-signed, Windows may show
+a blue "protected your PC" warning the first time. Click **More info → Run
+anyway**. This is normal for any small, unsigned program and does not mean
+anything is wrong.
+
+---
+
+## B. Windows Server (from source)
 
 ### 1. Install Python (once)
 Download Python 3.12 from https://www.python.org/downloads/ and run the
@@ -63,7 +101,7 @@ Simplest reliable way — Task Scheduler:
 
 ---
 
-## B. Linux server (Ubuntu/Debian)
+## C. Linux server (Ubuntu/Debian)
 
 ### 1. Install and start
 ```bash
@@ -100,7 +138,7 @@ Check it: `systemctl status itam` → the site is at `http://SERVER-IP:8080`.
 
 ---
 
-## C. Docker (any OS)
+## D. Docker (any OS)
 
 If the server already runs Docker, this is the shortest path and uses
 PostgreSQL (better for many simultaneous users):

@@ -11,8 +11,8 @@ from .security import has_perm, load_user
 from .utils import get_setting
 
 
-def create_app(test_config=None):
-    app = Flask(__name__, instance_relative_config=True)
+def create_app(test_config=None, instance_path=None):
+    app = Flask(__name__, instance_relative_config=True, instance_path=instance_path)
     database_url = os.environ.get("DATABASE_URL", "")
     if "://" not in database_url:
         database_url = "sqlite:///" + os.path.join(app.instance_path, "itam.sqlite")
