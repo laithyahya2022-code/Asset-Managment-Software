@@ -131,7 +131,7 @@
       <img src="{{ url_for('assets.qr', asset_id=asset.id) }}" alt="QR code for {{ asset.tag }}" width="150" height="150">
       <img src="{{ url_for('assets.barcode', asset_id=asset.id) }}" alt="Barcode for {{ asset.tag }}" style="max-width:100%">
       <div class="actions-row no-print" style="justify-content:center">
-        <a class="btn secondary sm" href="{{ url_for('assets.labels', id=asset.id) }}">{{ t("Print") }} label</a>
+        <a class="btn sm" href="{{ url_for('assets.label', asset_id=asset.id) }}" target="_blank" rel="noopener">{{ t("Print") }} label (6×3)</a>
       </div>
     </div>
 

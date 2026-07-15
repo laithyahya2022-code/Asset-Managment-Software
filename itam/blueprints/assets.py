@@ -458,6 +458,15 @@ def barcode(asset_id):
     return Response(barcode_svg(a.tag), mimetype="image/svg+xml")
 
 
+@bp.route("/<int:asset_id>/label")
+@perm_required("assets.view")
+def label(asset_id):
+    a = db.get_or_404(Asset, asset_id)
+    return render_template("assets/label.html", asset=a,
+                           app_name=get_setting("app_name"),
+                           auto=request.args.get("auto") == "1")
+
+
 @bp.route("/labels")
 @perm_required("assets.view")
 def labels():

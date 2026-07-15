@@ -316,6 +316,23 @@ def test_lifecycle_and_movement_reports(client):
     assert client.get("/reports/locations").status_code == 200
 
 
+def test_asset_label_6x3(client, app):
+    login(client)
+    client.post("/assets/new", data={
+        "tag": "LBL-1", "name": "Label Asset", "status": "Available",
+        "condition": "Good", "depreciation_years": "5", "branch": "Mada 3",
+        "location_name": "IT", "serial": "SN-8842-XJ01"})
+    with app.app_context():
+        asset_id = db.session.scalar(db.select(Asset.id).where(Asset.tag == "LBL-1"))
+    resp = client.get(f"/assets/{asset_id}/label")
+    assert resp.status_code == 200
+    body = resp.data.decode()
+    assert "size: 6in 3in" in body          # exact 6x3 label size
+    assert "LBL-1" in body                   # tag under QR
+    assert "Mada 3" in body and "SN-8842-XJ01" in body
+    assert "/qr.svg" in body                 # QR image embedded
+
+
 def test_arabic_language_switch(client):
     login(client)
     resp = client.get("/lang/ar", follow_redirects=True)

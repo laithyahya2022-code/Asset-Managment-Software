@@ -112,6 +112,7 @@
     </div>
     <div class="form-actions">
       <button class="btn" type="submit">{{ "Save changes" if asset else "Create asset" }}</button>
+      {% if asset %}<a class="btn secondary" href="{{ url_for('assets.label', asset_id=asset.id) }}" target="_blank" rel="noopener">{{ t("Print") }} label (6×3)</a>{% endif %}
       <a class="btn secondary" href="{{ url_for('assets.detail', asset_id=asset.id) if asset else url_for('assets.list_') }}">{{ t("Cancel") }}</a>
     </div>
   </form>
