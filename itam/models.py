@@ -19,6 +19,8 @@ EMPLOYEE_TYPES = ["Administrative Staff", "Teacher"]
 BRANCHES = ["Mada 1", "Mada 2", "Mada 3"]
 BUILDINGS = ["Building 1", "Building 2", "Building 3"]
 FLOORS = ["B1", "GF", "F1", "F2", "F3", "F4", "F5"]
+PLACES = ["Reception", "Admin Office", "Registration office", "Teachers Room",
+          "Supervisor Room", "Principal", "Secretary Office", "Class Room"]
 LOCATION_KINDS = ["Branch", "Building", "Floor", "Room", "Storage Area"]
 MAINTENANCE_KINDS = ["Preventive", "Corrective"]
 MAINTENANCE_STATUSES = ["Scheduled", "In Progress", "Completed", "Cancelled"]
@@ -212,6 +214,8 @@ class Asset(db.Model):
     branch = db.Column(db.String(40))     # Mada 1 / Mada 2 / Mada 3
     building = db.Column(db.String(40))   # Building 1 / 2 / 3
     floor = db.Column(db.String(10))      # B1 / GF / F1..F5
+    location_name = db.Column(db.String(120))  # Reception, Class Room, … (free text)
+    updated_by = db.Column(db.String(120))     # data-entry person's name
     parent_id = db.Column(db.Integer, db.ForeignKey("asset.id"))
     status = db.Column(db.String(25), nullable=False, default="Available")
     condition = db.Column(db.String(15), nullable=False, default="Good")

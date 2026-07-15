@@ -11,9 +11,9 @@ from sqlalchemy import or_
 from werkzeug.utils import secure_filename
 
 from ..models import (ASSET_CONDITIONS, ASSET_STATUSES, BRANCHES, BUILDINGS,
-                      BLOCKED_CHECKOUT_STATUSES, FLOORS, Asset, Assignment,
-                      Category, Department, Employee, Location, Reservation,
-                      Transfer, Vendor, db)
+                      BLOCKED_CHECKOUT_STATUSES, FLOORS, PLACES, Asset,
+                      Assignment, Category, Department, Employee, Location,
+                      Reservation, Transfer, Vendor, db)
 from ..security import has_perm, login_required, perm_required
 from ..utils import (barcode_svg, csv_response, custom_field_names, get_setting,
                      log_activity, parse_date, qr_svg)
@@ -34,7 +34,7 @@ def _lookups():
                                      .order_by(Employee.name)).all(),
         parents=db.session.scalars(db.select(Asset).order_by(Asset.tag)).all(),
         statuses=ASSET_STATUSES, conditions=ASSET_CONDITIONS,
-        branches=BRANCHES, buildings=BUILDINGS, floors=FLOORS,
+        branches=BRANCHES, buildings=BUILDINGS, floors=FLOORS, places=PLACES,
         custom_names=custom_field_names(),
     )
 
@@ -67,12 +67,27 @@ def _from_form(a, form):
     a.serial = form.get("serial", "").strip() or None
     a.manufacturer = form.get("manufacturer", "").strip() or None
     a.model = form.get("model", "").strip() or None
+    if form.get("status") in ASSET_STATUSES:
+        a.status = form["status"]
+    if form.get("condition") in ASSET_CONDITIONS:
+        a.condition = form["condition"]
     for field in ("os_name", "os_version", "cpu", "ram", "storage", "gpu",
                   "hostname", "mac_address", "ip_address", "invoice_number"):
         setattr(a, field, form.get(field, "").strip() or None)
     a.branch = form.get("branch") if form.get("branch") in BRANCHES else None
     a.building = form.get("building") if form.get("building") in BUILDINGS else None
     a.floor = form.get("floor") if form.get("floor") in FLOORS else None
+    a.location_name = form.get("location_name", "").strip() or None
+    a.updated_by = form.get("updated_by", "").strip() or None
+    a.vendor_id = int(form["vendor_id"]) if form.get("vendor_id") else None
+    a.purchase_date = parse_date(form.get("purchase_date"))
+    a.purchase_cost = form.get("purchase_cost") or None
+    a.depreciation_years = int(form.get("depreciation_years") or 5)
+    a.warranty_expiry = parse_date(form.get("warranty_expiry"))
+    a.notes = form.get("notes", "").strip() or None
+    custom = {name: form.get(f"custom_{i}", "").strip()
+              for i, name in enumerate(custom_field_names())}
+    a.custom_fields = json.dumps({k: v for k, v in custom.items() if v})
     parent = form.get("parent_id")
     a.parent_id = int(parent) if parent and (not a.id or int(parent) != a.id) else None
 
@@ -96,21 +111,6 @@ def _apply_assignment(a, form):
     db.session.add(Assignment(asset=a, employee=emp, assigned_by=g.user.id))
     a.status = "Checked Out"
     log_activity("checked_out", "asset", a.id, f"{a.tag} → {emp.name}")
-    if form.get("status") in ASSET_STATUSES:
-        a.status = form["status"]
-    if form.get("condition") in ASSET_CONDITIONS:
-        a.condition = form["condition"]
-    a.location_id = int(form["location_id"]) if form.get("location_id") else None
-    a.department_id = int(form["department_id"]) if form.get("department_id") else None
-    a.vendor_id = int(form["vendor_id"]) if form.get("vendor_id") else None
-    a.purchase_date = parse_date(form.get("purchase_date"))
-    a.purchase_cost = form.get("purchase_cost") or None
-    a.depreciation_years = int(form.get("depreciation_years") or 5)
-    a.warranty_expiry = parse_date(form.get("warranty_expiry"))
-    a.notes = form.get("notes", "").strip() or None
-    custom = {name: form.get(f"custom_{i}", "").strip()
-              for i, name in enumerate(custom_field_names())}
-    a.custom_fields = json.dumps({k: v for k, v in custom.items() if v})
 
 
 def _filtered_assets(args):

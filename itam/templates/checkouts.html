@@ -1,7 +1,7 @@
 {% extends "base.html" %}
-{% block title %}{{ t("Checkouts") }}{% endblock %}
+{% block title %}{{ t("Lending") }}{% endblock %}
 {% block content %}
-<div class="page-head"><h1>{{ t("Checkouts") }}</h1></div>
+<div class="page-head"><h1>{{ t("Lending") }}</h1></div>
 
 <div class="filters no-print">
   {% for key, label in [("active", "Active"), ("overdue", "Overdue"), ("all", "All history")] %}
@@ -46,4 +46,39 @@
   </table></div>
   {% else %}<p class="empty">No reservations. Reserve assets from the asset page.</p>{% endif %}
 </div>
+
+{% if has_perm("checkout.manage") %}
+<div class="two-col no-print">
+  <div class="card">
+    <p class="eyebrow">{{ t("Check Out") }} — lend an asset</p>
+    {% if available %}
+    <form method="post" action="{{ url_for('ops.lend') }}">
+      <label for="co-asset">Asset</label>
+      <select id="co-asset" name="asset_id" required>
+        {% for a in available %}<option value="{{ a.id }}">{{ a.tag }} — {{ a.name }}</option>{% endfor %}
+      </select>
+      <label for="co-emp">{{ t("Employee") }}</label>
+      <select id="co-emp" name="employee_id" required>
+        {% for e in employees %}<option value="{{ e.id }}">{{ e.name }}{{ " (" ~ e.emp_code ~ ")" if e.emp_code }}</option>{% endfor %}
+      </select>
+      <label for="co-due">Due date</label>
+      <input id="co-due" name="due_at" type="date">
+      <div class="form-actions"><button class="btn" type="submit">{{ t("Check Out") }}</button></div>
+    </form>
+    {% else %}<p class="empty">No available assets to lend right now.</p>{% endif %}
+  </div>
+  <div class="card">
+    <p class="eyebrow">{{ t("Check In") }} — return an asset</p>
+    {% if out_assets %}
+    <form method="post" action="{{ url_for('ops.return_asset') }}">
+      <label for="ci-asset">Asset currently out</label>
+      <select id="ci-asset" name="asset_id" required>
+        {% for a in out_assets %}<option value="{{ a.id }}">{{ a.tag }} — {{ a.name }}{{ " (" ~ a.current_assignment.employee.name ~ ")" if a.current_assignment }}</option>{% endfor %}
+      </select>
+      <div class="form-actions"><button class="btn secondary" type="submit">{{ t("Check In") }}</button></div>
+    </form>
+    {% else %}<p class="empty">Nothing is currently checked out.</p>{% endif %}
+  </div>
+</div>
+{% endif %}
 {% endblock %}

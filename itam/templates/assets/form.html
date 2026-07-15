@@ -16,25 +16,25 @@
     </div>
     {% endif %}
     <div class="form-grid">
-      <div><label for="f-tag">Asset ID {{ "*" if asset else "" }}</label>
-        <input id="f-tag" name="tag" {{ "required" if asset }} value="{{ asset.tag if asset else '' }}"
-               placeholder="Auto — pick a category"></div>
       <div><label for="f-name">{{ t("Name") }} *</label>
         <input id="f-name" name="name" required value="{{ a.name if a else '' }}"></div>
       <div><label for="f-cat">{{ t("Category") }}</label>
         <select id="f-cat" name="category_id"><option value="">—</option>
           {% for c in categories %}<option value="{{ c.id }}" {{ 'selected' if a and a.category_id == c.id }}>{{ c.name }}</option>{% endfor %}
         </select></div>
-      <div><label for="f-type">Type</label>
-        <input id="f-type" name="asset_type" value="{{ a.asset_type or '' if a else '' }}" placeholder="Laptop, Printer…"></div>
-      <div><label for="f-status">{{ t("Status") }}</label>
-        <select id="f-status" name="status">
-          {% for s in statuses %}<option {{ 'selected' if a and a.status == s }}>{{ s }}</option>{% endfor %}
-        </select></div>
+      <div><label for="f-tag">Asset ID {{ "*" if asset else "" }}</label>
+        <input id="f-tag" name="tag" {{ "required" if asset }} value="{{ asset.tag if asset else '' }}"
+               placeholder="Auto — pick a category"></div>
       <div><label for="f-cond">Condition</label>
         <select id="f-cond" name="condition">
           {% for c in conditions %}<option {{ 'selected' if a and a.condition == c }}>{{ c }}</option>{% endfor %}
         </select></div>
+      <div><label for="f-status">{{ t("Status") }}</label>
+        <select id="f-status" name="status">
+          {% for s in statuses %}<option {{ 'selected' if a and a.status == s }}>{{ s }}</option>{% endfor %}
+        </select></div>
+      <div><label for="f-type">Type</label>
+        <input id="f-type" name="asset_type" value="{{ a.asset_type or '' if a else '' }}" placeholder="Laptop, Printer…"></div>
       <div><label for="f-serial">Serial number</label>
         <input id="f-serial" name="serial" value="{{ '' if source else (a.serial or '' if a else '') }}"></div>
       <div><label for="f-mfr">Manufacturer</label>
@@ -53,19 +53,19 @@
         <select id="f-floor" name="floor"><option value="">—</option>
           {% for fl in floors %}<option {{ 'selected' if a and a.floor == fl }}>{{ fl }}</option>{% endfor %}
         </select></div>
+      <div><label for="f-place">{{ t("Location") }}</label>
+        <input id="f-place" name="location_name" list="place-list"
+               value="{{ a.location_name or '' if a else '' }}" placeholder="Choose or type a location">
+        <datalist id="place-list">
+          {% for pl in places %}<option value="{{ pl }}">{% endfor %}
+        </datalist></div>
       <div><label for="f-assign">Assign to</label>
         <select id="f-assign" name="assign_employee_id"><option value="">— (unassigned)</option>
           {% for e in employees %}<option value="{{ e.id }}"
             {{ 'selected' if asset and asset.current_assignment and asset.current_assignment.employee_id == e.id }}>{{ e.name }}{{ " (" ~ e.emp_code ~ ")" if e.emp_code }}</option>{% endfor %}
         </select></div>
-      <div><label for="f-loc">{{ t("Location") }} / Room</label>
-        <select id="f-loc" name="location_id"><option value="">—</option>
-          {% for l in locations %}<option value="{{ l.id }}" {{ 'selected' if a and a.location_id == l.id }}>{{ l.path }}</option>{% endfor %}
-        </select></div>
-      <div><label for="f-dept">{{ t("Department") }}</label>
-        <select id="f-dept" name="department_id"><option value="">—</option>
-          {% for d in departments %}<option value="{{ d.id }}" {{ 'selected' if a and a.department_id == d.id }}>{{ d.name }}</option>{% endfor %}
-        </select></div>
+      <div><label for="f-updby">Updated by (data entry)</label>
+        <input id="f-updby" name="updated_by" value="{{ a.updated_by or '' if a else (g.user.name if g.user else '') }}"></div>
       <div><label for="f-vendor">Vendor</label>
         <select id="f-vendor" name="vendor_id"><option value="">—</option>
           {% for v in vendors %}<option value="{{ v.id }}" {{ 'selected' if a and a.vendor_id == v.id }}>{{ v.name }}</option>{% endfor %}

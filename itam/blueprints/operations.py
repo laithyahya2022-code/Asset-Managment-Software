@@ -30,8 +30,51 @@ def checkouts():
     reservations = db.session.scalars(
         db.select(Reservation).where(Reservation.status == "Active")
         .order_by(Reservation.start_date)).all()
+    available = db.session.scalars(
+        db.select(Asset).where(Asset.status == "Available").order_by(Asset.tag)).all()
+    out_assets = db.session.scalars(
+        db.select(Asset).where(Asset.status == "Checked Out").order_by(Asset.tag)).all()
+    employees = db.session.scalars(
+        db.select(Employee).where(Employee.active).order_by(Employee.name)).all()
     return render_template("checkouts.html", rows=rows, show=show,
-                           reservations=reservations, today=date.today())
+                           reservations=reservations, today=date.today(),
+                           available=available, out_assets=out_assets,
+                           employees=employees)
+
+
+@bp.post("/lend")
+@perm_required("checkout.manage")
+def lend():
+    from ..models import BLOCKED_CHECKOUT_STATUSES
+    asset = db.get_or_404(Asset, int(request.form["asset_id"]))
+    if asset.current_assignment or asset.status in BLOCKED_CHECKOUT_STATUSES:
+        flash(f"{asset.tag} cannot be lent out right now.", "error")
+        return redirect(url_for("ops.checkouts"))
+    emp = db.get_or_404(Employee, int(request.form["employee_id"]))
+    db.session.add(Assignment(asset=asset, employee=emp, assigned_by=g.user.id,
+                              due_at=parse_date(request.form.get("due_at")),
+                              notes=request.form.get("notes", "").strip() or None))
+    asset.status = "Checked Out"
+    log_activity("checked_out", "asset", asset.id, f"{asset.tag} → {emp.name}")
+    db.session.commit()
+    flash(f"{asset.tag} lent to {emp.name}.", "success")
+    return redirect(url_for("ops.checkouts"))
+
+
+@bp.post("/return")
+@perm_required("checkout.manage")
+def return_asset():
+    asset = db.get_or_404(Asset, int(request.form["asset_id"]))
+    asg = asset.current_assignment
+    if not asg:
+        flash(f"{asset.tag} is not currently lent out.", "error")
+        return redirect(url_for("ops.checkouts"))
+    asg.returned_at = datetime.utcnow()
+    asset.status = "Available"
+    log_activity("checked_in", "asset", asset.id, f"{asset.tag} ← {asg.employee.name}")
+    db.session.commit()
+    flash(f"{asset.tag} returned from {asg.employee.name}.", "success")
+    return redirect(url_for("ops.checkouts"))
 
 
 @bp.post("/reservations/<int:res_id>/cancel")

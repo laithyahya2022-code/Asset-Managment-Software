@@ -42,8 +42,7 @@
         <dt>Branch</dt><dd>{{ asset.branch or "—" }}</dd>
         <dt>Building</dt><dd>{{ asset.building or "—" }}</dd>
         <dt>Floor</dt><dd>{{ asset.floor or "—" }}</dd>
-        <dt>{{ t("Location") }} / Room</dt><dd>{{ asset.location.path if asset.location else "—" }}</dd>
-        <dt>{{ t("Department") }}</dt><dd>{{ asset.department.name if asset.department else "—" }}</dd>
+        <dt>{{ t("Location") }}</dt><dd>{{ asset.location_name or "—" }}</dd>
         <dt>Vendor</dt><dd>{% if asset.vendor %}<a href="{{ url_for('org.vendor_detail', vendor_id=asset.vendor_id) }}">{{ asset.vendor.name }}</a>{% else %}—{% endif %}</dd>
         <dt>Purchase date</dt><dd>{{ asset.purchase_date or "—" }}</dd>
         <dt>Purchase cost</dt><dd>{{ "$%.2f" | format(asset.purchase_cost) if asset.purchase_cost else "—" }}</dd>
@@ -55,6 +54,7 @@
         <dt>{{ name }}</dt><dd>{{ value }}</dd>
         {% endfor %}
         <dt>Notes</dt><dd>{{ asset.notes or "—" }}</dd>
+        <dt>Updated by</dt><dd>{{ asset.updated_by or "—" }}</dd>
         <dt>Added</dt><dd>{{ asset.created_at.strftime("%Y-%m-%d %H:%M") }}</dd>
       </dl>
     </div>

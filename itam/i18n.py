@@ -4,6 +4,7 @@ AR = {
     "Dashboard": "لوحة التحكم",
     "Assets": "الأصول",
     "Checkouts": "الإعارات",
+    "Lending": "الإعارة",
     "Licenses": "التراخيص",
     "Maintenance": "الصيانة",
     "Inventory": "الجرد",
