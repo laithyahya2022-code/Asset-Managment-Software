@@ -10,10 +10,10 @@ from flask import (Blueprint, Response, current_app, flash, g, redirect,
 from sqlalchemy import or_
 from werkzeug.utils import secure_filename
 
-from ..models import (ASSET_CONDITIONS, ASSET_STATUSES,
-                      BLOCKED_CHECKOUT_STATUSES, Asset, Assignment, Category,
-                      Department, Employee, Location, Reservation, Transfer,
-                      Vendor, db)
+from ..models import (ASSET_CONDITIONS, ASSET_STATUSES, BRANCHES, BUILDINGS,
+                      BLOCKED_CHECKOUT_STATUSES, FLOORS, Asset, Assignment,
+                      Category, Department, Employee, Location, Reservation,
+                      Transfer, Vendor, db)
 from ..security import has_perm, login_required, perm_required
 from ..utils import (barcode_svg, csv_response, custom_field_names, get_setting,
                      log_activity, parse_date, qr_svg)
@@ -34,6 +34,7 @@ def _lookups():
                                      .order_by(Employee.name)).all(),
         parents=db.session.scalars(db.select(Asset).order_by(Asset.tag)).all(),
         statuses=ASSET_STATUSES, conditions=ASSET_CONDITIONS,
+        branches=BRANCHES, buildings=BUILDINGS, floors=FLOORS,
         custom_names=custom_field_names(),
     )
 
@@ -69,8 +70,32 @@ def _from_form(a, form):
     for field in ("os_name", "os_version", "cpu", "ram", "storage", "gpu",
                   "hostname", "mac_address", "ip_address", "invoice_number"):
         setattr(a, field, form.get(field, "").strip() or None)
+    a.branch = form.get("branch") if form.get("branch") in BRANCHES else None
+    a.building = form.get("building") if form.get("building") in BUILDINGS else None
+    a.floor = form.get("floor") if form.get("floor") in FLOORS else None
     parent = form.get("parent_id")
     a.parent_id = int(parent) if parent and (not a.id or int(parent) != a.id) else None
+
+
+def _apply_assignment(a, form):
+    """Handle the 'Assign to' field on the asset form (spec section 15)."""
+    emp_id = form.get("assign_employee_id")
+    cur = a.current_assignment
+    if not emp_id:
+        return
+    emp_id = int(emp_id)
+    if cur and cur.employee_id == emp_id:
+        return  # already assigned to this person
+    if a.status in BLOCKED_CHECKOUT_STATUSES:
+        return
+    if cur:  # reassignment: return the current holder first
+        cur.returned_at = datetime.utcnow()
+    emp = db.session.get(Employee, emp_id)
+    if not emp:
+        return
+    db.session.add(Assignment(asset=a, employee=emp, assigned_by=g.user.id))
+    a.status = "Checked Out"
+    log_activity("checked_out", "asset", a.id, f"{a.tag} → {emp.name}")
     if form.get("status") in ASSET_STATUSES:
         a.status = form["status"]
     if form.get("condition") in ASSET_CONDITIONS:
@@ -184,6 +209,7 @@ def new():
             db.session.add(a)
             db.session.flush()
             log_activity("created", "asset", a.id, f"{a.tag} — {a.name}")
+            _apply_assignment(a, request.form)
             db.session.commit()
             flash(f"Asset {a.tag} created.", "success")
             return redirect(url_for("assets.detail", asset_id=a.id))
@@ -223,6 +249,7 @@ def edit(asset_id):
         else:
             _from_form(a, request.form)
             log_activity("updated", "asset", a.id, a.tag)
+            _apply_assignment(a, request.form)
             db.session.commit()
             flash(f"Asset {a.tag} updated.", "success")
             return redirect(url_for("assets.detail", asset_id=a.id))

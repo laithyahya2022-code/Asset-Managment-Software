@@ -39,7 +39,10 @@
         {% if asset.invoice_number %}<dt>Invoice number</dt><dd>{{ asset.invoice_number }}</dd>{% endif %}
         {% if asset.parent %}<dt>Part of</dt><dd><a href="{{ url_for('assets.detail', asset_id=asset.parent_id) }}">{{ asset.parent.tag }} — {{ asset.parent.name }}</a></dd>{% endif %}
         {% if last_check %}<dt>Last inventory</dt><dd>{{ last_check.checked_at.strftime("%Y-%m-%d") }} — {{ last_check.status }}</dd>{% endif %}
-        <dt>{{ t("Location") }}</dt><dd>{{ asset.location.path if asset.location else "—" }}</dd>
+        <dt>Branch</dt><dd>{{ asset.branch or "—" }}</dd>
+        <dt>Building</dt><dd>{{ asset.building or "—" }}</dd>
+        <dt>Floor</dt><dd>{{ asset.floor or "—" }}</dd>
+        <dt>{{ t("Location") }} / Room</dt><dd>{{ asset.location.path if asset.location else "—" }}</dd>
         <dt>{{ t("Department") }}</dt><dd>{{ asset.department.name if asset.department else "—" }}</dd>
         <dt>Vendor</dt><dd>{% if asset.vendor %}<a href="{{ url_for('org.vendor_detail', vendor_id=asset.vendor_id) }}">{{ asset.vendor.name }}</a>{% else %}—{% endif %}</dd>
         <dt>Purchase date</dt><dd>{{ asset.purchase_date or "—" }}</dd>

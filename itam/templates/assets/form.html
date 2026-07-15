@@ -41,7 +41,24 @@
         <input id="f-mfr" name="manufacturer" value="{{ a.manufacturer or '' if a else '' }}"></div>
       <div><label for="f-model">Model</label>
         <input id="f-model" name="model" value="{{ a.model or '' if a else '' }}"></div>
-      <div><label for="f-loc">{{ t("Location") }}</label>
+      <div><label for="f-branch">Branch</label>
+        <select id="f-branch" name="branch"><option value="">—</option>
+          {% for b in branches %}<option {{ 'selected' if a and a.branch == b }}>{{ b }}</option>{% endfor %}
+        </select></div>
+      <div><label for="f-building">Building</label>
+        <select id="f-building" name="building"><option value="">—</option>
+          {% for b in buildings %}<option {{ 'selected' if a and a.building == b }}>{{ b }}</option>{% endfor %}
+        </select></div>
+      <div><label for="f-floor">Floor</label>
+        <select id="f-floor" name="floor"><option value="">—</option>
+          {% for fl in floors %}<option {{ 'selected' if a and a.floor == fl }}>{{ fl }}</option>{% endfor %}
+        </select></div>
+      <div><label for="f-assign">Assign to</label>
+        <select id="f-assign" name="assign_employee_id"><option value="">— (unassigned)</option>
+          {% for e in employees %}<option value="{{ e.id }}"
+            {{ 'selected' if asset and asset.current_assignment and asset.current_assignment.employee_id == e.id }}>{{ e.name }}{{ " (" ~ e.emp_code ~ ")" if e.emp_code }}</option>{% endfor %}
+        </select></div>
+      <div><label for="f-loc">{{ t("Location") }} / Room</label>
         <select id="f-loc" name="location_id"><option value="">—</option>
           {% for l in locations %}<option value="{{ l.id }}" {{ 'selected' if a and a.location_id == l.id }}>{{ l.path }}</option>{% endfor %}
         </select></div>
