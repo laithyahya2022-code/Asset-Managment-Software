@@ -5,16 +5,21 @@
 <div class="page-head"><h1>{{ "Edit asset" if asset else (t("New Asset") ~ (" (clone of " ~ source.tag ~ ")" if source else "")) }}</h1></div>
 <div class="card">
   <form method="post">
-    {% if not asset %}
-    <div class="id-banner">
-      <div>
-        <p class="eyebrow" style="margin:0 0 .2rem">Asset ID</p>
-        <div id="id-display">Choose a category to generate the ID</div>
-        <p class="muted" style="margin:.2rem 0 0;font-size:.8rem">Generated automatically from the category. Leave the field below to keep it, or type your own.</p>
+    <p class="eyebrow" style="margin:0 0 .5rem">Label preview {% if not asset %}· Asset ID is generated from the category{% endif %}</p>
+    <div class="label-preview">
+      <div class="lp-qr">
+        <div class="box"><img id="qr-live" alt="QR code"></div>
+        <div class="lp-tag" id="lbl-tag">{{ asset.tag if asset else "—" }}</div>
       </div>
-      <div id="qr-box" class="id-qr" hidden><img id="qr-live" alt="QR code" width="96" height="96"></div>
+      <div class="lp-info">
+        <div class="lp-org">{{ app_name }}</div>
+        <div class="lp-grid">
+          <div><div class="lp-l">Branch</div><div class="lp-v" id="lbl-branch">{{ a.branch or "—" if a else "—" }}</div></div>
+          <div><div class="lp-l">Location</div><div class="lp-v" id="lbl-loc">{{ a.location_name or "—" if a else "—" }}</div></div>
+          <div class="lp-full"><div class="lp-l">Serial</div><div class="lp-v" id="lbl-serial">{{ a.serial or "—" if a else "—" }}</div></div>
+        </div>
+      </div>
     </div>
-    {% endif %}
     <div class="form-grid">
       <div><label for="f-name">{{ t("Name") }} *</label>
         <input id="f-name" name="name" required value="{{ a.name if a else '' }}"></div>
@@ -118,37 +123,45 @@
   </form>
 </div>
 
-{% if not asset %}
 <script>
 (function () {
+  var isNew = {{ 'false' if asset else 'true' }};
   var nextTags = {{ next_tags | tojson }};
   var cat = document.getElementById("f-cat");
   var tag = document.getElementById("f-tag");
-  var disp = document.getElementById("id-display");
-  var qrBox = document.getElementById("qr-box");
   var qrImg = document.getElementById("qr-live");
+  var lblTag = document.getElementById("lbl-tag");
+  var lblBranch = document.getElementById("lbl-branch");
+  var lblLoc = document.getElementById("lbl-loc");
+  var lblSerial = document.getElementById("lbl-serial");
+  var branch = document.getElementById("f-branch");
+  var place = document.getElementById("f-place");
+  var serial = document.getElementById("f-serial");
   var userEdited = false;
-  tag.addEventListener("input", function () { userEdited = true; });
 
   function showQR(value) {
-    if (!value) { qrBox.hidden = true; return; }
+    if (!value) { qrImg.removeAttribute("src"); return; }
     qrImg.src = "{{ url_for('assets.qr_preview') }}?data=" + encodeURIComponent(value);
-    qrBox.hidden = false;
   }
   function update() {
-    var id = nextTags[cat.value];
-    if (id && !userEdited) { tag.value = id; }
-    var shown = tag.value || id || "";
-    disp.textContent = shown || "Choose a category to generate the ID";
+    if (isNew && cat) {
+      var id = nextTags[cat.value];
+      if (id && !userEdited) { tag.value = id; }
+    }
+    var shown = tag.value || "";
+    lblTag.textContent = shown || "—";
     showQR(shown);
+    if (branch) lblBranch.textContent = branch.value || "—";
+    if (place) lblLoc.textContent = place.value || "—";
+    if (serial) lblSerial.textContent = serial.value || "—";
   }
-  cat.addEventListener("change", update);
-  tag.addEventListener("input", function () {
-    disp.textContent = tag.value || "Choose a category to generate the ID";
-    showQR(tag.value);
+  if (cat) cat.addEventListener("change", update);
+  tag.addEventListener("input", function () { userEdited = true; update(); });
+  [branch, place, serial].forEach(function (el) {
+    if (el) el.addEventListener("input", update);
+    if (el && el.tagName === "SELECT") el.addEventListener("change", update);
   });
   update();
 })();
 </script>
-{% endif %}
 {% endblock %}
