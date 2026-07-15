@@ -5,10 +5,20 @@
 <div class="page-head"><h1>{{ "Edit asset" if asset else (t("New Asset") ~ (" (clone of " ~ source.tag ~ ")" if source else "")) }}</h1></div>
 <div class="card">
   <form method="post">
+    {% if not asset %}
+    <div class="id-banner">
+      <div>
+        <p class="eyebrow" style="margin:0 0 .2rem">Asset ID</p>
+        <div id="id-display">Choose a category to generate the ID</div>
+        <p class="muted" style="margin:.2rem 0 0;font-size:.8rem">Generated automatically from the category. Leave the field below to keep it, or type your own.</p>
+      </div>
+      <div id="qr-box" class="id-qr" hidden><img id="qr-live" alt="QR code" width="96" height="96"></div>
+    </div>
+    {% endif %}
     <div class="form-grid">
-      <div><label for="f-tag">Asset tag {{ "*" if asset else "(leave blank to auto-number)" }}</label>
+      <div><label for="f-tag">Asset ID {{ "*" if asset else "" }}</label>
         <input id="f-tag" name="tag" {{ "required" if asset }} value="{{ asset.tag if asset else '' }}"
-               placeholder="Auto: PC-000001"></div>
+               placeholder="Auto — pick a category"></div>
       <div><label for="f-name">{{ t("Name") }} *</label>
         <input id="f-name" name="name" required value="{{ a.name if a else '' }}"></div>
       <div><label for="f-cat">{{ t("Category") }}</label>
@@ -89,4 +99,38 @@
     </div>
   </form>
 </div>
+
+{% if not asset %}
+<script>
+(function () {
+  var nextTags = {{ next_tags | tojson }};
+  var cat = document.getElementById("f-cat");
+  var tag = document.getElementById("f-tag");
+  var disp = document.getElementById("id-display");
+  var qrBox = document.getElementById("qr-box");
+  var qrImg = document.getElementById("qr-live");
+  var userEdited = false;
+  tag.addEventListener("input", function () { userEdited = true; });
+
+  function showQR(value) {
+    if (!value) { qrBox.hidden = true; return; }
+    qrImg.src = "{{ url_for('assets.qr_preview') }}?data=" + encodeURIComponent(value);
+    qrBox.hidden = false;
+  }
+  function update() {
+    var id = nextTags[cat.value];
+    if (id && !userEdited) { tag.value = id; }
+    var shown = tag.value || id || "";
+    disp.textContent = shown || "Choose a category to generate the ID";
+    showQR(shown);
+  }
+  cat.addEventListener("change", update);
+  tag.addEventListener("input", function () {
+    disp.textContent = tag.value || "Choose a category to generate the ID";
+    showQR(tag.value);
+  });
+  update();
+})();
+</script>
+{% endif %}
 {% endblock %}

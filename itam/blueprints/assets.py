@@ -50,6 +50,12 @@ def next_tag(category):
     return f"{prefix}-{top + 1:06d}"
 
 
+def _next_tag_map():
+    """{category_id: next auto-generated Asset ID} for live form preview."""
+    return {c.id: next_tag(c) for c in
+            db.session.scalars(db.select(Category)).all()}
+
+
 def _from_form(a, form):
     a.name = form["name"].strip()
     a.category_id = int(form["category_id"]) if form.get("category_id") else None
@@ -181,7 +187,9 @@ def new():
             db.session.commit()
             flash(f"Asset {a.tag} created.", "success")
             return redirect(url_for("assets.detail", asset_id=a.id))
-    return render_template("assets/form.html", asset=None, source=source, **_lookups())
+    return render_template("assets/form.html", asset=None, source=source,
+                           next_tags=_next_tag_map(),
+                           qr_prefix=get_setting("qr_prefix"), **_lookups())
 
 
 @bp.route("/<int:asset_id>")
@@ -218,7 +226,9 @@ def edit(asset_id):
             db.session.commit()
             flash(f"Asset {a.tag} updated.", "success")
             return redirect(url_for("assets.detail", asset_id=a.id))
-    return render_template("assets/form.html", asset=a, source=None, **_lookups())
+    return render_template("assets/form.html", asset=a, source=None,
+                           next_tags=_next_tag_map(),
+                           qr_prefix=get_setting("qr_prefix"), **_lookups())
 
 
 @bp.post("/<int:asset_id>/delete")
@@ -399,6 +409,13 @@ def delete_file(file_id):
 
 
 # ------------------------------------------------------------ QR / barcode
+
+@bp.route("/qr-preview.svg")
+@perm_required("assets.view")
+def qr_preview():
+    data = request.args.get("data", "").strip() or "PREVIEW"
+    return Response(qr_svg(get_setting("qr_prefix") + data), mimetype="image/svg+xml")
+
 
 @bp.route("/<int:asset_id>/qr.svg")
 @perm_required("assets.view")

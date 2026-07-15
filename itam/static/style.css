@@ -264,5 +264,17 @@ dl.props dd { margin: 0; }
   .card { border: none; box-shadow: none; padding: 0; }
 }
 
+/* auto Asset ID banner on the asset form */
+.id-banner {
+  display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+  background: var(--accent-soft, #e3f4ea); border: 1px solid #bfe6cd;
+  border-radius: 10px; padding: 0.9rem 1.1rem; margin-bottom: 1rem; flex-wrap: wrap;
+}
+#id-display {
+  font-size: 1.5rem; font-weight: 800; letter-spacing: 0.01em;
+  font-family: ui-monospace, "SFMono-Regular", Menlo, monospace; color: var(--accent-dark);
+}
+.id-qr img { background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 4px; }
+
 /* RTL tweaks */
 [dir="rtl"] .chart .cl { direction: ltr; }
