@@ -29,6 +29,14 @@ def create_app(test_config=None, instance_path=None):
     if test_config:
         app.config.update(test_config)
 
+    # When served behind a reverse proxy (Caddy / Nginx / IIS) that terminates
+    # HTTPS for a domain like https://itam.yourschool.edu, trust the standard
+    # forwarded headers so redirects and generated links use the right
+    # scheme/host. Enabled by default; harmless for direct LAN access.
+    if os.environ.get("ITAM_BEHIND_PROXY", "1") == "1":
+        from werkzeug.middleware.proxy_fix import ProxyFix
+        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1)
+
     for d in (app.instance_path, app.config["UPLOAD_FOLDER"], app.config["BACKUP_FOLDER"]):
         os.makedirs(d, exist_ok=True)
 

@@ -1,0 +1,36 @@
+# ITAM Enterprise — reverse proxy with automatic HTTPS (Caddy)
+# --------------------------------------------------------------
+# Put ITAM behind a real domain name that people just type and sign in.
+# Caddy gets and renews a free HTTPS certificate automatically.
+#
+# 1) Edit the domain below to yours.
+# 2) Run ITAM headless on the same machine, listening on 127.0.0.1:8080:
+#       Windows : set ITAM_NO_BROWSER=1 && set PORT=8080 && ITAM.exe
+#       Linux   : ITAM_NO_BROWSER=1 PORT=8080 python run_server.py
+# 3) Start Caddy in this folder:  caddy run
+#
+# --- PUBLIC domain (reachable from the internet) --------------------
+# Requires: a real domain pointed (DNS A record) at your school's public
+# IP, and the router forwarding ports 80 and 443 to this server.
+# Caddy will fetch a trusted Let's Encrypt certificate automatically.
+
+itam.yourschool.edu {
+    encode zstd gzip
+    reverse_proxy 127.0.0.1:8080
+}
+
+# --- INTERNAL only (school network, no internet) --------------------
+# If the site should only work inside the school, comment out the block
+# above and use this instead. Point your internal DNS name at this
+# server; Caddy issues a local certificate (staff install it once, or
+# just use http:// on the LAN).
+#
+# itam.mada.local {
+#     tls internal
+#     reverse_proxy 127.0.0.1:8080
+# }
+#
+# Plain HTTP on the LAN (simplest, no certificate at all):
+# http://itam.mada.local {
+#     reverse_proxy 127.0.0.1:8080
+# }
