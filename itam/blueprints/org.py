@@ -3,10 +3,11 @@ from datetime import datetime
 from flask import (Blueprint, flash, g, redirect, render_template, request,
                    url_for)
 
-from ..models import (LOCATION_KINDS, PO_STATUSES, Asset, Category, Department,
-                      Employee, Location, PurchaseOrder, Vendor, db)
+from ..models import (EMPLOYEE_TYPES, LOCATION_KINDS, Asset, Category,
+                      Department, Employee, Location, Vendor, db)
 from ..security import perm_required
-from ..utils import log_activity, parse_date
+from ..utils import (csv_response, log_activity, parse_date, read_table,
+                     xlsx_response)
 
 bp = Blueprint("org", __name__)
 
@@ -18,6 +19,71 @@ bp = Blueprint("org", __name__)
 def employees():
     rows = db.session.scalars(db.select(Employee).order_by(Employee.name)).all()
     return render_template("org/employees.html", rows=rows)
+
+
+def _employee_rows():
+    return [(e.name, e.emp_code or "", e.emp_type or "", e.email, e.phone or "",
+             e.title or "", e.department.name if e.department else "",
+             "Yes" if e.active else "No", len(e.current_assets))
+            for e in db.session.scalars(db.select(Employee).order_by(Employee.name))]
+
+
+EMP_HEADERS = ["Name", "Employee ID", "Type", "Email", "Phone", "Title",
+               "Department", "Active", "Assets Held"]
+
+
+@bp.route("/employees/export.xlsx")
+@perm_required("assets.view")
+def employees_export_xlsx():
+    return xlsx_response(EMP_HEADERS, _employee_rows(), "employees.xlsx", "Employees")
+
+
+@bp.route("/employees/export.csv")
+@perm_required("assets.view")
+def employees_export_csv():
+    return csv_response(EMP_HEADERS, _employee_rows(), "employees.csv")
+
+
+@bp.route("/employees/import", methods=["GET", "POST"])
+@perm_required("people.manage")
+def employees_import():
+    if request.method == "POST" and request.files.get("file"):
+        _, rows = read_table(request.files["file"])
+        depts = {d.name.lower(): d for d in db.session.scalars(db.select(Department))}
+        created = updated = skipped = 0
+        for r in rows:
+            email = (r.get("email") or "").strip().lower()
+            name = (r.get("name") or "").strip()
+            if not email or not name:
+                skipped += 1
+                continue
+            emp = db.session.scalar(db.select(Employee).where(Employee.email == email))
+            if not emp:
+                emp = Employee(email=email)
+                db.session.add(emp)
+                created += 1
+            else:
+                updated += 1
+            emp.name = name
+            emp.emp_code = r.get("employee id") or r.get("emp_code") or emp.emp_code
+            etype = r.get("type") or r.get("emp_type") or ""
+            emp.emp_type = etype if etype in EMPLOYEE_TYPES else emp.emp_type
+            emp.phone = r.get("phone") or emp.phone
+            emp.title = r.get("title") or emp.title
+            dep = depts.get((r.get("department") or "").lower())
+            if dep:
+                emp.department_id = dep.id
+        log_activity("employees_imported", "employee", None,
+                     f"{created} new, {updated} updated")
+        db.session.commit()
+        flash(f"Imported {created} new and {updated} updated employees "
+              f"({skipped} skipped).", "success")
+        return redirect(url_for("org.employees"))
+    return render_template("org/import.html", title="Import employees",
+                           cols=["name", "employee id", "type", "email", "phone",
+                                 "title", "department"],
+                           post_url=url_for("org.employees_import"),
+                           back_url=url_for("org.employees"))
 
 
 @bp.route("/employees/new", methods=["GET", "POST"])
@@ -199,65 +265,3 @@ def vendor_delete(vendor_id):
         db.session.commit()
         flash("Vendor deleted.", "success")
     return redirect(url_for("org.vendors"))
-
-
-# ------------------------------------------------------------- procurement
-
-@bp.route("/procurement")
-@perm_required("assets.view")
-def procurement():
-    rows = db.session.scalars(
-        db.select(PurchaseOrder).order_by(PurchaseOrder.created_at.desc())).all()
-    return render_template("org/procurement.html", rows=rows, statuses=PO_STATUSES)
-
-
-@bp.route("/procurement/new", methods=["GET", "POST"])
-@perm_required("procurement.manage")
-def po_new():
-    if request.method == "POST":
-        count = db.session.scalar(db.select(db.func.count(PurchaseOrder.id))) or 0
-        po = PurchaseOrder(
-            number=f"PO-{datetime.utcnow():%Y}-{count + 1:04d}",
-            vendor_id=int(request.form["vendor_id"]) if request.form.get("vendor_id") else None,
-            description=request.form["description"].strip(),
-            category_id=int(request.form["category_id"]) if request.form.get("category_id") else None,
-            qty=int(request.form.get("qty") or 1),
-            unit_cost=request.form.get("unit_cost") or None,
-            expected_date=parse_date(request.form.get("expected_date")),
-            requested_by=g.user.id,
-            notes=request.form.get("notes", "").strip() or None,
-        )
-        db.session.add(po)
-        db.session.flush()
-        log_activity("po_created", "purchase_order", po.id, po.number)
-        db.session.commit()
-        flash(f"Purchase request {po.number} created.", "success")
-        return redirect(url_for("org.procurement"))
-    vendors_ = db.session.scalars(db.select(Vendor).order_by(Vendor.name)).all()
-    categories = db.session.scalars(db.select(Category).order_by(Category.name)).all()
-    return render_template("org/po_form.html", vendors=vendors_, categories=categories)
-
-
-@bp.post("/procurement/<int:po_id>/status")
-@perm_required("procurement.manage")
-def po_status(po_id):
-    po = db.get_or_404(PurchaseOrder, po_id)
-    status = request.form["status"]
-    if status not in PO_STATUSES:
-        return redirect(url_for("org.procurement"))
-    po.status = status
-    if status == "Received" and not po.received_at:
-        po.received_at = datetime.utcnow()
-        if request.form.get("create_assets"):
-            base = po.number.replace("PO-", "AST-")
-            for i in range(1, po.qty + 1):
-                db.session.add(Asset(
-                    tag=f"{base}-{i:02d}", name=po.description,
-                    category_id=po.category_id, vendor_id=po.vendor_id,
-                    purchase_date=po.received_at.date(), purchase_cost=po.unit_cost,
-                    status="Available"))
-            flash(f"{po.qty} assets created from {po.number}.", "success")
-    log_activity("po_" + status.lower(), "purchase_order", po.id, po.number)
-    db.session.commit()
-    flash(f"{po.number} marked {status}.", "success")
-    return redirect(url_for("org.procurement"))

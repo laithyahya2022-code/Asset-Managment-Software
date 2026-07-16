@@ -6,7 +6,7 @@ from sqlalchemy import func, or_
 
 from ..models import (ASSET_STATUSES, ActivityLog, Asset, Assignment, Category,
                       Employee, License, Maintenance, Notification,
-                      PurchaseOrder, Vendor, db)
+                      Vendor, db)
 from ..security import login_required, perm_required
 from ..models import Department
 from ..utils import (bar_chart, donut_chart, get_setting, line_chart,
@@ -181,9 +181,6 @@ def search():
             License.name.ilike(like)).limit(15)).all()
         results["vendors"] = db.session.scalars(db.select(Vendor).where(
             Vendor.name.ilike(like)).limit(15)).all()
-        results["orders"] = db.session.scalars(db.select(PurchaseOrder).where(or_(
-            PurchaseOrder.number.ilike(like),
-            PurchaseOrder.description.ilike(like))).limit(15)).all()
     return render_template("search.html", q=q, results=results)
 
 

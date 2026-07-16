@@ -288,5 +288,18 @@ dl.props dd { margin: 0; }
 .label-preview .lp-v { font-size: 1.15rem; font-weight: 700; color: #1d2530; word-break: break-word; }
 .label-preview .lp-full { grid-column: 1 / -1; }
 
+/* print only the label preview when the Print label button is used */
+@media print {
+  body.printing-label * { visibility: hidden !important; }
+  body.printing-label .label-preview,
+  body.printing-label .label-preview * { visibility: visible !important; }
+  body.printing-label .label-preview {
+    position: fixed; top: 0; left: 0; width: 6in; height: 3in;
+    margin: 0; page-break-inside: avoid;
+  }
+  body.printing-label #qr-live { visibility: visible !important; }
+  @page { size: 6in 3in; margin: 0; }
+}
+
 /* RTL tweaks */
 [dir="rtl"] .chart .cl { direction: ltr; }

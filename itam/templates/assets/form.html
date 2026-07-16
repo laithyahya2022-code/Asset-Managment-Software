@@ -5,8 +5,11 @@
 <div class="page-head"><h1>{{ "Edit asset" if asset else (t("New Asset") ~ (" (clone of " ~ source.tag ~ ")" if source else "")) }}</h1></div>
 <div class="card">
   <form method="post">
-    <p class="eyebrow" style="margin:0 0 .5rem">Label preview {% if not asset %}· Asset ID is generated from the category{% endif %}</p>
-    <div class="label-preview">
+    <div class="actions-row no-print" style="justify-content:space-between;align-items:center;margin-bottom:.5rem">
+      <p class="eyebrow" style="margin:0">Label preview {% if not asset %}· Asset ID is generated from the category{% endif %}</p>
+      <button type="button" class="btn secondary sm" onclick="printLabelPreview()">{{ t("Print") }} label (6×3)</button>
+    </div>
+    <div class="label-preview" id="label-preview">
       <div class="lp-qr">
         <div class="box"><img id="qr-live" alt="QR code"></div>
         <div class="lp-tag" id="lbl-tag">{{ asset.tag if asset else "—" }}</div>
@@ -124,6 +127,11 @@
 </div>
 
 <script>
+function printLabelPreview() {
+  document.body.classList.add("printing-label");
+  window.print();
+  setTimeout(function () { document.body.classList.remove("printing-label"); }, 500);
+}
 (function () {
   var isNew = {{ 'false' if asset else 'true' }};
   var nextTags = {{ next_tags | tojson }};

@@ -3,13 +3,18 @@
 {% block content %}
 <div class="page-head">
   <h1>{{ t("Licenses") }}</h1>
-  {% if has_perm("licenses.manage") %}
-  <a class="btn no-print" href="{{ url_for('ops.license_form') }}">+ New license</a>
-  {% endif %}
+  <div class="actions-row no-print">
+    {% if has_perm("licenses.manage") %}
+    <a class="btn" href="{{ url_for('ops.license_form') }}">+ New license</a>
+    <a class="btn secondary" href="{{ url_for('ops.licenses_import') }}">{{ t("Import") }} Excel/CSV</a>
+    {% endif %}
+    <a class="btn secondary" href="{{ url_for('ops.licenses_export_xlsx') }}">Export Excel</a>
+    <a class="btn secondary" href="{{ url_for('ops.licenses_export_csv') }}">{{ t("Export CSV") }}</a>
+  </div>
 </div>
 {% if rows %}
 <div class="card table-wrap"><table>
-  <tr><th>{{ t("Name") }}</th><th>Vendor</th><th>Seats</th><th>Used</th><th>Compliance</th><th>Expiry</th><th>Cost</th></tr>
+  <tr><th>{{ t("Name") }}</th><th>Vendor</th><th>Seats</th><th>Used</th><th>Compliance</th><th>Expiry</th><th>Cost</th><th></th></tr>
   {% for l in rows %}
   <tr>
     <td><a href="{{ url_for('ops.license_detail', license_id=l.id) }}">{{ l.name }}</a></td>
@@ -18,6 +23,7 @@
     <td>{% if l.compliant %}<span class="badge s-available">Compliant</span>{% else %}<span class="badge s-missing">Over-used</span>{% endif %}</td>
     <td>{% if l.expiry_date %}{{ l.expiry_date }}{% if l.expired %} <span class="red">expired</span>{% endif %}{% else %}Perpetual{% endif %}</td>
     <td>{{ "$%.2f" | format(l.cost) if l.cost else "—" }}</td>
+    <td class="no-print">{% if has_perm("licenses.manage") %}<a class="btn secondary sm" href="{{ url_for('ops.license_form', license_id=l.id) }}">{{ t("Edit") }}</a>{% endif %}</td>
   </tr>
   {% endfor %}
 </table></div>

@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="page-head"><h1>{{ title }}</h1></div>
+<div class="card">
+  <p>Upload an <strong>Excel (.xlsx)</strong> or <strong>CSV</strong> file. The first row must be
+     column headers. Recognized columns:</p>
+  <p><code>{{ cols | join(", ") }}</code></p>
+  <p class="muted">Existing rows are matched and updated by their unique key (email / name);
+     new rows are added.</p>
+  <form method="post" enctype="multipart/form-data" class="filters">
+    <input type="file" name="file" accept=".xlsx,.xlsm,.csv,text/csv" required>
+    <button class="btn" type="submit">Import</button>
+    <a class="btn secondary" href="{{ back_url }}">{{ t("Cancel") }}</a>
+  </form>
+</div>
+{% endblock %}

@@ -3,9 +3,12 @@
 {% block content %}
 <div class="page-head">
   <h1>{{ t("Maintenance") }}</h1>
-  {% if has_perm("maintenance.manage") %}
-  <a class="btn no-print" href="{{ url_for('ops.maintenance_new') }}">+ New task</a>
-  {% endif %}
+  <div class="actions-row no-print">
+    {% if has_perm("maintenance.manage") %}
+    <a class="btn" href="{{ url_for('ops.maintenance_new') }}">+ New task</a>
+    {% endif %}
+    <a class="btn secondary" href="{{ url_for('ops.maintenance_export_xlsx') }}">Export Excel</a>
+  </div>
 </div>
 
 <div class="filters no-print">
@@ -28,8 +31,10 @@
     <td>{{ m.scheduled_for or "—" }}</td>
     <td>{{ m.technician.name if m.technician else "—" }}</td>
     <td>{{ "$%.2f" | format(m.cost) if m.cost else "—" }}</td>
-    <td class="no-print">
-      {% if has_perm("maintenance.manage") and m.status not in ("Completed", "Cancelled") %}
+    <td class="no-print" style="white-space:nowrap">
+      {% if has_perm("maintenance.manage") %}
+      <a class="btn secondary sm" href="{{ url_for('ops.maintenance_edit', mid=m.id) }}">{{ t("Edit") }}</a>
+      {% if m.status not in ("Completed", "Cancelled") %}
       <form class="inline" method="post" action="{{ url_for('ops.maintenance_status', mid=m.id) }}">
         {% if m.status == "Scheduled" %}
         <button class="btn secondary sm" name="status" value="In Progress" type="submit">Start</button>
@@ -37,6 +42,7 @@
         <button class="btn sm" name="status" value="Completed" type="submit">Complete</button>
         <button class="btn secondary sm" name="status" value="Cancelled" type="submit">{{ t("Cancel") }}</button>
       </form>
+      {% endif %}
       {% endif %}
     </td>
   </tr>

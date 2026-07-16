@@ -59,16 +59,5 @@
 </div>
 {% endif %}
 
-{% if results.orders %}
-<div class="card">
-  <p class="eyebrow">{{ t("Procurement") }} ({{ results.orders | length }})</p>
-  <div class="table-wrap"><table>
-    {% for po in results.orders %}
-    <tr><td><a href="{{ url_for('org.procurement') }}">{{ po.number }}</a></td>
-        <td>{{ po.description }}</td><td>{{ po.status }}</td></tr>
-    {% endfor %}
-  </table></div>
-</div>
-{% endif %}
 {% endif %}
 {% endblock %}

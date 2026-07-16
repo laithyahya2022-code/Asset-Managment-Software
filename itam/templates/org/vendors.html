@@ -2,25 +2,29 @@
 {% block title %}{{ t("Vendors") }}{% endblock %}
 {% block content %}
 <div class="page-head">
-  <h1>{{ t("Vendors") }}</h1>
+  <h1>{{ t("Vendors") }} / Stores</h1>
   {% if has_perm("org.manage") %}
-  <a class="btn no-print" href="{{ url_for('org.vendor_form') }}">+ New vendor</a>
+  <a class="btn no-print" href="{{ url_for('org.vendor_form') }}">+ Add store / vendor</a>
   {% endif %}
 </div>
 {% if rows %}
 <div class="card table-wrap"><table>
-  <tr><th>{{ t("Name") }}</th><th>Contact</th><th>Email</th><th>Phone</th><th>{{ t("Assets") }}</th><th>{{ t("Licenses") }}</th><th>Orders</th></tr>
+  <tr><th>{{ t("Name") }}</th><th>Contact</th><th>Email</th><th>Phone</th><th>{{ t("Assets") }}</th><th>{{ t("Licenses") }}</th><th></th></tr>
   {% for v in rows %}
   <tr>
     <td><a href="{{ url_for('org.vendor_detail', vendor_id=v.id) }}">{{ v.name }}</a></td>
     <td>{{ v.contact_name or "—" }}</td>
-    <td>{{ v.email or "—" }}</td>
-    <td>{{ v.phone or "—" }}</td>
+    <td>{% if v.email %}<a href="mailto:{{ v.email }}">{{ v.email }}</a>{% else %}—{% endif %}</td>
+    <td>{% if v.phone %}<a href="tel:{{ v.phone }}">{{ v.phone }}</a>{% else %}—{% endif %}</td>
     <td>{{ v.assets | length }}</td>
     <td>{{ v.licenses | length }}</td>
-    <td>{{ v.orders | length }}</td>
+    <td class="no-print" style="white-space:nowrap">
+      {% if v.email %}<a class="btn secondary sm" href="mailto:{{ v.email }}">Contact</a>{% endif %}
+      <a class="btn secondary sm" href="{{ url_for('org.vendor_detail', vendor_id=v.id) }}">Info</a>
+      {% if has_perm("org.manage") %}<a class="btn secondary sm" href="{{ url_for('org.vendor_form', vendor_id=v.id) }}">{{ t("Edit") }}</a>{% endif %}
+    </td>
   </tr>
   {% endfor %}
 </table></div>
-{% else %}<p class="empty">No vendors yet.</p>{% endif %}
+{% else %}<p class="empty">No vendors/stores yet.</p>{% endif %}
 {% endblock %}

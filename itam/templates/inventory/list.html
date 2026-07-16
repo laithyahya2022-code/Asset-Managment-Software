@@ -3,12 +3,15 @@
 {% block content %}
 <div class="page-head">
   <h1>{{ t("Inventory") }}</h1>
-  {% if has_perm("inventory.manage") %}
-  <form class="filters no-print" method="post" action="{{ url_for('ops.inventory_new') }}" style="margin:0">
-    <input name="name" placeholder="Audit name (optional)">
-    <button class="btn" type="submit">Start physical audit</button>
-  </form>
-  {% endif %}
+  <div class="actions-row no-print">
+    {% if has_perm("inventory.manage") %}
+    <form class="filters" method="post" action="{{ url_for('ops.inventory_new') }}" style="margin:0">
+      <input name="name" placeholder="Audit name (optional)">
+      <button class="btn" type="submit">Start physical audit</button>
+    </form>
+    {% endif %}
+    <a class="btn secondary" href="{{ url_for('ops.inventory_export_xlsx') }}">Export Excel</a>
+  </div>
 </div>
 
 <div class="kpi-grid">

@@ -8,9 +8,101 @@ from ..models import (MAINTENANCE_KINDS, MAINTENANCE_STATUSES, Asset,
                       License, LicenseAssignment, Maintenance, Reservation,
                       User, Vendor, db)
 from ..security import perm_required
-from ..utils import csv_response, log_activity, parse_date
+from ..utils import (csv_response, log_activity, parse_date, read_table,
+                     xlsx_response)
 
 bp = Blueprint("ops", __name__)
+
+
+# ------------------------------------------------------- Excel/CSV exports
+
+def _license_rows():
+    return [(l.name, l.vendor.name if l.vendor else "", l.key or "", l.seats,
+             l.seats_used, "Yes" if l.compliant else "No",
+             l.purchase_date or "", l.expiry_date or "", l.cost or "")
+            for l in db.session.scalars(db.select(License).order_by(License.name))]
+
+
+LIC_HEADERS = ["Name", "Vendor", "Key", "Seats", "Used", "Compliant",
+               "Purchase Date", "Expiry", "Cost"]
+
+
+@bp.route("/licenses/export.xlsx")
+@perm_required("assets.view")
+def licenses_export_xlsx():
+    return xlsx_response(LIC_HEADERS, _license_rows(), "licenses.xlsx", "Licenses")
+
+
+@bp.route("/licenses/export.csv")
+@perm_required("assets.view")
+def licenses_export_csv():
+    return csv_response(LIC_HEADERS, _license_rows(), "licenses.csv")
+
+
+@bp.route("/licenses/import", methods=["GET", "POST"])
+@perm_required("licenses.manage")
+def licenses_import():
+    if request.method == "POST" and request.files.get("file"):
+        _, rows = read_table(request.files["file"])
+        vendors = {v.name.lower(): v for v in db.session.scalars(db.select(Vendor))}
+        created = updated = skipped = 0
+        for r in rows:
+            name = (r.get("name") or "").strip()
+            if not name:
+                skipped += 1
+                continue
+            lic = db.session.scalar(db.select(License).where(License.name == name))
+            if not lic:
+                lic = License(name=name)
+                db.session.add(lic)
+                created += 1
+            else:
+                updated += 1
+            lic.key = r.get("key") or lic.key
+            try:
+                lic.seats = int(float(r.get("seats"))) if r.get("seats") else lic.seats
+            except ValueError:
+                pass
+            lic.expiry_date = parse_date(r.get("expiry")) or lic.expiry_date
+            lic.cost = r.get("cost") or lic.cost
+            vend = vendors.get((r.get("vendor") or "").lower())
+            if vend:
+                lic.vendor_id = vend.id
+        log_activity("licenses_imported", "license", None, f"{created} new, {updated} updated")
+        db.session.commit()
+        flash(f"Imported {created} new and {updated} updated licenses "
+              f"({skipped} skipped).", "success")
+        return redirect(url_for("ops.licenses"))
+    return render_template("org/import.html", title="Import licenses",
+                           cols=["name", "vendor", "key", "seats", "expiry", "cost"],
+                           post_url=url_for("ops.licenses_import"),
+                           back_url=url_for("ops.licenses"))
+
+
+@bp.route("/maintenance/export.xlsx")
+@perm_required("assets.view")
+def maintenance_export_xlsx():
+    rows = [(m.asset.tag, m.asset.name, m.kind, m.title, m.status,
+             m.scheduled_for or "", m.completed_at.date() if m.completed_at else "",
+             m.technician.name if m.technician else "", m.cost or "", m.parts or "")
+            for m in db.session.scalars(db.select(Maintenance).order_by(Maintenance.created_at.desc()))]
+    return xlsx_response(
+        ["Asset", "Asset Name", "Kind", "Title", "Status", "Scheduled",
+         "Completed", "Technician", "Cost", "Parts"], rows,
+        "maintenance.xlsx", "Maintenance")
+
+
+@bp.route("/inventory/export.xlsx")
+@perm_required("assets.view")
+def inventory_export_xlsx():
+    audit_rows = [(au.name, au.started_at.date(),
+                   au.completed_at.date() if au.completed_at else "in progress",
+                   au.verified_count, au.missing_count)
+                  for au in db.session.scalars(db.select(InventoryAudit)
+                                               .order_by(InventoryAudit.started_at.desc()))]
+    return xlsx_response(
+        ["Audit", "Started", "Completed", "Verified", "Missing"], audit_rows,
+        "inventory.xlsx", "Inventory")
 
 
 # ---------------------------------------------------------------- checkouts
@@ -129,7 +221,32 @@ def maintenance_new():
     techs = db.session.scalars(db.select(User).where(User.active).order_by(User.name)).all()
     preselect = request.args.get("asset", type=int)
     return render_template("maintenance/form.html", assets=assets, techs=techs,
-                           kinds=MAINTENANCE_KINDS, preselect=preselect)
+                           kinds=MAINTENANCE_KINDS, preselect=preselect, m=None)
+
+
+@bp.route("/maintenance/<int:mid>/edit", methods=["GET", "POST"])
+@perm_required("maintenance.manage")
+def maintenance_edit(mid):
+    m = db.get_or_404(Maintenance, mid)
+    if request.method == "POST":
+        m.asset_id = int(request.form["asset_id"])
+        m.kind = request.form.get("kind", "Corrective")
+        m.title = request.form["title"].strip()
+        m.description = request.form.get("description", "").strip() or None
+        m.solution = request.form.get("solution", "").strip() or None
+        m.scheduled_for = parse_date(request.form.get("scheduled_for"))
+        m.technician_id = (int(request.form["technician_id"])
+                           if request.form.get("technician_id") else None)
+        m.cost = request.form.get("cost") or None
+        m.parts = request.form.get("parts", "").strip() or None
+        log_activity("maintenance_updated", "asset", m.asset_id, m.title)
+        db.session.commit()
+        flash("Maintenance task updated.", "success")
+        return redirect(url_for("ops.maintenance_list"))
+    assets = db.session.scalars(db.select(Asset).order_by(Asset.tag)).all()
+    techs = db.session.scalars(db.select(User).where(User.active).order_by(User.name)).all()
+    return render_template("maintenance/form.html", assets=assets, techs=techs,
+                           kinds=MAINTENANCE_KINDS, preselect=m.asset_id, m=m)
 
 
 @bp.post("/maintenance/<int:mid>/status")

@@ -3,22 +3,28 @@
 {% block content %}
 <div class="page-head">
   <h1>{{ t("Employees") }}</h1>
-  {% if has_perm("people.manage") %}
-  <a class="btn no-print" href="{{ url_for('org.employee_form') }}">+ New employee</a>
-  {% endif %}
+  <div class="actions-row no-print">
+    {% if has_perm("people.manage") %}
+    <a class="btn" href="{{ url_for('org.employee_form') }}">+ New employee</a>
+    <a class="btn secondary" href="{{ url_for('org.employees_import') }}">{{ t("Import") }} Excel/CSV</a>
+    {% endif %}
+    <a class="btn secondary" href="{{ url_for('org.employees_export_xlsx') }}">Export Excel</a>
+    <a class="btn secondary" href="{{ url_for('org.employees_export_csv') }}">{{ t("Export CSV") }}</a>
+  </div>
 </div>
 {% if rows %}
 <div class="card table-wrap"><table>
-  <tr><th>{{ t("Name") }}</th><th>Employee ID</th><th>Type</th><th>Email</th><th>{{ t("Department") }}</th><th>Assets held</th><th>Active</th></tr>
+  <tr><th>{{ t("Name") }}</th><th>Employee ID</th><th>Type</th><th>Email</th><th>{{ t("Department") }}</th><th>Assets held</th><th>Active</th><th></th></tr>
   {% for e in rows %}
   <tr>
     <td><a href="{{ url_for('org.employee_detail', emp_id=e.id) }}">{{ e.name }}</a></td>
     <td>{{ e.emp_code or "—" }}</td>
     <td>{{ e.emp_type or "—" }}</td>
-    <td>{{ e.email }}</td>
+    <td>{% if e.email %}<a href="mailto:{{ e.email }}">{{ e.email }}</a>{% else %}—{% endif %}</td>
     <td>{{ e.department.name if e.department else "—" }}</td>
     <td>{{ e.current_assets | length }}</td>
     <td>{{ "Yes" if e.active else "No" }}</td>
+    <td class="no-print">{% if has_perm("people.manage") %}<a class="btn secondary sm" href="{{ url_for('org.employee_form', emp_id=e.id) }}">{{ t("Edit") }}</a>{% endif %}</td>
   </tr>
   {% endfor %}
 </table></div>

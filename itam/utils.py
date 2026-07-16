@@ -96,6 +96,58 @@ def csv_response(headers, rows, filename):
         headers={"Content-Disposition": f"attachment; filename={filename}"},
     )
 
+
+def xlsx_response(headers, rows, filename, sheet="Sheet1"):
+    """Build a real .xlsx download from headers + rows."""
+    from flask import send_file
+    from openpyxl import Workbook
+    wb = Workbook()
+    ws = wb.active
+    ws.title = sheet[:31]
+    ws.append(list(headers))
+    for r in rows:
+        ws.append([("" if v is None else
+                    (v.strftime("%Y-%m-%d") if hasattr(v, "strftime") else
+                     (float(v) if hasattr(v, "is_integer") or _is_decimal(v) else v)))
+                   for v in r])
+    out = io.BytesIO()
+    wb.save(out)
+    out.seek(0)
+    return send_file(out, download_name=filename, as_attachment=True,
+                     mimetype="application/vnd.openxmlformats-officedocument"
+                              ".spreadsheetml.sheet")
+
+
+def _is_decimal(v):
+    import decimal
+    return isinstance(v, decimal.Decimal)
+
+
+def read_table(file_storage):
+    """Read an uploaded .xlsx or .csv into (headers, list-of-dict-rows)."""
+    name = (file_storage.filename or "").lower()
+    if name.endswith((".xlsx", ".xlsm")):
+        from openpyxl import load_workbook
+        wb = load_workbook(file_storage, read_only=True, data_only=True)
+        ws = wb.active
+        data = [[("" if c is None else
+                  (c.strftime("%Y-%m-%d") if hasattr(c, "strftime") else c))
+                 for c in row] for row in ws.iter_rows(values_only=True)]
+        wb.close()
+    else:
+        raw = file_storage.read().decode("utf-8-sig", errors="replace")
+        data = [row for row in csv.reader(io.StringIO(raw))]
+    if not data:
+        return [], []
+    headers = [str(h or "").strip().lower() for h in data[0]]
+    rows = []
+    for line in data[1:]:
+        if not any(str(c).strip() for c in line):
+            continue
+        rows.append({headers[i]: (str(line[i]).strip() if i < len(line) else "")
+                     for i in range(len(headers))})
+    return headers, rows
+
 # ------------------------------------------------------------------ QR / barcode
 
 

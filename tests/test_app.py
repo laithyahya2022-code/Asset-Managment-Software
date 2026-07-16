@@ -333,6 +333,41 @@ def test_asset_label_6x3(client, app):
     assert "/qr.svg" in body                 # QR image embedded
 
 
+def test_procurement_removed(client):
+    login(client)
+    assert client.get("/procurement").status_code == 404
+    assert b"Procurement" not in client.get("/").data
+
+
+def test_employee_excel_export_and_import(client, app):
+    import io
+    from openpyxl import load_workbook
+    from itam.models import Employee
+    login(client)
+    resp = client.get("/employees/export.xlsx")
+    assert resp.status_code == 200
+    wb = load_workbook(io.BytesIO(resp.data))
+    assert wb.active["A1"].value == "Name"
+
+    csv_data = ("name,employee id,type,email,phone,title,department\n"
+                "Imported Person,EMP-7001,Teacher,imp@example.com,555,Teacher,\n")
+    resp = client.post("/employees/import",
+                       data={"file": (io.BytesIO(csv_data.encode()), "e.csv")},
+                       content_type="multipart/form-data", follow_redirects=True)
+    assert resp.status_code == 200
+    with app.app_context():
+        e = db.session.scalar(db.select(Employee).where(Employee.email == "imp@example.com"))
+        assert e is not None and e.emp_code == "EMP-7001"
+
+
+def test_license_and_maintenance_exports(client):
+    login(client)
+    assert client.get("/licenses/export.xlsx").status_code == 200
+    assert client.get("/licenses/export.csv").status_code == 200
+    assert client.get("/maintenance/export.xlsx").status_code == 200
+    assert client.get("/inventory/export.xlsx").status_code == 200
+
+
 def test_arabic_language_switch(client):
     login(client)
     resp = client.get("/lang/ar", follow_redirects=True)

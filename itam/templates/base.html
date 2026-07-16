@@ -31,7 +31,6 @@
       <a href="{{ url_for('org.employees') }}" class="{{ 'active' if ep.startswith('org.employee') }}">{{ icon("user") }}<span>{{ t("Employees") }}</span></a>
       <a href="{{ url_for('org.departments') }}" class="{{ 'active' if ep.startswith('org.department') }}">{{ icon("building") }}<span>{{ t("Departments") }}</span></a>
       <a href="{{ url_for('org.vendors') }}" class="{{ 'active' if ep.startswith('org.vendor') }}">{{ icon("truck") }}<span>{{ t("Vendors") }}</span></a>
-      <a href="{{ url_for('org.procurement') }}" class="{{ 'active' if ep.startswith('org.p') }}">{{ icon("box") }}<span>{{ t("Procurement") }}</span></a>
       <a href="{{ url_for('main.scanner') }}" class="{{ 'active' if ep == 'main.scanner' }}">{{ icon("qr") }}<span>{{ t("QR Scanner") }}</span></a>
       {% if has_perm("reports.view") %}
       <a href="{{ url_for('reports.index') }}" class="{{ 'active' if ep.startswith('reports.') }}">{{ icon("report") }}<span>{{ t("Reports") }}</span></a>
