@@ -8,3 +8,6 @@ pytest>=8.0
 # psycopg2-binary>=2.9
 waitress>=3.0
 openpyxl>=3.1
+# Desktop app window for the packaged Windows build (falls back to a browser).
+# Only needed/installed on Windows; ignored elsewhere.
+pywebview>=5.0 ; sys_platform == "win32"

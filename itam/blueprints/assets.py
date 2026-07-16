@@ -753,7 +753,9 @@ def _apply_asset_import(rows):
             tag=tag,
             name=r["name"].strip(),
             category_id=cat.id if cat else None,
-            asset_type=r["type"].strip() or None,
+            # if the sheet has no separate "type" column, reuse the category
+            # (e.g. the "Asset" column: Desktop / Printer / IP Phone …)
+            asset_type=(r["type"].strip() or r["category"].strip()) or None,
             serial=r["serial"].strip() or None,
             manufacturer=r["manufacturer"].strip() or None,
             model=r["model"].strip() or None,

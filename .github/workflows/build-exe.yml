@@ -28,11 +28,12 @@ jobs:
 
       - name: Build ITAM.exe
         run: >
-          pyinstaller --onefile --name ITAM --console
+          pyinstaller --onefile --name ITAM --noconsole
           --icon itam/static/app.ico
           --add-data "itam/templates;itam/templates"
           --add-data "itam/static;itam/static"
           --collect-submodules sqlalchemy.dialects.sqlite
+          --collect-submodules webview
           --hidden-import waitress
           --hidden-import qrcode.image.svg
           --hidden-import barcode.writer
