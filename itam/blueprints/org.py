@@ -50,28 +50,50 @@ def employees_import():
     if request.method == "POST" and request.files.get("file"):
         _, rows = read_table(request.files["file"])
         depts = {d.name.lower(): d for d in db.session.scalars(db.select(Department))}
+
+        def pick(r, *keys):
+            for k in keys:
+                v = (r.get(k) or "").strip()
+                if v:
+                    return v
+            return ""
+
         created = updated = skipped = 0
         for r in rows:
-            email = (r.get("email") or "").strip().lower()
-            name = (r.get("name") or "").strip()
-            if not email or not name:
+            name = pick(r, "name", "employee name", "full name")
+            code = pick(r, "employee id", "emp_code", "emp code", "id", "badge")
+            email = pick(r, "email", "e-mail", "email address").lower()
+            if not name and not code:
                 skipped += 1
                 continue
-            emp = db.session.scalar(db.select(Employee).where(Employee.email == email))
+            # match an existing employee by Employee ID; only fall back to email
+            # when the row has no ID (emails may be shared, so they can't key rows)
+            emp = None
+            if code:
+                emp = db.session.scalar(db.select(Employee).where(Employee.emp_code == code))
+            elif email:
+                emp = db.session.scalar(db.select(Employee).where(Employee.email == email))
             if not emp:
-                emp = Employee(email=email)
+                emp = Employee()
                 db.session.add(emp)
                 created += 1
             else:
                 updated += 1
-            emp.name = name
-            emp.emp_code = r.get("employee id") or r.get("emp_code") or emp.emp_code
-            etype = r.get("type") or r.get("emp_type") or ""
-            emp.emp_type = etype if etype in EMPLOYEE_TYPES else emp.emp_type
-            emp.phone = r.get("phone") or emp.phone
-            emp.title = r.get("title") or emp.title
-            dep = depts.get((r.get("department") or "").lower())
-            if dep:
+            emp.name = name or emp.name or code
+            emp.emp_code = code or emp.emp_code
+            emp.email = email or emp.email
+            emp.emp_type = (pick(r, "employee type", "type", "emp_type", "staff type")
+                            or emp.emp_type)
+            emp.phone = pick(r, "phone", "mobile", "telephone") or emp.phone
+            emp.title = pick(r, "job title", "title", "position", "role") or emp.title
+            dname = pick(r, "department", "dept")
+            if dname:
+                dep = depts.get(dname.lower())
+                if not dep:                       # auto-create missing departments
+                    dep = Department(name=dname)
+                    db.session.add(dep)
+                    db.session.flush()
+                    depts[dname.lower()] = dep
                 emp.department_id = dep.id
         log_activity("employees_imported", "employee", None,
                      f"{created} new, {updated} updated")
@@ -80,8 +102,8 @@ def employees_import():
               f"({skipped} skipped).", "success")
         return redirect(url_for("org.employees"))
     return render_template("org/import.html", title="Import employees",
-                           cols=["name", "employee id", "type", "email", "phone",
-                                 "title", "department"],
+                           cols=["Name", "Employee ID", "Employee Type", "Email",
+                                 "Job Title", "Department"],
                            post_url=url_for("org.employees_import"),
                            back_url=url_for("org.employees"))
 

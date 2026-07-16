@@ -1,3 +1,5 @@
+import io
+
 import pytest
 
 from itam import create_app
@@ -169,7 +171,6 @@ def test_excel_import_and_export(client, app):
     ws = wb.active
     ws.append(["tag", "name", "category", "status", "purchase_cost"])
     ws.append(["XL-0001", "Excel Laptop", "Laptops", "Available", 999.5])
-    ws.append(["XL-0001", "Duplicate row", "", "", ""])   # dup: skipped
     buf = io.BytesIO()
     wb.save(buf)
     buf.seek(0)
@@ -178,7 +179,6 @@ def test_excel_import_and_export(client, app):
                        data={"file": (buf, "assets.xlsx")},
                        content_type="multipart/form-data")
     assert b"Import preview" in resp.data
-    assert b"duplicate tag" in resp.data
     import re
     token = re.search(rb'name="token" value="([^"]+)"', resp.data).group(1).decode()
     client.post("/assets/import", data={"token": token}, follow_redirects=True)
@@ -186,13 +186,43 @@ def test_excel_import_and_export(client, app):
         a = db.session.scalar(db.select(Asset).where(Asset.tag == "XL-0001"))
         assert a is not None and a.name == "Excel Laptop"
         assert float(a.purchase_cost) == 999.5
-        assert a.category.name == "Laptops"
+        assert a.category.name == "Laptops"    # category auto-created
 
     resp = client.get("/assets/export.xlsx")
     assert resp.status_code == 200
     out = load_workbook(io.BytesIO(resp.data))
     tags = [row[0].value for row in out.active.iter_rows(min_row=2)]
     assert "XL-0001" in tags
+
+
+def test_import_flexible_headers_and_autotag(client, app):
+    """Real-world sheet: odd headers, no usable tags, DD/MM/YYYY dates,
+    duplicated tag column -> every row still imports with a generated ID."""
+    import re
+    login(client)
+    csv = (
+        "No,Asset,TAG,Branch,Floor,Assigned to,Name,Asset Status,Condition,"
+        "Purchase Date,Serial No.,Dept\n"
+        "1,Desktop,eff,Mada 3,GF,Ms A,M3-PC01,In Use,Good,16/07/2026,SN-1,Reg\n"
+        "2,Desktop,eff,Mada 3,GF,Ms B,M3-PC02,In Use,Good,16/07/2026,SN-2,Reg\n"
+        "3,Printer,eff,Mada 3,F1,Copy Room,M3-PR01,In Use,Good,16/07/2026,SN-3,IT\n"
+    )
+    resp = client.post("/assets/import",
+                       data={"file": (io.BytesIO(csv.encode()), "db.csv")},
+                       content_type="multipart/form-data")
+    assert b"Import preview" in resp.data
+    token = re.search(rb'name="token" value="([^"]+)"', resp.data).group(1).decode()
+    client.post("/assets/import", data={"token": token}, follow_redirects=True)
+    with app.app_context():
+        assets = db.session.scalars(db.select(Asset)).all()
+        assert len(assets) == 3                       # all rows imported
+        assert len({a.tag for a in assets}) == 3      # unique generated tags
+        pc = db.session.scalar(db.select(Asset).where(Asset.name == "M3-PC01"))
+        assert pc.category.name == "Desktop"          # from "Asset" column
+        assert pc.branch == "Mada 3" and pc.floor == "GF"
+        assert pc.serial == "SN-1"
+        assert str(pc.purchase_date) == "2026-07-16"  # DD/MM/YYYY parsed
+        assert "Ms A" in (pc.notes or "")             # "Assigned to" kept
 
 
 def test_search_page(client, app):
@@ -349,15 +379,28 @@ def test_employee_excel_export_and_import(client, app):
     wb = load_workbook(io.BytesIO(resp.data))
     assert wb.active["A1"].value == "Name"
 
-    csv_data = ("name,employee id,type,email,phone,title,department\n"
-                "Imported Person,EMP-7001,Teacher,imp@example.com,555,Teacher,\n")
+    # Real-world sheet: "Employee Type"/"Job Title" headers, SHARED emails across
+    # distinct people, custom types, and a department that doesn't exist yet.
+    csv_data = (
+        "Name,Employee ID,Employee Type,Email,Job Title,Department\n"
+        "Laith 1,Emp001,IT Technical,shared@mada.edu,IT Technical,IT\n"
+        "Ayham 1,Emp002,IT Manager,shared@mada.edu,IT Manager,IT\n"
+        "Rama 1,Emp003,Teacher,shared@mada.edu,Teacher,National\n"
+    )
     resp = client.post("/employees/import",
                        data={"file": (io.BytesIO(csv_data.encode()), "e.csv")},
                        content_type="multipart/form-data", follow_redirects=True)
     assert resp.status_code == 200
     with app.app_context():
-        e = db.session.scalar(db.select(Employee).where(Employee.email == "imp@example.com"))
-        assert e is not None and e.emp_code == "EMP-7001"
+        from itam.models import Department
+        people = db.session.scalars(
+            db.select(Employee).where(Employee.emp_code.in_(["Emp001", "Emp002", "Emp003"]))).all()
+        assert len(people) == 3                       # shared email did NOT collapse them
+        e1 = db.session.scalar(db.select(Employee).where(Employee.emp_code == "Emp001"))
+        assert e1.emp_type == "IT Technical"          # custom type kept
+        assert e1.title == "IT Technical"             # "Job Title" mapped
+        assert e1.department.name == "IT"             # department auto-created
+        assert db.session.scalar(db.select(Department).where(Department.name == "National"))
 
 
 def test_license_and_maintenance_exports(client):

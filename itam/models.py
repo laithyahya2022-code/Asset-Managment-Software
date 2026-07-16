@@ -176,8 +176,8 @@ class Employee(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(120), nullable=False)
     emp_code = db.Column(db.String(40))          # Employee ID badge number
-    emp_type = db.Column(db.String(30))          # Administrative Staff | Teacher
-    email = db.Column(db.String(120), unique=True, nullable=False)
+    emp_type = db.Column(db.String(60))          # Teacher, IT Technical, Supervisor, …
+    email = db.Column(db.String(120))            # optional; may repeat (shared inboxes)
     phone = db.Column(db.String(40))
     title = db.Column(db.String(80))
     department_id = db.Column(db.Integer, db.ForeignKey("department.id"))

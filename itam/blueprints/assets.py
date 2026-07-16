@@ -531,9 +531,72 @@ def bulk():
 
 # ------------------------------------------------------- import (Excel/CSV)
 
-IMPORT_COLS = ["tag", "name", "category", "type", "serial", "manufacturer", "model",
-               "status", "condition", "purchase_date", "purchase_cost", "warranty_expiry",
-               "os", "cpu", "ram", "storage", "hostname", "mac_address"]
+IMPORT_COLS = ["tag", "name", "category / asset", "type", "serial / serial no.",
+               "manufacturer", "model", "status / asset status", "condition",
+               "branch", "building", "floor", "location", "room", "assigned to",
+               "department / dept", "ip address", "os", "cpu", "ram", "storage",
+               "hostname", "mac address", "purchase date", "warranty expiry",
+               "purchase cost", "updated by", "notes"]
+
+# Map many possible spreadsheet header names -> our canonical field.
+# Keys are "normalized" (lowercased, non-alphanumerics collapsed to spaces).
+HEADER_ALIASES = {
+    "tag": "tag", "asset tag": "tag", "asset id": "tag", "assetid": "tag",
+    "barcode qr code": "tag", "barcode": "tag", "qr code": "tag", "qr": "tag",
+    "name": "name", "device name": "name", "asset name": "name", "device": "name",
+    "hostname": "hostname", "host name": "hostname", "computer name": "hostname",
+    "asset": "category", "category": "category", "asset category": "category",
+    "type": "type", "asset type": "type", "device type": "type",
+    "serial": "serial", "serial no": "serial", "serial number": "serial",
+    "serialno": "serial", "serial num": "serial",
+    "manufacturer": "manufacturer", "brand": "manufacturer", "make": "manufacturer",
+    "model": "model",
+    "status": "status", "asset status": "status", "state": "status",
+    "condition": "condition",
+    "branch": "branch", "site": "branch", "campus": "branch",
+    "building": "building",
+    "floor": "floor", "level": "floor",
+    "location": "location", "location name": "location", "place": "location",
+    "room": "room",
+    "assigned to": "assigned_to", "assigned": "assigned_to", "assignee": "assigned_to",
+    "user": "assigned_to", "owner": "assigned_to", "holder": "assigned_to",
+    "department": "department", "dept": "department",
+    "ip address": "ip_address", "ip": "ip_address", "ipaddress": "ip_address",
+    "os": "os", "operating system": "os", "os name": "os",
+    "cpu": "cpu", "processor": "cpu",
+    "ram": "ram", "memory": "ram",
+    "storage": "storage", "disk": "storage", "hdd": "storage", "ssd": "storage",
+    "mac": "mac_address", "mac address": "mac_address",
+    "purchase date": "purchase_date", "purchased": "purchase_date", "buy date": "purchase_date",
+    "warranty expiry": "warranty_expiry", "warranty": "warranty_expiry",
+    "warranty expiration": "warranty_expiry", "warranty end": "warranty_expiry",
+    "purchase cost": "purchase_cost", "cost": "purchase_cost", "price": "purchase_cost",
+    "updated by": "updated_by", "data entry": "updated_by", "entered by": "updated_by",
+    "notes": "notes", "note": "notes", "remarks": "notes", "comment": "notes",
+    "comments": "notes",
+}
+
+
+def _norm_header(h):
+    out = []
+    for ch in str(h or "").lower():
+        out.append(ch if ch.isalnum() else " ")
+    return " ".join("".join(out).split())
+
+
+def _flex_date(value):
+    """Parse a date written in several common formats; return date or None."""
+    v = str(value or "").strip()
+    if not v:
+        return None
+    v = v.split(" ")[0]  # drop any time portion
+    for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d/%m/%y", "%m/%d/%Y",
+                "%d-%m-%Y", "%Y/%m/%d", "%d.%m.%Y"):
+        try:
+            return datetime.strptime(v, fmt).date()
+        except ValueError:
+            continue
+    return None
 
 
 def _xlsx_to_csv(file_storage):
@@ -606,63 +669,170 @@ def import_():
         with open(path, encoding="utf-8") as fh:
             raw = fh.read()
         rows, errors = _validate_import(raw)
-        created = 0
-        for r in rows:
-            if r["_error"]:
-                continue
-            a = Asset(tag=r["tag"], name=r["name"], serial=r["serial"] or None,
-                      asset_type=r["type"] or None, manufacturer=r["manufacturer"] or None,
-                      model=r["model"] or None,
-                      status=r["status"] if r["status"] in ASSET_STATUSES else "Available",
-                      condition=r["condition"] if r["condition"] in ASSET_CONDITIONS else "Good",
-                      purchase_date=r["_pdate"], purchase_cost=r["purchase_cost"] or None,
-                      warranty_expiry=r["_wdate"], category_id=r["_cat_id"],
-                      os_name=r["os"] or None, cpu=r["cpu"] or None,
-                      ram=r["ram"] or None, storage=r["storage"] or None,
-                      hostname=r["hostname"] or None,
-                      mac_address=r["mac_address"] or None)
-            db.session.add(a)
-            created += 1
-        log_activity("imported", "asset", None, f"{created} assets from CSV")
+        created = _apply_asset_import(rows)
+        log_activity("imported", "asset", None, f"{created} assets from file")
         db.session.commit()
-        os.remove(path)
-        flash(f"Imported {created} assets ({len([r for r in rows if r['_error']])} rows skipped).",
-              "success")
+        try:
+            os.remove(path)
+        except OSError:
+            pass
+        skipped = len([r for r in rows if r["_error"]])
+        flash(f"Imported {created} assets ({skipped} rows skipped).", "success")
         return redirect(url_for("assets.list_"))
     return render_template("assets/import.html", preview=preview, errors=errors,
                            token=token, cols=IMPORT_COLS)
 
 
+def _apply_asset_import(rows):
+    """Create assets from validated rows, auto-creating categories & departments
+    and auto-generating a unique Asset ID whenever the file's tag is missing or
+    duplicated."""
+    # 1) auto-create categories and departments referenced in the file
+    cats = {c.name.lower(): c for c in db.session.scalars(db.select(Category))}
+    deps = {d.name.lower(): d for d in db.session.scalars(db.select(Department))}
+    for r in rows:
+        if r["_error"]:
+            continue
+        cn = r["category"].strip()
+        if cn and cn.lower() not in cats:
+            c = Category(name=cn)
+            db.session.add(c)
+            cats[cn.lower()] = c
+        dn = r["department"].strip()
+        if dn and dn.lower() not in deps:
+            d = Department(name=dn)
+            db.session.add(d)
+            deps[dn.lower()] = d
+    db.session.flush()  # assign ids to the new categories/departments
+
+    # 2) seed per-prefix counters and the set of tags already in use
+    used = {t.lower() for (t,) in db.session.execute(db.select(Asset.tag)).all()}
+    counters = {}
+
+    def gen_tag(cat):
+        prefix = cat.tag_prefix if cat else "AST"
+        n = counters.get(prefix)
+        if n is None:
+            n = 0
+            for t in used:
+                if t.startswith(prefix.lower() + "-"):
+                    suf = t.rsplit("-", 1)[-1]
+                    if suf.isdigit():
+                        n = max(n, int(suf))
+        while True:
+            n += 1
+            counters[prefix] = n
+            cand = f"{prefix}-{n:06d}"
+            if cand.lower() not in used:
+                used.add(cand.lower())
+                return cand
+
+    created = 0
+    for r in rows:
+        if r["_error"]:
+            continue
+        cat = cats.get(r["category"].strip().lower()) if r["category"].strip() else None
+        dep = deps.get(r["department"].strip().lower()) if r["department"].strip() else None
+        tag = r["tag"].strip()
+        if not tag or r["_auto_tag"] or tag.lower() in used:
+            tag = gen_tag(cat)
+        else:
+            used.add(tag.lower())
+        # fold "assigned to" and any secondary room into notes
+        extra = []
+        if r["assigned_to"].strip():
+            extra.append(f"Assigned to: {r['assigned_to'].strip()}")
+        if r["room"].strip() and r["room"].strip().lower() != r["location"].strip().lower():
+            extra.append(f"Room: {r['room'].strip()}")
+        notes = "\n".join([p for p in [r["notes"].strip(), *extra] if p]) or None
+        try:
+            cost = float(r["purchase_cost"]) if r["purchase_cost"].strip() else None
+        except ValueError:
+            cost = None
+        a = Asset(
+            tag=tag,
+            name=r["name"].strip(),
+            category_id=cat.id if cat else None,
+            asset_type=r["type"].strip() or None,
+            serial=r["serial"].strip() or None,
+            manufacturer=r["manufacturer"].strip() or None,
+            model=r["model"].strip() or None,
+            status=r["status"].strip() if r["status"].strip() in ASSET_STATUSES else "In Use",
+            condition=r["condition"].strip() if r["condition"].strip() in ASSET_CONDITIONS else "Good",
+            branch=r["branch"].strip() or None,
+            building=r["building"].strip() or None,
+            floor=r["floor"].strip() or None,
+            location_name=(r["location"].strip() or r["room"].strip()) or None,
+            updated_by=r["updated_by"].strip() or None,
+            department_id=dep.id if dep else None,
+            ip_address=r["ip_address"].strip() or None,
+            os_name=r["os"].strip() or None,
+            cpu=r["cpu"].strip() or None,
+            ram=r["ram"].strip() or None,
+            storage=r["storage"].strip() or None,
+            hostname=(r["hostname"].strip() or r["name"].strip()) or None,
+            mac_address=r["mac_address"].strip() or None,
+            purchase_date=_flex_date(r["purchase_date"]),
+            warranty_expiry=_flex_date(r["warranty_expiry"]),
+            purchase_cost=cost,
+            notes=notes,
+        )
+        db.session.add(a)
+        created += 1
+    return created
+
+
+# canonical fields carried on each parsed row
+_CANON = ["tag", "name", "category", "type", "serial", "manufacturer", "model",
+          "status", "condition", "branch", "building", "floor", "location", "room",
+          "assigned_to", "department", "ip_address", "os", "cpu", "ram", "storage",
+          "hostname", "mac_address", "purchase_date", "warranty_expiry",
+          "purchase_cost", "updated_by", "notes"]
+
+
 def _validate_import(raw):
     errors = []
     reader = csv.DictReader(io.StringIO(raw))
-    field_map = { (fn or "").strip().lower().replace(" ", "_"): fn
-                  for fn in (reader.fieldnames or []) }
-    if "tag" not in field_map or "name" not in field_map:
-        return [], ['CSV must include at least "tag" and "name" columns.']
-    cats = {c.name.lower(): c.id for c in db.session.scalars(db.select(Category))}
-    existing = {t.lower() for (t,) in db.session.execute(db.select(Asset.tag)).all()}
+    # map each source header to a canonical field (first match wins)
+    col_of = {}
+    for fn in (reader.fieldnames or []):
+        canon = HEADER_ALIASES.get(_norm_header(fn))
+        if canon and canon not in col_of:
+            col_of[canon] = fn
+    if "name" not in col_of and "tag" not in col_of and "hostname" not in col_of:
+        return [], ['The file needs at least a "Name" column (a "Tag"/"Asset ID" '
+                    'column is optional — IDs are generated automatically).']
+
+    raw_rows = list(reader)
+    # decide whether the file's tag column is trustworthy: if tags repeat, ignore it
+    tag_vals = [(_row_val(rec, col_of, "tag")) for rec in raw_rows]
+    nonempty = [t for t in tag_vals if t]
+    ignore_tags = bool(nonempty) and len(set(t.lower() for t in nonempty)) < len(nonempty)
+
     seen, rows = set(), []
-    for i, rec in enumerate(reader, start=2):
-        row = {c: (rec.get(field_map.get(c, ""), "") or "").strip() for c in IMPORT_COLS}
+    for i, rec in enumerate(raw_rows, start=2):
+        row = {c: _row_val(rec, col_of, c) for c in _CANON}
+        # a usable name: fall back to hostname, then tag, then category+line
+        if not row["name"]:
+            row["name"] = (row["hostname"] or row["tag"]
+                           or (f"{row['category']} {i - 1}".strip() if row["category"]
+                               else ""))
         err = None
-        if not row["tag"] or not row["name"]:
-            err = "missing tag or name"
-        elif row["tag"].lower() in existing or row["tag"].lower() in seen:
-            err = "duplicate tag"
-        row["_pdate"] = row["_wdate"] = None
-        try:
-            row["_pdate"] = parse_date(row["purchase_date"])
-            row["_wdate"] = parse_date(row["warranty_expiry"])
-        except ValueError:
-            err = err or "bad date (use YYYY-MM-DD)"
-        row["_cat_id"] = cats.get(row["category"].lower()) if row["category"] else None
-        if row["category"] and row["_cat_id"] is None:
-            err = err or f'unknown category "{row["category"]}"'
+        if not row["name"]:
+            err = "row is empty (no name)"
+        auto_tag = ignore_tags or not row["tag"] or row["tag"].lower() in seen
+        if not auto_tag:
+            seen.add(row["tag"].lower())
+        row["_auto_tag"] = auto_tag
         row["_line"], row["_error"] = i, err
         if err:
             errors.append(f"Row {i}: {err}")
-        else:
-            seen.add(row["tag"].lower())
         rows.append(row)
     return rows, errors
+
+
+def _row_val(rec, col_of, canon):
+    src = col_of.get(canon)
+    if not src:
+        return ""
+    return (rec.get(src, "") or "").strip()

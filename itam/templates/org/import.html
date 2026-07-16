@@ -6,8 +6,9 @@
   <p>Upload an <strong>Excel (.xlsx)</strong> or <strong>CSV</strong> file. The first row must be
      column headers. Recognized columns:</p>
   <p><code>{{ cols | join(", ") }}</code></p>
-  <p class="muted">Existing rows are matched and updated by their unique key (email / name);
-     new rows are added.</p>
+  <p class="muted">Column names are matched flexibly and order doesn't matter. Existing people are
+     matched by <strong>Employee ID</strong> (so shared email addresses are fine); new rows are added,
+     and any missing department is created automatically.</p>
   <form method="post" enctype="multipart/form-data" class="filters">
     <input type="file" name="file" accept=".xlsx,.xlsm,.csv,text/csv" required>
     <button class="btn" type="submit">Import</button>
