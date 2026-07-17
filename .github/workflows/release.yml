@@ -1,0 +1,77 @@
+name: Release ITAM.exe
+
+# Cut a permanent, never-expiring download by pushing a version tag, e.g.:
+#   git tag v1.0.0 && git push origin v1.0.0
+# The built ITAM.exe is attached to a GitHub Release, so the link
+#   .../releases/latest/download/ITAM.exe
+# always points at the newest version and never expires.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build ITAM.exe
+        run: >
+          pyinstaller --onefile --name ITAM --noconsole
+          --icon itam/static/app.ico
+          --add-data "itam/templates;itam/templates"
+          --add-data "itam/static;itam/static"
+          --collect-submodules sqlalchemy.dialects.sqlite
+          --collect-submodules webview
+          --hidden-import waitress
+          --hidden-import qrcode.image.svg
+          --hidden-import barcode.writer
+          run_server.py
+
+      - name: Smoke-test the executable
+        shell: pwsh
+        run: |
+          $env:ITAM_NO_BROWSER = "1"
+          $env:PORT = "8099"
+          $proc = Start-Process -FilePath "dist\ITAM.exe" -PassThru
+          Start-Sleep -Seconds 6
+          $resp = Invoke-WebRequest -Uri "http://127.0.0.1:8099/login" -UseBasicParsing
+          if ($resp.StatusCode -ne 200) { throw "Executable did not serve the login page" }
+          Stop-Process -Id $proc.Id -Force
+
+      - name: Publish GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $notes = @"
+          **ITAM Enterprise — IT Asset Management System**
+
+          Download **ITAM.exe** below (Windows). Free, no time limit, no license key.
+
+          Getting started:
+          1. Put ITAM.exe in a folder and double-click it — it opens in its own app window.
+          2. First login: admin / admin123 (change it right away).
+          3. Import your assets and employees from Excel/CSV (Assets and Employees screens).
+          4. To host it as a website on your own server, see deploy/HOST-AS-A-WEBSITE.md.
+
+          This download link is permanent and does not expire.
+          "@
+          gh release create $env:GITHUB_REF_NAME dist/ITAM.exe `
+            --title "ITAM $env:GITHUB_REF_NAME" `
+            --notes $notes
