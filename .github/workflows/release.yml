@@ -9,7 +9,12 @@ name: Release ITAM.exe
 on:
   push:
     tags: ["v*"]
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version tag to create (e.g. v1.0.0)"
+        required: true
+        default: "v1.0.0"
 
 permissions:
   contents: write
@@ -72,6 +77,9 @@ jobs:
 
           This download link is permanent and does not expire.
           "@
-          gh release create $env:GITHUB_REF_NAME dist/ITAM.exe `
-            --title "ITAM $env:GITHUB_REF_NAME" `
+          $tag = "${{ github.event.inputs.version }}"
+          if (-not $tag) { $tag = "$env:GITHUB_REF_NAME" }
+          gh release create $tag dist/ITAM.exe `
+            --target "$env:GITHUB_SHA" `
+            --title "ITAM $tag" `
             --notes $notes
