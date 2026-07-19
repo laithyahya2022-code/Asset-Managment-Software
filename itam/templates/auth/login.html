@@ -2,7 +2,7 @@
 {% block title %}{{ t("Log in") }}{% endblock %}
 {% block auth_content %}
 <div class="auth-card">
-  <div class="auth-logo">🖥️</div>
+  <img class="auth-logo-img" src="{{ url_for('static', filename='icon.svg') }}" alt="" width="72" height="72">
   <h1>{{ app_name }}</h1>
   <p class="muted">{{ t("Log in") }}</p>
   <form method="post">

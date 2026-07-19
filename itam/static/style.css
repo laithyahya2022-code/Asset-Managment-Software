@@ -48,6 +48,7 @@ h2 { font-size: 1.05rem; margin: 0 0 0.6rem; }
   background: var(--accent); color: #fff; border-radius: 8px;
   width: 34px; height: 34px; display: grid; place-items: center; flex-shrink: 0;
 }
+.side-brand .brand-mark { width: 34px; height: 34px; border-radius: 8px; flex-shrink: 0; }
 .side-brand strong { display: block; font-size: 0.95rem; line-height: 1.2; }
 .side-brand small { color: var(--side-text); font-size: 0.72rem; }
 .sidebar nav { padding: 0.7rem 0.65rem 1.2rem; display: flex; flex-direction: column; gap: 2px; }
@@ -231,6 +232,7 @@ dl.props dd { margin: 0; }
 .auth-card h1 { text-align: center; }
 .auth-card .muted { text-align: center; margin-top: 0.2rem; }
 .auth-logo { font-size: 2rem; text-align: center; }
+.auth-logo-img { display: block; margin: 0 auto 0.6rem; width: 72px; height: 72px; }
 .auth-links { text-align: center; font-size: 0.85rem; margin-top: 1rem; }
 .auth-wrap .flash { width: 100%; max-width: 380px; }
 
