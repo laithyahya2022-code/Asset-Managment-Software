@@ -27,6 +27,15 @@
   <select name="department"><option value="">All departments</option>
     {% for d in departments %}<option value="{{ d.id }}" {{ 'selected' if args.get('department') == d.id|string }}>{{ d.name }}</option>{% endfor %}
   </select>
+  <select name="branch"><option value="">All branches</option>
+    {% for b in branch_opts %}<option value="{{ b }}" {{ 'selected' if args.get('branch') == b }}>{{ b }}</option>{% endfor %}
+  </select>
+  <select name="building"><option value="">All buildings</option>
+    {% for b in building_opts %}<option value="{{ b }}" {{ 'selected' if args.get('building') == b }}>{{ b }}</option>{% endfor %}
+  </select>
+  <select name="floor"><option value="">All floors</option>
+    {% for f in floor_opts %}<option value="{{ f }}" {{ 'selected' if args.get('floor') == f }}>{{ f }}</option>{% endfor %}
+  </select>
   <select name="location"><option value="">All locations</option>
     {% for l in locations %}<option value="{{ l.id }}" {{ 'selected' if args.get('location') == l.id|string }}>{{ l.path }}</option>{% endfor %}
   </select>
@@ -62,7 +71,7 @@
     <tr>
       {% if has_perm("assets.manage") %}<th><input type="checkbox" data-check-all></th>{% endif %}
       <th>Tag</th><th>{{ t("Name") }}</th><th>{{ t("Category") }}</th><th>{{ t("Status") }}</th>
-      <th>Condition</th><th>Assigned to</th><th>{{ t("Location") }}</th><th>{{ t("Department") }}</th>
+      <th>Branch</th><th>Floor</th><th>{{ t("Location") }}</th><th>Assigned to</th><th>{{ t("Department") }}</th>
     </tr>
     {% for a in assets %}
     <tr>
@@ -71,9 +80,10 @@
       <td>{{ a.name }}</td>
       <td>{{ a.category.name if a.category else "—" }}</td>
       <td>{{ status_badge(a.status) }}</td>
-      <td>{{ a.condition }}</td>
+      <td>{{ a.branch or "—" }}</td>
+      <td>{{ a.floor or "—" }}</td>
+      <td>{{ a.location_name or (a.location.path if a.location else "—") }}</td>
       <td>{% if a.current_assignment %}<a href="{{ url_for('org.employee_detail', emp_id=a.current_assignment.employee_id) }}">{{ a.current_assignment.employee.name }}</a>{% else %}—{% endif %}</td>
-      <td>{{ a.location.path if a.location else "—" }}</td>
       <td>{{ a.department.name if a.department else "—" }}</td>
     </tr>
     {% endfor %}

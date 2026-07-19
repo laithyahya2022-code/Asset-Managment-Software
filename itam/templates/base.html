@@ -23,7 +23,7 @@
   <aside class="sidebar">
     <div class="side-brand">
       <img class="brand-mark" src="{{ url_for('static', filename='icon.svg') }}" alt="" width="34" height="34">
-      <span><strong>{{ app_name }}</strong><small>{{ t("Assets") }} · IT</small></span>
+      <span><strong>{{ g.user.name }}</strong></span>
     </div>
     <nav>
       {% set ep = request.endpoint or "" %}

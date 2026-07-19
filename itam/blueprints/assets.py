@@ -133,7 +133,20 @@ def _filtered_assets(args):
         stmt = stmt.where(Asset.location_id == int(args["location"]))
     if args.get("condition"):
         stmt = stmt.where(Asset.condition == args["condition"])
+    if args.get("branch"):
+        stmt = stmt.where(Asset.branch == args["branch"])
+    if args.get("building"):
+        stmt = stmt.where(Asset.building == args["building"])
+    if args.get("floor"):
+        stmt = stmt.where(Asset.floor == args["floor"])
     return db.session.scalars(stmt).all()
+
+
+def _distinct(col):
+    """Sorted list of the non-empty values actually present in the data."""
+    vals = db.session.scalars(
+        db.select(col).where(col.isnot(None), col != "").distinct()).all()
+    return sorted(vals)
 
 
 @bp.route("/")
@@ -144,7 +157,11 @@ def list_():
                                   .where(SavedSearch.user_id == g.user.id)
                                   .order_by(SavedSearch.name)).all()
     return render_template("assets/list.html", assets=_filtered_assets(request.args),
-                           args=request.args, searches=searches, **_lookups())
+                           args=request.args, searches=searches,
+                           branch_opts=_distinct(Asset.branch),
+                           building_opts=_distinct(Asset.building),
+                           floor_opts=_distinct(Asset.floor),
+                           **_lookups())
 
 
 @bp.post("/searches")
