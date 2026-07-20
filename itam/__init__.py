@@ -4,6 +4,8 @@ from datetime import datetime
 
 from flask import Flask, g, redirect, request, session, url_for
 
+APP_VERSION = "2026.07.19"  # bumped on each release so users can confirm their build
+
 from .i18n import LANGS, t
 from .models import (DEFAULT_ROLE_PERMS, PERMISSIONS, ROLES, Notification,
                      RolePermission, User, db)
@@ -77,7 +79,8 @@ def create_app(test_config=None, instance_path=None):
                 db.select(db.func.count(Notification.id)).where(Notification.read == False)  # noqa: E712
             ) or 0
         return dict(t=t, has_perm=has_perm, app_name=get_setting("app_name"),
-                    unread_count=unread, LANGS=LANGS, now=datetime.utcnow())
+                    unread_count=unread, LANGS=LANGS, now=datetime.utcnow(),
+                    app_version=APP_VERSION)
 
     with app.app_context():
         db.create_all()

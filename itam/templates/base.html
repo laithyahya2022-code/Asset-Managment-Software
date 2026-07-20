@@ -50,6 +50,7 @@
       <a href="{{ url_for('admin.settings') }}" class="{{ 'active' if ep in ('admin.settings', 'admin.backups') }}">{{ icon("settings") }}<span>{{ t("Settings") }}</span></a>
       {% endif %}
     </nav>
+    <div class="side-version">v{{ app_version }}</div>
   </aside>
 
   <div class="content">
