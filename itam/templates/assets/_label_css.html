@@ -1,0 +1,52 @@
+{# Label styling, driven entirely by the size configured in Settings.
+   Shared by the single-asset label and the bulk label run. #}
+<style>
+  @page { size: {{ L.width }}mm {{ L.height }}mm; margin: 0; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: #f4f5f7; font-family: -apple-system, BlinkMacSystemFont,
+    "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: #1d2530; }
+  .toolbar { text-align: center; padding: 16px; }
+  .btn { display: inline-block; padding: 10px 22px; border-radius: 8px; border: none;
+    background: #1e9e4e; color: #fff; font-size: 15px; font-weight: 700; cursor: pointer;
+    text-decoration: none; }
+  .btn.secondary { background: #fff; color: #1d2530; border: 1px solid #d1d5db; margin-left: 8px; }
+  .hint { text-align: center; color: #6b7480; font-size: 13px; padding: 0 16px 14px; }
+  .hint code { font-family: ui-monospace, Menlo, Consolas, monospace; }
+
+  .label {
+    width: {{ L.width }}mm; height: {{ L.height }}mm; margin: 0 auto 10px; background: #fff;
+    border: 1px dashed #c9ced6; overflow: hidden;
+    display: flex; align-items: center; gap: {{ L.gap }}mm; padding: {{ L.pad }}mm;
+    {% if L.portrait %}flex-direction: column; justify-content: center;{% endif %}
+  }
+  .qr-col { flex-shrink: 0; text-align: center; }
+  .qr-col .box { width: {{ L.qr }}mm; height: {{ L.qr }}mm; }
+  .qr-col .box img, .qr-col .box svg { width: 100%; height: 100%; display: block; }
+  .qr-col .tag {
+    margin-top: {{ (L.pad * 0.3) | round(2) }}mm; font-size: {{ L.fs_tag }}mm; font-weight: 700;
+    font-family: ui-monospace, "SFMono-Regular", Menlo, monospace; white-space: nowrap;
+  }
+  .info { flex: 1; min-width: 0; overflow: hidden;
+    {% if L.portrait %}width: 100%; text-align: center;{% endif %} }
+  .org { font-size: {{ L.fs_org }}mm; font-weight: 800; line-height: 1.15;
+    margin-bottom: {{ (L.pad * 0.5) | round(2) }}mm;
+    display: -webkit-box; -webkit-box-orient: vertical;
+    -webkit-line-clamp: {{ L.org_lines }}; line-clamp: {{ L.org_lines }};
+    overflow: hidden; overflow-wrap: anywhere; }
+  .grid { display: grid; grid-template-columns: repeat({{ L.columns }}, minmax(0, 1fr));
+    gap: {{ (L.pad * 0.45) | round(2) }}mm {{ (L.pad * 0.7) | round(2) }}mm; }
+  .field { min-width: 0; }
+  .field .lbl { font-size: {{ L.fs_label }}mm; color: #6b7480; line-height: 1.2; }
+  .field .val { font-size: {{ L.fs_value }}mm; font-weight: 700; line-height: 1.2;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .field.full { grid-column: 1 / -1; }
+
+  @media print {
+    html, body { background: #fff; }
+    .toolbar, .hint { display: none !important; }
+    /* One sticker per label on the roll. */
+    .label { border: none; margin: 0; page-break-inside: avoid; break-inside: avoid;
+      page-break-after: always; break-after: page; }
+    .label:last-of-type { page-break-after: auto; break-after: auto; }
+  }
+</style>

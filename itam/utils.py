@@ -21,7 +21,34 @@ DEFAULT_SETTINGS = {
     "custom_asset_fields": "",
     "checkout_days": "30",
     "warranty_alert_days": "90", "license_alert_days": "90",
+    # Printed asset label, in millimetres. The default is the 6 x 3 inch label
+    # the app has always produced; set it to match the stock in your printer.
+    "label_width_mm": "152.4", "label_height_mm": "76.2",
 }
+
+# Ready-made sizes offered on the Settings screen. Roll printers such as the
+# Xprinter XP-series take the smaller ones.
+LABEL_PRESETS = [
+    ("152.4x76.2", "6 × 3 in  (152 × 76 mm)"),
+    ("101.6x152.4", "4 × 6 in  (102 × 152 mm) shipping roll"),
+    ("101.6x50.8", "4 × 2 in  (102 × 51 mm)"),
+    ("70x38", "70 × 38 mm"),
+    ("50x30", "50 × 30 mm  asset tag"),
+    ("40x20", "40 × 20 mm  small asset tag"),
+]
+
+
+def label_size_mm():
+    """(width, height) of the printed label in mm, clamped to sane values."""
+    def read(key, fallback):
+        try:
+            value = float(get_setting(key))
+        except (TypeError, ValueError):
+            return fallback
+        # Below ~15mm nothing legible fits; above 300mm is past any roll printer.
+        return min(max(value, 15.0), 300.0)
+
+    return (read("label_width_mm", 152.4), read("label_height_mm", 76.2))
 
 
 def get_setting(key):
@@ -49,6 +76,82 @@ def app_name_parts():
     if match:
         return match.group(2).strip(), match.group(1).strip()
     return name, ""
+
+
+def label_layout(width_mm=None, height_mm=None, org_name=None):
+    """Geometry for the printed asset label, in millimetres.
+
+    One design has to cover everything from a 40x20mm equipment tag to a
+    152x76mm sheet, so nothing is fixed: sizes derive from the short edge, and
+    the text block is then measured against the space actually left over and
+    scaled down until it fits. Without that last step a long organisation name
+    or a tall field list simply overflows the sticker.
+    """
+    import math
+
+    if width_mm is None or height_mm is None:
+        width_mm, height_mm = label_size_mm()
+    if org_name is None:
+        org_name = get_setting("app_name")
+    short = min(width_mm, height_mm)
+    portrait = height_mm > width_mm
+    pad = max(1.2, short * 0.06)
+    gap = pad * 0.8
+
+    # The asset tag prints under the QR, so it has to come out of the height
+    # budget before the QR is sized, or the column overflows the sticker.
+    fs_tag = short * 0.10
+    tag_line = fs_tag * 1.25 + pad * 0.3
+    if portrait:
+        qr = min(width_mm - 2 * pad, height_mm * 0.45)
+    else:
+        qr = min(height_mm - 2 * pad - tag_line, width_mm * 0.42)
+    qr = max(qr, 8.0)
+
+    show_org = short >= 24
+    if short < 24:
+        fields = []
+    elif short < 34:
+        fields = ["name"]
+    elif short < 45:
+        fields = ["name", "serial"]
+    else:
+        fields = ["name", "branch", "serial", "location"]
+    columns = 2 if (not portrait and short >= 45) else 1
+
+    fs_org = short * 0.115
+    fs_label = max(short * 0.055, 1.4)
+    fs_value = short * 0.085
+
+    # A long name needs a smaller type size before it will sit on two lines.
+    org_len = len(org_name or "")
+    if show_org and org_len > 16:
+        fs_org *= max(0.45, 16 / org_len)
+
+    # Height the text block may occupy, then shrink it until it does.
+    if portrait:
+        avail = height_mm - 2 * pad - qr - tag_line - gap
+    else:
+        avail = height_mm - 2 * pad
+    org_lines = 2 if org_len > 16 else 1
+    needed = (fs_org * 1.25 * org_lines + pad * 0.5) if show_org else 0.0
+    rows = math.ceil(len(fields) / columns) if fields else 0
+    if rows:
+        needed += rows * (fs_label * 1.25 + fs_value * 1.25) + (rows - 1) * (pad * 0.45)
+    if needed > avail > 0:
+        squeeze = avail / needed
+        fs_org *= squeeze
+        fs_label = max(fs_label * squeeze, 1.1)
+        fs_value *= squeeze
+
+    return {
+        "width": round(width_mm, 2), "height": round(height_mm, 2),
+        "portrait": portrait, "pad": round(pad, 2), "qr": round(qr, 2),
+        "gap": round(gap, 2), "show_org": show_org, "fields": fields,
+        "org_lines": org_lines, "columns": columns,
+        "fs_org": round(fs_org, 2), "fs_tag": round(fs_tag, 2),
+        "fs_label": round(fs_label, 2), "fs_value": round(fs_value, 2),
+    }
 
 
 def custom_field_names():

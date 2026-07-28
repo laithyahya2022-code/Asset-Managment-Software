@@ -7,7 +7,8 @@ from flask import (Blueprint, current_app, flash, g, redirect, render_template,
 
 from ..models import (PERMISSIONS, ROLES, RolePermission, User, db)
 from ..security import clear_perm_cache, new_token, perm_required
-from ..utils import DEFAULT_SETTINGS, get_setting, log_activity, set_setting
+from ..utils import (DEFAULT_SETTINGS, LABEL_PRESETS, get_setting, log_activity,
+                     set_setting)
 
 bp = Blueprint("admin", __name__, url_prefix="/admin")
 
@@ -115,6 +116,7 @@ def roles():
 
 SETTING_GROUPS = {
     "General": ["app_name", "qr_prefix", "custom_asset_fields", "checkout_days"],
+    "Printed labels": ["label_width_mm", "label_height_mm"],
     "Alerts": ["warranty_alert_days", "license_alert_days"],
     "Email": ["email_enabled", "smtp_host", "smtp_port", "smtp_user",
               "smtp_password", "smtp_from"],
@@ -137,7 +139,8 @@ def settings():
         flash("Settings saved.", "success")
         return redirect(url_for("admin.settings"))
     values = {k: get_setting(k) for k in keys}
-    return render_template("admin/settings.html", groups=SETTING_GROUPS, values=values)
+    return render_template("admin/settings.html", groups=SETTING_GROUPS, values=values,
+                           label_presets=LABEL_PRESETS)
 
 
 # ----------------------------------------------------------------- backups

@@ -1,0 +1,30 @@
+{# One printed label for `asset`. Expects `L` (label_layout) and `app_name`. #}
+<div class="label">
+  <div class="qr-col">
+    <div class="box"><img src="{{ url_for('assets.qr', asset_id=asset.id) }}" alt="QR {{ asset.tag }}"></div>
+    <div class="tag">{{ asset.tag }}</div>
+  </div>
+  {% if L.show_org or L.fields %}
+  <div class="info">
+    {% if L.show_org %}<div class="org">{{ app_name }}</div>{% endif %}
+    {% if L.fields %}
+    {% set values = {
+      "name": asset.name, "branch": asset.branch, "serial": asset.serial,
+      "floor": asset.floor, "location": asset.location_name
+    } %}
+    {% set titles = {
+      "name": "Name", "branch": "Branch", "serial": "Serial",
+      "floor": "Floor", "location": "Location"
+    } %}
+    <div class="grid">
+      {% for key in L.fields %}
+      <div class="field {{ 'full' if key in ('name', 'location') }}">
+        <div class="lbl">{{ titles[key] }}</div>
+        <div class="val">{{ values[key] or "—" }}</div>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>

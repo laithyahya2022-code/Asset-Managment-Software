@@ -1,17 +1,27 @@
-{% extends "base.html" %}
-{% block title %}Labels{% endblock %}
-{% block content %}
-<div class="page-head">
-  <h1>Asset labels ({{ assets | length }})</h1>
-  <button class="btn no-print" onclick="window.print()">{{ t("Print") }}</button>
-</div>
-<div class="labels-grid">
-  {% for a in assets %}
-  <div class="label-card">
-    <img src="{{ url_for('assets.qr', asset_id=a.id) }}" alt="QR {{ a.tag }}">
-    <div class="tag">{{ a.tag }}</div>
-    <div class="nm">{{ a.name }}</div>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Asset labels ({{ assets | length }})</title>
+  {% include "assets/_label_css.html" %}
+</head>
+<body>
+  <div class="toolbar">
+    <button class="btn" onclick="window.print()">
+      Print {{ assets | length }} label{{ "" if assets | length == 1 else "s" }}
+      ({{ L.width }} × {{ L.height }} mm)</button>
+    <a class="btn secondary" href="{{ url_for('assets.list_') }}">Back to assets</a>
   </div>
+  <p class="hint">
+    Each asset prints on its own label. Pick the label printer, set paper size to
+    <code>{{ L.width }} × {{ L.height }} mm</code> and scale to <code>100%</code> /
+    “Actual size”. Change the size in Settings → Printed labels.
+  </p>
+
+  {% for asset in assets %}
+    {% include "assets/_label_body.html" %}
+  {% else %}
+    <p class="hint">No assets selected.</p>
   {% endfor %}
-</div>
-{% endblock %}
+</body>
+</html>

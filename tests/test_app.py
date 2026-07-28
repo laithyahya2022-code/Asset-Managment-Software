@@ -357,7 +357,8 @@ def test_asset_label_6x3(client, app):
     resp = client.get(f"/assets/{asset_id}/label")
     assert resp.status_code == 200
     body = resp.data.decode()
-    assert "size: 6in 3in" in body          # exact 6x3 label size
+    # 6 x 3 in is the default, now expressed in mm so any stock size works
+    assert "@page { size: 152.4mm 76.2mm; margin: 0; }" in body
     assert "LBL-1" in body                   # tag under QR
     assert "Mada 3" in body and "SN-8842-XJ01" in body
     assert "/qr.svg" in body                 # QR image embedded
@@ -468,3 +469,67 @@ def test_schema_sync_is_idempotent(tmp_path):
         added, skipped = _sync_schema()
         assert added == [], "a current database needs no changes"
         assert skipped == []
+
+
+@pytest.mark.parametrize("w,h", [(152.4, 76.2), (101.6, 152.4), (101.6, 50.8),
+                                 (70, 38), (50, 30), (40, 20)])
+def test_label_layout_fits_every_offered_size(w, h):
+    """Nothing may be sized past the sticker it prints on."""
+    from itam.utils import label_layout
+
+    L = label_layout(w, h, org_name="Mada Asset Management System (AMS)")
+    assert L["width"] == round(w, 2) and L["height"] == round(h, 2)
+
+    tag_line = L["fs_tag"] * 1.25 + L["pad"] * 0.3
+    if L["portrait"]:
+        assert L["qr"] <= w - 2 * L["pad"] + 0.01
+        used = L["qr"] + tag_line + 2 * L["pad"]
+    else:
+        # QR column is the tall one on a landscape label.
+        used = L["qr"] + tag_line + 2 * L["pad"]
+        assert L["qr"] <= w * 0.42 + 0.01
+    assert used <= h + 0.01, f"QR column {used:.1f}mm overflows a {h}mm label"
+    assert L["fs_label"] >= 1.0 and L["fs_value"] > 0
+
+
+def test_tiny_labels_drop_detail_fields():
+    from itam.utils import label_layout
+
+    assert label_layout(40, 20, org_name="Mada AMS")["fields"] == []
+    assert label_layout(40, 20, org_name="Mada AMS")["show_org"] is False
+    assert label_layout(152.4, 76.2, org_name="Mada AMS")["fields"]
+
+
+def test_label_size_setting_drives_the_printed_page(client, app):
+    from itam.models import Category
+    from itam.utils import set_setting
+
+    with app.app_context():
+        asset = Asset(tag="LT-9001", name="ThinkPad", status="Available",
+                      condition="Good",
+                      category=db.session.scalar(db.select(Category)))
+        db.session.add(asset)
+        set_setting("label_width_mm", "50")
+        set_setting("label_height_mm", "30")
+        db.session.commit()
+        asset_id = asset.id
+
+    login(client)
+    page = client.get(f"/assets/{asset_id}/label").data.decode()
+    assert "@page { size: 50.0mm 30.0mm; margin: 0; }" in page
+    assert "width: 50.0mm; height: 30.0mm" in page
+
+
+def test_label_size_is_clamped_to_something_printable(app):
+    from itam.utils import label_size_mm, set_setting
+
+    with app.app_context():
+        set_setting("label_width_mm", "0")
+        set_setting("label_height_mm", "99999")
+        db.session.commit()
+        w, h = label_size_mm()
+        assert w == 15.0 and h == 300.0
+
+        set_setting("label_width_mm", "not a number")
+        db.session.commit()
+        assert label_size_mm()[0] == 152.4      # falls back to the default

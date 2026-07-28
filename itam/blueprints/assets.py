@@ -15,7 +15,8 @@ from ..models import (ASSET_CONDITIONS, ASSET_STATUSES, BRANCHES, BUILDINGS,
                       Assignment, Category, Department, Employee, Location,
                       Reservation, Transfer, Vendor, db)
 from ..security import has_perm, login_required, perm_required
-from ..utils import (barcode_svg, csv_response, custom_field_names, get_setting,
+from ..utils import (app_name_parts, barcode_svg, csv_response,
+                     custom_field_names, get_setting, label_layout,
                      log_activity, parse_date, qr_svg)
 
 bp = Blueprint("assets", __name__, url_prefix="/assets")
@@ -480,7 +481,8 @@ def barcode(asset_id):
 def label(asset_id):
     a = db.get_or_404(Asset, asset_id)
     return render_template("assets/label.html", asset=a,
-                           app_name=get_setting("app_name"),
+                           app_name=app_name_parts()[0],
+                           L=label_layout(org_name=app_name_parts()[0]),
                            auto=request.args.get("auto") == "1")
 
 
@@ -492,7 +494,9 @@ def labels():
     if ids:
         stmt = stmt.where(Asset.id.in_(ids))
     return render_template("assets/labels.html",
-                           assets=db.session.scalars(stmt).all())
+                           assets=db.session.scalars(stmt).all(),
+                           app_name=app_name_parts()[0],
+                           L=label_layout(org_name=app_name_parts()[0]))
 
 
 # ------------------------------------------------------------------ bulk
