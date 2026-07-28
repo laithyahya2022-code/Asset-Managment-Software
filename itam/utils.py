@@ -1,5 +1,6 @@
 import csv
 import io
+import re
 import smtplib
 from datetime import datetime
 from email.message import EmailMessage
@@ -34,6 +35,20 @@ def set_setting(key, value):
         row.value = value
     else:
         db.session.add(Setting(key=key, value=value))
+
+
+def app_name_parts():
+    """Split the application name into a short badge and the full title.
+
+    "Mada Asset Management System (AMS)" -> ("AMS", "Mada Asset Management System")
+    so the sign-in screen can lead with the abbreviation. A name without a
+    trailing "(…)" is used as-is, with no subtitle.
+    """
+    name = get_setting("app_name").strip()
+    match = re.fullmatch(r"(.+?)\s*\(([^()]+)\)", name)
+    if match:
+        return match.group(2).strip(), match.group(1).strip()
+    return name, ""
 
 
 def custom_field_names():

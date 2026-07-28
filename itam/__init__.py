@@ -10,7 +10,7 @@ from .i18n import LANGS, t
 from .models import (DEFAULT_ROLE_PERMS, PERMISSIONS, ROLES, Notification,
                      RolePermission, Setting, User, db)
 from .security import has_perm, load_user
-from .utils import DEFAULT_SETTINGS, get_setting
+from .utils import DEFAULT_SETTINGS, app_name_parts, get_setting
 
 
 def create_app(test_config=None, instance_path=None):
@@ -80,7 +80,9 @@ def create_app(test_config=None, instance_path=None):
             unread = db.session.scalar(
                 db.select(db.func.count(Notification.id)).where(Notification.read == False)  # noqa: E712
             ) or 0
+        short, full = app_name_parts()
         return dict(t=t, has_perm=has_perm, app_name=get_setting("app_name"),
+                    app_short=short, app_full=full,
                     unread_count=unread, LANGS=LANGS, now=datetime.utcnow(),
                     app_version=APP_VERSION)
 
