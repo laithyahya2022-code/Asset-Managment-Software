@@ -1,0 +1,1424 @@
+<title>ITAM Enterprise — interactive demo</title>
+<style>
+/* ---- the real app's design tokens (itam/static/style.css) ---- */
+:root {
+  --bg: #f4f5f7; --surface: #ffffff; --border: #e4e7eb; --text: #22272e;
+  --muted: #6b7480; --accent: #22a04a; --accent-dark: #1b823c; --side: #171a1f;
+  --side-text: #b9c0ca; --danger: #d05555; --blue: #2f6fed; --orange: #e8a13c;
+  --purple: #7c5cd6; --teal: #18a8a0; --red: #d05574; --grey: #8a929e;
+  --shadow: 0 1px 3px rgba(23, 26, 31, .07); --radius: 10px;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans Arabic", Tahoma, Arial, sans-serif;
+  font-size: 14.5px; line-height: 1.5;
+}
+a { color: var(--accent-dark); }
+h1 { font-size: 1.35rem; margin: 0; letter-spacing: -.01em; }
+h2 { font-size: 1.05rem; margin: 0 0 .6rem; }
+
+.shell { display: flex; min-height: 100vh; }
+.sidebar { width: 232px; flex-shrink: 0; background: var(--side); color: var(--side-text);
+  display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh; overflow-y: auto; }
+.side-brand { display: flex; align-items: center; gap: .6rem; padding: 1rem 1.1rem .9rem;
+  color: #fff; border-bottom: 1px solid #262b33; }
+.side-brand .brand-mark { width: 34px; height: 34px; border-radius: 8px; flex-shrink: 0; }
+.side-brand strong { display: block; font-size: .95rem; line-height: 1.2; }
+.side-version { margin-top: auto; padding: .7rem 1.1rem; font-size: .72rem; opacity: .7; }
+.sidebar nav { padding: .7rem .65rem 1.2rem; display: flex; flex-direction: column; gap: 2px; }
+.sidebar nav a { display: flex; align-items: center; gap: .65rem; color: var(--side-text);
+  text-decoration: none; font-size: .9rem; padding: .5rem .7rem; border-radius: 8px; cursor: pointer; }
+.sidebar nav a:hover { background: #21262e; color: #fff; }
+.sidebar nav a.active { background: var(--accent); color: #fff; font-weight: 600; }
+.sidebar nav a svg { flex-shrink: 0; }
+
+.content { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+main { padding: 1.3rem 1.6rem 4rem; max-width: 1280px; width: 100%; }
+
+.topbar { display: flex; align-items: center; gap: 1rem; padding: .6rem 1.6rem;
+  background: var(--surface); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 20; }
+.nav-btn { display: none; cursor: pointer; color: var(--muted); background: none; border: 0; padding: .35rem; }
+.global-search { display: flex; align-items: center; gap: .5rem; flex: 1; max-width: 430px;
+  background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+  padding: .35rem .7rem; color: var(--muted); }
+.global-search input { border: none; background: none; outline: none; width: 100%;
+  font-size: .9rem; color: var(--text); font-family: inherit; padding: 0; }
+.top-actions { display: flex; align-items: center; gap: .55rem; margin-inline-start: auto; }
+.top-icon { position: relative; color: var(--muted); display: flex; align-items: center; gap: 2px;
+  padding: .35rem; border-radius: 8px; background: none; border: 0; cursor: pointer; }
+.top-icon:hover { background: var(--bg); color: var(--text); }
+.lang-tag { font-size: .72rem; font-weight: 700; }
+.bell-badge { position: absolute; top: -2px; inset-inline-end: -4px; background: var(--danger);
+  color: #fff; font-size: .62rem; font-weight: 700; border-radius: 999px; padding: 0 4px;
+  min-width: 15px; text-align: center; line-height: 15px; }
+.user-chip { display: flex; align-items: center; gap: .5rem; color: var(--text);
+  padding: .25rem .5rem; border-radius: 8px; background: none; border: 0; cursor: pointer; font-family: inherit; }
+.user-chip:hover { background: var(--bg); }
+.avatar { background: var(--accent); color: #fff; width: 30px; height: 30px; border-radius: 50%;
+  display: grid; place-items: center; font-weight: 700; font-size: .85rem; }
+.user-name { font-size: .85rem; font-weight: 600; line-height: 1.15; text-align: start; }
+.user-name small { display: block; color: var(--muted); font-weight: 400; font-size: .72rem; }
+
+.page-head { display: flex; justify-content: space-between; align-items: center; gap: .8rem;
+  flex-wrap: wrap; margin-bottom: 1.1rem; }
+.actions-row { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; }
+.eyebrow { font-size: .72rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--muted); margin: 0 0 .7rem; }
+.muted { color: var(--muted); }
+.empty { color: var(--muted); font-size: .92rem; }
+.red { color: var(--danger) !important; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 1.05rem 1.2rem; margin-bottom: 1rem; box-shadow: var(--shadow); }
+.two-col { display: grid; grid-template-columns: 1.4fr 1fr; gap: 1rem; align-items: start; }
+@media (max-width: 900px) { .two-col { grid-template-columns: 1fr; } }
+
+.kpi-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: .9rem; margin-bottom: 1.1rem; }
+.kpi { display: flex; gap: .85rem; align-items: flex-start; background: var(--surface);
+  border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem; text-align: start;
+  color: var(--text); box-shadow: var(--shadow); cursor: pointer; font-family: inherit; font-size: inherit; }
+.kpi:hover { border-color: #cdd3da; }
+.tile { width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center; color: #fff; flex-shrink: 0; }
+.tile.green { background: var(--accent); } .tile.blue { background: var(--blue); }
+.tile.orange { background: var(--orange); } .tile.red { background: var(--red); }
+.tile.purple { background: var(--purple); } .tile.teal { background: var(--teal); }
+.tile.grey { background: var(--grey); } .tile.deepgreen { background: #128a5e; }
+.k-label { display: block; color: var(--muted); font-size: .8rem; }
+.k-value { display: block; font-size: 1.55rem; font-weight: 800; line-height: 1.25; font-variant-numeric: tabular-nums; }
+.k-sub { display: block; font-size: .76rem; color: var(--muted); }
+.k-sub.red { color: var(--danger); font-weight: 600; }
+
+.chart { width: 100%; height: auto; }
+.chart .cl { font-size: 10.5px; fill: var(--muted); }
+.chart .cv { font-size: 11px; font-weight: 700; fill: var(--text); }
+.chart .cg { stroke: var(--border); stroke-width: 1; }
+.chart .dv { font-size: 26px; font-weight: 800; fill: var(--text); }
+.chart .dl { font-size: 11px; fill: var(--muted); }
+.donut-wrap { display: flex; gap: 1.2rem; align-items: center; flex-wrap: wrap; }
+.donut-wrap svg { max-width: 190px; }
+.legend { display: flex; flex-direction: column; gap: .35rem; font-size: .85rem; }
+.legend .lg { display: flex; align-items: center; gap: .45rem; }
+.legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+th, td { text-align: start; padding: .55rem .7rem; border-bottom: 1px solid var(--border);
+  font-size: .9rem; vertical-align: middle; }
+th { color: var(--muted); font-weight: 600; font-size: .76rem; text-transform: uppercase;
+  letter-spacing: .05em; white-space: nowrap; }
+th.sortable { cursor: pointer; user-select: none; }
+th.sortable:hover { color: var(--text); }
+th .arrow { opacity: .55; font-size: .7rem; }
+tr:last-child td { border-bottom: none; }
+tbody tr:hover td { background: #fafbfc; }
+td a, .linkish { color: var(--accent-dark); font-weight: 600; text-decoration: none;
+  background: none; border: 0; padding: 0; font-family: inherit; font-size: inherit; cursor: pointer; }
+td a:hover, .linkish:hover { text-decoration: underline; }
+
+.badge { display: inline-block; padding: .14rem .6rem; border-radius: 999px; font-size: .76rem;
+  font-weight: 600; white-space: nowrap; }
+.s-available { background: #ddf3e4; color: #14603c; }
+.s-checked-out { background: #dfe9fc; color: #1d3f8f; }
+.s-under-maintenance { background: #fbeecb; color: #7c5310; }
+.s-reserved { background: #e9e2fa; color: #4b3591; }
+.s-retired { background: #e7eaee; color: #454e5b; }
+.s-missing, .s-lost { background: #f9dee5; color: #8f2343; }
+.s-in-use { background: #e3e6fb; color: #35409a; }
+.s-in-storage { background: #d8f0ee; color: #0f5f5a; }
+.s-damaged { background: #fbe3dc; color: #8a3016; }
+.s-disposed { background: #dfe2e6; color: #3c434c; }
+.s-scheduled { background: #dfe9fc; color: #1d3f8f; }
+.s-in-progress { background: #fbeecb; color: #7c5310; }
+.s-completed { background: #ddf3e4; color: #14603c; }
+.b-warranty, .b-license { background: #fbeecb; color: #7c5310; }
+.b-maintenance { background: #dfe9fc; color: #1d3f8f; }
+.b-assignment { background: #f9dee5; color: #8f2343; }
+.chip { background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+  font-size: .76rem; font-weight: 600; padding: .1rem .5rem; text-transform: capitalize; }
+
+label { display: block; font-size: .8rem; font-weight: 600; color: var(--muted); margin: .6rem 0 .25rem; }
+input, select, textarea { width: 100%; padding: .48rem .65rem; border: 1px solid var(--border);
+  border-radius: 8px; font-size: .92rem; font-family: inherit; background: var(--surface); color: var(--text); }
+input:focus-visible, select:focus-visible, textarea:focus-visible,
+.btn:focus-visible, a:focus-visible, button:focus-visible, th.sortable:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 1px;
+}
+input[type="checkbox"] { width: auto; }
+.form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(215px, 1fr)); gap: 0 1rem; }
+.form-grid .full { grid-column: 1 / -1; }
+.form-actions { margin-top: 1.2rem; display: flex; gap: .5rem; flex-wrap: wrap; }
+.filters { display: flex; gap: .5rem; flex-wrap: wrap; margin-bottom: 1rem; align-items: center; }
+.filters input, .filters select { width: auto; }
+
+.btn { display: inline-block; padding: .45rem .95rem; border-radius: 8px; border: 1px solid transparent;
+  font-size: .88rem; font-weight: 600; font-family: inherit; cursor: pointer;
+  text-decoration: none; background: var(--accent); color: #fff; }
+.btn:hover { background: var(--accent-dark); }
+.btn.secondary { background: var(--surface); color: var(--text); border-color: var(--border); }
+.btn.secondary:hover { background: var(--bg); }
+.btn.danger { background: var(--danger); }
+.btn.danger:hover { background: #b74444; }
+.btn.sm { padding: .22rem .6rem; font-size: .78rem; }
+.btn.wide { width: 100%; margin-top: 1rem; }
+
+dl.props { display: grid; grid-template-columns: 175px 1fr; row-gap: .45rem; margin: 0; }
+dl.props dt { font-weight: 600; color: var(--muted); font-size: .86rem; }
+dl.props dd { margin: 0; }
+@media (max-width: 560px) { dl.props { grid-template-columns: 1fr; } dl.props dd { margin-bottom: .5rem; } }
+
+.feed, .alert-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .5rem; }
+.feed li, .alert-list li { display: flex; gap: .6rem; align-items: baseline; flex-wrap: wrap; font-size: .9rem; }
+.feed .muted, .alert-list .muted { margin-inline-start: auto; font-size: .78rem; }
+
+.auth-wrap { min-height: 100vh; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; background: var(--side); padding: 1rem; }
+.auth-card { background: var(--surface); border-radius: 14px; padding: 2rem; width: 100%;
+  max-width: 380px; box-shadow: 0 12px 40px rgba(0, 0, 0, .35); }
+.auth-card h1 { text-align: center; }
+.auth-card .muted { text-align: center; margin-top: .2rem; }
+.auth-logo-img { display: block; margin: 0 auto .6rem; width: 72px; height: 72px; }
+.auth-hint { margin-top: 1rem; font-size: .8rem; text-align: center; color: var(--muted);
+  background: var(--bg); border-radius: 8px; padding: .5rem; }
+.auth-hint code { font-family: ui-monospace, Menlo, Consolas, monospace; color: var(--accent-dark); font-weight: 700; }
+
+.qr-box { text-align: center; }
+.qr-box svg { width: 150px; height: 150px; }
+.codes { display: flex; gap: 1rem; align-items: center; justify-content: center; flex-wrap: wrap; }
+.codes .bc svg { width: 150px; height: 60px; }
+.seat-bar { background: var(--bg); border-radius: 999px; height: 7px; overflow: hidden; min-width: 90px; margin-top: 4px; }
+.seat-bar > i { display: block; height: 100%; background: var(--accent); }
+.seat-bar > i.over { background: var(--danger); }
+
+.tree { list-style: none; margin: 0; padding: 0; }
+.tree ul { list-style: none; margin: 0; padding-inline-start: 1.3rem;
+  border-inline-start: 1px solid var(--border); }
+.tree li { padding: .18rem 0; font-size: .9rem; }
+.tree .kind { font-size: .7rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-inline-start: .4rem; }
+
+.toast { position: fixed; inset-block-end: 1.2rem; inset-inline-start: 50%; transform: translateX(-50%);
+  background: #14603c; color: #fff; padding: .6rem 1.1rem; border-radius: 8px; font-size: .9rem;
+  font-weight: 600; box-shadow: 0 6px 24px rgba(0, 0, 0, .28); z-index: 60; max-width: 90vw; }
+[dir="rtl"] .toast { transform: translateX(50%); }
+
+.demo-ribbon { background: #0F1826; color: #cfe9d8; font-size: .78rem; padding: .4rem 1.6rem;
+  display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; }
+.demo-ribbon b { color: #7fe0a4; }
+.demo-ribbon button { background: none; border: 1px solid #3a4658; color: #cfe9d8; border-radius: 6px;
+  font-size: .72rem; padding: .1rem .5rem; cursor: pointer; font-family: inherit; }
+.demo-ribbon button:hover { background: #1d2837; }
+
+.modal { border: 0; border-radius: 12px; padding: 0; max-width: 520px; width: 92vw;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, .35); }
+.modal::backdrop { background: rgba(15, 24, 38, .55); }
+.modal .m-head { padding: 1rem 1.2rem .2rem; }
+.modal .m-body { padding: 0 1.2rem 1.2rem; }
+
+.label-preview { display: flex; align-items: center; gap: 1.2rem; flex-wrap: wrap; background: #fff;
+  border: 2px dashed #c9ced6; border-radius: 16px; padding: 1.1rem 1.3rem; margin-bottom: 1.2rem; }
+.label-preview .lp-qr { flex-shrink: 0; text-align: center; }
+.label-preview .lp-qr .box { width: 128px; height: 128px; border: 1px solid var(--border);
+  border-radius: 10px; padding: 5px; background: #fff; }
+.label-preview .lp-qr .box svg { width: 100%; height: 100%; display: block; }
+.label-preview .lp-tag { margin-top: .4rem; font-size: 1.15rem; font-weight: 600;
+  font-family: ui-monospace, Menlo, monospace; color: #1d2530; }
+.label-preview .lp-info { flex: 1; min-width: 220px; }
+.label-preview .lp-org { font-size: 1.5rem; font-weight: 800; letter-spacing: -.01em;
+  margin-bottom: .9rem; line-height: 1.15; color: #1d2530; }
+.label-preview .lp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .7rem 1rem; }
+.label-preview .lp-l { font-size: .82rem; color: #6b7480; margin-bottom: 1px; }
+.label-preview .lp-v { font-size: 1.15rem; font-weight: 700; color: #1d2530; word-break: break-word; }
+.label-preview .lp-full { grid-column: 1 / -1; }
+
+@media (max-width: 860px) {
+  .sidebar { position: fixed; inset-inline-start: -240px; z-index: 40; transition: inset-inline-start .2s; }
+  .shell.nav-open .sidebar { inset-inline-start: 0; }
+  .nav-btn { display: block; }
+  main { padding: 1rem; }
+  .topbar, .demo-ribbon { padding-inline: 1rem; }
+  .user-name { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .sidebar { transition: none; } * { animation: none !important; } }
+[dir="rtl"] .chart .cl { direction: ltr; }
+
+@media print {
+  .sidebar, .topbar, .demo-ribbon, .no-print, .btn, .filters { display: none !important; }
+  body, .content { background: #fff; }
+  main { padding: 0; max-width: none; }
+  .card { border: none; box-shadow: none; padding: 0; }
+  body.printing-label * { visibility: hidden !important; }
+  body.printing-label .label-preview, body.printing-label .label-preview * { visibility: visible !important; }
+  body.printing-label .label-preview { position: fixed; top: 0; left: 0; width: 6in; height: 3in; margin: 0; }
+}
+</style>
+
+<div id="root"></div>
+
+<script>
+const DATA = __DATA__;
+const CODES = __CODES__;
+const AR = __AR__;
+const LOGO = __LOGO__;
+const VERSION = "__VERSION__";
+const TODAY = new Date("__TODAY__");
+
+/* ------------------------------------------------------------------ icons */
+const ICONS = __ICONS__;
+function icon(name, size) {
+  const body = ICONS[name] || "";
+  return `<svg width="${size || 18}" height="${size || 18}" viewBox="0 0 24 24" fill="none"
+    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+    aria-hidden="true">${body}</svg>`;
+}
+
+/* ------------------------------------------------------------------ state */
+const state = {
+  authed: false,
+  view: "dashboard",
+  param: null,
+  lang: "en",
+  navOpen: false,
+  assetFilters: { q: "", status: "", category: "", department: "", branch: "", building: "", floor: "", condition: "" },
+  assetSort: { key: "tag", dir: 1 },
+  searchQ: "",
+  activity: [],
+  notifications: DATA.notifications.map(n => Object.assign({ read: false }, n)),
+};
+
+function t(s) { return state.lang === "ar" && AR[s] ? AR[s] : s; }
+function esc(s) {
+  return String(s == null ? "" : s).replace(/[&<>"']/g, c =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+function dash(v) { return (v === null || v === undefined || v === "") ? "—" : esc(v); }
+function money(n) { return n == null ? "—" : "$" + Number(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+function shortMoney(n) {
+  if (!n) return "$0";
+  if (n >= 1000) return "$" + (n / 1000).toFixed(1) + "K";
+  return "$" + Math.round(n);
+}
+function parseDate(s) { return s ? new Date(s + (s.length === 10 ? "T00:00:00" : "")) : null; }
+function fmtDate(s) { return s ? s.slice(0, 10) : "—"; }
+function daysBetween(a, b) { return Math.round((a - b) / 86400000); }
+function slug(s) { return String(s).toLowerCase().replace(/[^a-z0-9]+/g, "-"); }
+
+function log(action, details) {
+  state.activity.unshift({ action, details, at: new Date() });
+}
+function toast(msg) {
+  const old = document.querySelector(".toast");
+  if (old) old.remove();
+  const el = document.createElement("div");
+  el.className = "toast";
+  el.setAttribute("role", "status");
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 2600);
+}
+
+/* ------------------------------------------------------------------ derived */
+function assetByTag(tag) { return DATA.assets.find(a => a.tag === tag); }
+function openAssignment(tag) {
+  return DATA.assignments.find(x => x.assetTag === tag && !x.returnedAt);
+}
+function isOverdue(asn) {
+  return !asn.returnedAt && asn.dueAt && parseDate(asn.dueAt) < TODAY;
+}
+function currentValue(a) {
+  if (!a.purchaseCost || !a.purchaseDate) return null;
+  const yrs = a.depreciationYears || 5;
+  const age = daysBetween(TODAY, parseDate(a.purchaseDate)) / 365.25;
+  const left = Math.max(0, 1 - age / yrs);
+  return a.purchaseCost * left;
+}
+function countBy(list, fn) {
+  const m = new Map();
+  list.forEach(x => { const k = fn(x); if (k == null) return; m.set(k, (m.get(k) || 0) + 1); });
+  return m;
+}
+
+/* ------------------------------------------------------------------ charts */
+const DONUT_COLORS = { "Available": "#22a04a", "Checked Out": "#2f6fed", "Under Maintenance": "#e8a13c",
+  "Retired": "#8a929e", "Reserved": "#7c5cd6", "In Use": "#18a8a0", "In Storage": "#18a8a0",
+  "Lost": "#d05574", "Damaged": "#d05555", "Missing": "#d05574", "Disposed": "#8a929e" };
+
+function barChart(pairs, color) {
+  if (!pairs.length) return `<p class="empty">${esc(t("No data"))}</p>`;
+  const w = 620, h = 220, pad = 34, bw = (w - pad * 2) / pairs.length;
+  const max = Math.max(...pairs.map(p => p[1])) || 1;
+  let out = `<svg class="chart" viewBox="0 0 ${w} ${h}" role="img" aria-label="bar chart">`;
+  for (let i = 0; i <= 2; i++) {
+    const y = pad + (h - pad * 2) * (i / 2);
+    out += `<line class="cg" x1="${pad}" y1="${y}" x2="${w - pad}" y2="${y}"/>`;
+  }
+  pairs.forEach((p, i) => {
+    const bh = (h - pad * 2) * (p[1] / max);
+    const x = pad + i * bw + bw * .22, y = h - pad - bh, bwid = bw * .56;
+    out += `<rect x="${x}" y="${y}" width="${bwid}" height="${bh}" rx="3" fill="${color}"/>`;
+    out += `<text class="cv" x="${x + bwid / 2}" y="${y - 5}" text-anchor="middle">${p[1]}</text>`;
+    const lbl = p[0].length > 9 ? p[0].slice(0, 8) + "…" : p[0];
+    out += `<text class="cl" x="${x + bwid / 2}" y="${h - pad + 14}" text-anchor="middle"
+      transform="rotate(-18 ${x + bwid / 2} ${h - pad + 14})">${esc(lbl)}</text>`;
+  });
+  return out + "</svg>";
+}
+
+function donut(pairs) {
+  const total = pairs.reduce((s, p) => s + p[1], 0);
+  if (!total) return `<p class="empty">${esc(t("No data"))}</p>`;
+  const cx = 100, cy = 100, r = 74, sw = 26;
+  const circ = 2 * Math.PI * r;
+  let acc = 0, segs = "";
+  pairs.forEach(p => {
+    const frac = p[1] / total;
+    const col = DONUT_COLORS[p[0]] || "#8a929e";
+    segs += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${col}" stroke-width="${sw}"
+      stroke-dasharray="${circ * frac} ${circ * (1 - frac)}" stroke-dashoffset="${-circ * acc}"
+      transform="rotate(-90 ${cx} ${cy})"/>`;
+    acc += frac;
+  });
+  const legend = pairs.map(p =>
+    `<span class="lg"><i style="background:${DONUT_COLORS[p[0]] || "#8a929e"}"></i>${esc(t(p[0]))} (${p[1]})</span>`).join("");
+  return `<div class="donut-wrap">
+    <svg class="chart" viewBox="0 0 200 200" role="img" aria-label="status donut">${segs}
+      <text class="dv" x="100" y="98" text-anchor="middle">${total}</text>
+      <text class="dl" x="100" y="116" text-anchor="middle">${esc(t("assets"))}</text></svg>
+    <div class="legend">${legend}</div></div>`;
+}
+
+/* ------------------------------------------------------------------ nav */
+const NAV = [
+  ["dashboard", "Dashboard", "dashboard"], ["assets", "Assets", "asset"],
+  ["lending", "Lending", "checkout"], ["licenses", "Licenses", "license"],
+  ["maintenance", "Maintenance", "wrench"], ["inventory", "Inventory", "clipboard"],
+  ["locations", "Locations", "location"], ["employees", "Employees", "user"],
+  ["departments", "Departments", "building"], ["vendors", "Vendors", "truck"],
+  ["scanner", "QR Scanner", "qr"], ["reports", "Reports", "report"],
+  ["analytics", "Analytics", "trend"], ["users", "Users", "users"],
+  ["activity", "Activity", "activity"], ["settings", "Settings", "settings"],
+];
+const NAV_PARENT = { asset: "assets", newasset: "assets", report: "reports" };
+
+function go(view, param) {
+  state.view = view;
+  state.param = param || null;
+  state.navOpen = false;
+  render();
+  window.scrollTo(0, 0);
+}
+
+/* ------------------------------------------------------------------ views */
+function viewDashboard() {
+  const A = DATA.assets;
+  const open = DATA.assignments.filter(x => !x.returnedAt);
+  const overdue = open.filter(isOverdue);
+  const value = A.reduce((s, a) => s + (a.purchaseCost || 0), 0);
+  const warrSoon = A.filter(a => {
+    const w = parseDate(a.warrantyExpiry);
+    return w && w >= TODAY && daysBetween(w, TODAY) <= 90;
+  });
+  const st = n => A.filter(a => a.status === n).length;
+  const licSoon = DATA.licenses.filter(l => {
+    const e = parseDate(l.expiry);
+    return e && daysBetween(e, TODAY) <= 90;
+  });
+  const maintOpen = DATA.maintenance.filter(m => m.status !== "Completed" && m.status !== "Cancelled");
+
+  const kpis = [
+    ["green", "asset", "Total Assets", A.length, A.length + " " + t("added this month"), false, () => go("assets")],
+    ["blue", "checkout", "Checked Out", open.length, overdue.length + " " + t("overdue"), overdue.length > 0, () => go("lending")],
+    ["orange", "wrench", "Under Maintenance", st("Under Maintenance"), maintOpen.length + " " + t("tasks scheduled"), false, () => go("maintenance")],
+    ["red", "alert", "Expiring Warranties", warrSoon.length, t("in the next 90 days"), warrSoon.length > 0, () => go("report", "warranty")],
+    ["deepgreen", "dollar", "Total Asset Value", shortMoney(value), st("Available") + " " + t("assets available"), false, () => go("report", "financial")],
+    ["purple", "license", "Active Licenses", DATA.licenses.length, licSoon.length + " " + t("expiring soon"), false, () => go("licenses")],
+    ["teal", "check", "Available Assets", st("Available"), t("Ready for checkout"), false, () => go("assets")],
+    ["red", "alert", "Lost", st("Lost"), t("Lost or missing assets"), false, () => go("assets")],
+    ["orange", "wrench", "Damaged", st("Damaged"), t("Need repair or disposal"), false, () => go("assets")],
+    ["grey", "box", "Retired / Disposed", st("Retired") + st("Disposed"), t("End of life assets"), false, () => go("assets")],
+  ];
+
+  const catPairs = [...countBy(A, a => a.category)].sort((x, y) => y[1] - x[1]);
+  const stPairs = [...countBy(A, a => a.status)].sort((x, y) => y[1] - x[1]);
+  const depPairs = [...countBy(A, a => a.department)].sort((x, y) => y[1] - x[1]);
+
+  const dueRows = open.map(x => `<tr>
+    <td><button class="linkish" data-go="asset" data-param="${esc(x.assetTag)}">${esc(x.assetTag)}</button></td>
+    <td>${dash(x.employee)}</td>
+    <td>${fmtDate(x.dueAt)} ${isOverdue(x) ? `<span class="red">${esc(t("Overdue"))}</span>` : ""}</td></tr>`).join("");
+
+  return `
+  <div class="page-head"><h1>${esc(t("Dashboard"))}</h1>
+    <div class="actions-row">
+      <button class="btn" data-go="newasset">+ ${esc(t("Add Asset"))}</button>
+      <button class="btn secondary" data-go="scanner">${esc(t("QR Scanner"))}</button>
+      <button class="btn secondary" data-go="reports">${esc(t("Reports"))}</button>
+    </div></div>
+  <div class="kpi-grid">${kpis.map((k, i) => `
+    <button class="kpi" data-kpi="${i}">
+      <span class="tile ${k[0]}">${icon(k[1], 20)}</span>
+      <span><span class="k-label">${esc(t(k[2]))}</span>
+        <span class="k-value">${esc(k[3])}</span>
+        <span class="k-sub ${k[5] ? "red" : ""}">${esc(k[4])}</span></span>
+    </button>`).join("")}</div>
+
+  <div class="two-col">
+    <div class="card"><p class="eyebrow">${esc(t("Assets by Category"))}</p>${barChart(catPairs, "#22a04a")}</div>
+    <div class="card"><p class="eyebrow">${esc(t("Assets by Status"))}</p>${donut(stPairs)}</div>
+  </div>
+  <div class="two-col">
+    <div class="card"><p class="eyebrow">${esc(t("Assets by Department"))}</p>${barChart(depPairs, "#2f6fed")}</div>
+    <div class="card"><p class="eyebrow">${esc(t("Assets due for return"))}</p>
+      ${open.length ? `<div class="table-wrap"><table><thead><tr>
+        <th>${esc(t("Asset"))}</th><th>${esc(t("Employee"))}</th><th>${esc(t("Due"))}</th>
+        </tr></thead><tbody>${dueRows}</tbody></table></div>`
+        : `<p class="empty">${esc(t("Nothing out on loan."))}</p>`}</div>
+  </div>
+  <div class="two-col">
+    <div class="card"><p class="eyebrow">${esc(t("Notifications"))}</p>
+      <ul class="alert-list">${state.notifications.slice(0, 6).map(n => `<li>
+        <span class="badge b-${slug(n.kind)}">${esc(t(n.kind))}</span>
+        <span>${esc(n.message)}</span><span class="muted">${fmtDate(n.createdAt)}</span></li>`).join("")}</ul>
+      <button class="linkish" style="margin-top:.7rem" data-go="notifications">${esc(t("View all"))} →</button></div>
+    <div class="card"><p class="eyebrow">${esc(t("Recent Activity"))}</p>
+      <ul class="feed">${recentActivityItems(6)}</ul></div>
+  </div>`;
+}
+
+function recentActivityItems(n) {
+  const items = state.activity.slice(0, n);
+  if (!items.length) return `<li class="empty">${esc(t("Nothing yet — try checking an asset in or out."))}</li>`;
+  return items.map(a => `<li><span class="chip">${esc(a.action)}</span>
+    <span>${esc(a.details)}</span>
+    <span class="muted">${a.at.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span></li>`).join("");
+}
+
+function filteredAssets() {
+  const f = state.assetFilters;
+  let list = DATA.assets.filter(a => {
+    if (f.status && a.status !== f.status) return false;
+    if (f.category && a.category !== f.category) return false;
+    if (f.department && a.department !== f.department) return false;
+    if (f.branch && a.branch !== f.branch) return false;
+    if (f.building && a.building !== f.building) return false;
+    if (f.floor && a.floor !== f.floor) return false;
+    if (f.condition && a.condition !== f.condition) return false;
+    if (f.q) {
+      const hay = [a.tag, a.name, a.serial, a.manufacturer, a.model, a.assignedTo,
+        a.category, a.department, a.locationPath].join(" ").toLowerCase();
+      if (!hay.includes(f.q.toLowerCase())) return false;
+    }
+    return true;
+  });
+  const { key, dir } = state.assetSort;
+  list.sort((x, y) => {
+    const a = x[key], b = y[key];
+    if (a == null && b == null) return 0;
+    if (a == null) return 1;
+    if (b == null) return -1;
+    if (typeof a === "number" && typeof b === "number") return (a - b) * dir;
+    return String(a).localeCompare(String(b)) * dir;
+  });
+  return list;
+}
+
+function viewAssets() {
+  const f = state.assetFilters;
+  const list = filteredAssets();
+  const opt = (arr, cur) => [`<option value="">${esc(t("All"))}</option>`]
+    .concat(arr.map(v => `<option value="${esc(v)}" ${v === cur ? "selected" : ""}>${esc(t(v))}</option>`)).join("");
+  const cols = [["tag", "Tag"], ["name", "Name"], ["category", "Category"], ["status", "Status"],
+    ["branch", "Branch"], ["floor", "Floor"], ["locationPath", "Location"],
+    ["assignedTo", "Assigned to"], ["department", "Department"]];
+  const arrow = k => state.assetSort.key === k ? `<span class="arrow">${state.assetSort.dir > 0 ? "▲" : "▼"}</span>` : "";
+
+  return `
+  <div class="page-head"><h1>${esc(t("Assets"))}</h1>
+    <div class="actions-row">
+      <button class="btn" data-go="newasset">+ ${esc(t("New Asset"))}</button>
+      <button class="btn secondary" data-act="export-csv">${esc(t("Export CSV"))}</button>
+      <button class="btn secondary" data-act="labels">${esc(t("Labels"))}</button>
+    </div></div>
+
+  <div class="filters">
+    <input type="search" id="f-q" placeholder="${esc(t("Search"))}…" value="${esc(f.q)}" aria-label="${esc(t("Search"))}">
+    <select id="f-status" aria-label="${esc(t("Status"))}">${opt(DATA.constants.statuses, f.status)}</select>
+    <select id="f-category" aria-label="${esc(t("Category"))}">${opt(DATA.categories.map(c => c.name), f.category)}</select>
+    <select id="f-department" aria-label="${esc(t("Department"))}">${opt(DATA.departments.map(d => d.name), f.department)}</select>
+    <select id="f-branch" aria-label="${esc(t("Branch"))}">${opt(DATA.constants.branches, f.branch)}</select>
+    <select id="f-building" aria-label="${esc(t("Building"))}">${opt(DATA.constants.buildings, f.building)}</select>
+    <select id="f-floor" aria-label="${esc(t("Floor"))}">${opt(DATA.constants.floors, f.floor)}</select>
+    <select id="f-condition" aria-label="${esc(t("Condition"))}">${opt(DATA.constants.conditions, f.condition)}</select>
+    <button class="btn secondary" data-act="clear-filters">${esc(t("Clear"))}</button>
+  </div>
+
+  <div class="card">
+    <p class="eyebrow">${list.length} ${esc(t("of"))} ${DATA.assets.length} ${esc(t("assets"))}</p>
+    <div class="table-wrap"><table><thead><tr>
+      ${cols.map(c => `<th class="sortable" tabindex="0" data-sort="${c[0]}">${esc(t(c[1]))} ${arrow(c[0])}</th>`).join("")}
+    </tr></thead><tbody>
+      ${list.length ? list.map(a => `<tr>
+        <td><button class="linkish" data-go="asset" data-param="${esc(a.tag)}">${esc(a.tag)}</button></td>
+        <td>${esc(a.name)}</td><td>${dash(a.category)}</td>
+        <td><span class="badge s-${slug(a.status)}">${esc(t(a.status))}</span></td>
+        <td>${dash(a.branch)}</td><td>${dash(a.floor)}</td>
+        <td>${dash(a.locationPath)}</td>
+        <td>${a.assignedTo ? `<b>${esc(a.assignedTo)}</b>` : "—"}</td>
+        <td>${dash(a.department)}</td></tr>`).join("")
+        : `<tr><td colspan="9" class="empty">${esc(t("No assets match those filters."))}</td></tr>`}
+    </tbody></table></div>
+  </div>`;
+}
+
+function viewAsset() {
+  const a = assetByTag(state.param);
+  if (!a) return `<div class="card"><p class="empty">${esc(t("Asset not found."))}</p>
+    <button class="btn secondary" data-go="assets">← ${esc(t("Back to assets"))}</button></div>`;
+  const asn = openAssignment(a.tag);
+  const code = CODES[a.tag];
+  const cv = currentValue(a);
+  const hist = DATA.assignments.filter(x => x.assetTag === a.tag);
+  const maint = DATA.maintenance.filter(m => m.assetTag === a.tag);
+  const canLend = !["Retired", "Disposed", "Lost", "Missing"].includes(a.status);
+
+  const props = [
+    ["Status", `<span class="badge s-${slug(a.status)}">${esc(t(a.status))}</span>`],
+    ["Condition", dash(a.condition)], ["Category", dash(a.category)], ["Type", dash(a.type)],
+    ["Serial number", dash(a.serial)], ["Manufacturer", dash(a.manufacturer)], ["Model", dash(a.model)],
+    ["Branch", dash(a.branch)], ["Building", dash(a.building)], ["Floor", dash(a.floor)],
+    ["Location", dash(a.locationPath)], ["Department", dash(a.department)], ["Vendor", dash(a.vendor)],
+    ["Purchase date", fmtDate(a.purchaseDate)], ["Purchase cost", money(a.purchaseCost)],
+    ["Current value", cv == null ? "—" : `${money(cv)} <span class="muted">(${esc(t("straight-line over"))} ${a.depreciationYears || 5} ${esc(t("yrs"))})</span>`],
+    ["Warranty expiry", a.warrantyExpiry
+      ? `${fmtDate(a.warrantyExpiry)} ${parseDate(a.warrantyExpiry) < TODAY ? `<span class="red">${esc(t("expired"))}</span>` : ""}` : "—"],
+    ["Notes", dash(a.notes)], ["Added", fmtDate(a.createdAt)],
+  ];
+
+  return `
+  <div class="page-head"><h1>${esc(a.tag)} — ${esc(a.name)}</h1>
+    <div class="actions-row">
+      <button class="btn secondary" data-go="assets">← ${esc(t("Assets"))}</button>
+      <button class="btn secondary" data-act="clone">${esc(t("Clone"))}</button>
+      <button class="btn secondary" data-act="print-label">${esc(t("Print label (6×3)"))}</button>
+    </div></div>
+
+  <div class="label-preview">
+    <div class="lp-qr"><div class="box">${code ? code.qr : ""}</div><div class="lp-tag">${esc(a.tag)}</div></div>
+    <div class="lp-info"><div class="lp-org">Mada Academy</div>
+      <div class="lp-grid">
+        <div><div class="lp-l">${esc(t("Name"))}</div><div class="lp-v">${esc(a.name)}</div></div>
+        <div><div class="lp-l">${esc(t("Branch"))}</div><div class="lp-v">${dash(a.branch)}</div></div>
+        <div><div class="lp-l">${esc(t("Serial number"))}</div><div class="lp-v">${dash(a.serial)}</div></div>
+        <div><div class="lp-l">${esc(t("Floor"))}</div><div class="lp-v">${dash(a.floor)}</div></div>
+        <div class="lp-full"><div class="lp-l">${esc(t("Location"))}</div><div class="lp-v">${dash(a.locationPath)}</div></div>
+      </div></div>
+  </div>
+
+  <div class="two-col">
+    <div>
+      <div class="card"><p class="eyebrow">${esc(t("Details"))}</p>
+        <dl class="props">${props.map(p => `<dt>${esc(t(p[0]))}</dt><dd>${p[1]}</dd>`).join("")}</dl></div>
+
+      <div class="card"><p class="eyebrow">${esc(t("Assignment"))}</p>
+        ${asn ? `<p>${esc(t("Checked Out"))} → <b>${esc(asn.employee)}</b>
+            ${esc(t("since"))} ${fmtDate(asn.checkoutAt)} · ${esc(t("due"))} ${fmtDate(asn.dueAt)}
+            ${isOverdue(asn) ? `<span class="red">(${esc(t("Overdue"))})</span>` : ""}</p>
+          <label for="ci-cond">${esc(t("Condition after return"))}</label>
+          <select id="ci-cond">${DATA.constants.conditions.map(c =>
+            `<option ${c === a.condition ? "selected" : ""}>${esc(c)}</option>`).join("")}</select>
+          <button class="btn" style="margin-top:.9rem" data-act="checkin">${esc(t("Check In"))}</button>`
+        : canLend ? `<label for="co-emp">${esc(t("Check out to"))}</label>
+          <select id="co-emp">${DATA.employees.map(e => `<option>${esc(e.name)}</option>`).join("")}</select>
+          <label for="co-due">${esc(t("Due date"))}</label>
+          <input type="date" id="co-due" value="${defaultDue()}">
+          <button class="btn" style="margin-top:.9rem" data-act="checkout">${esc(t("Check Out"))}</button>`
+        : `<p class="empty">${esc(t("This asset's status blocks lending."))}</p>`}
+      </div>
+
+      <div class="card"><p class="eyebrow">${esc(t("Assignment History"))}</p>
+        ${hist.length ? `<div class="table-wrap"><table><thead><tr>
+          <th>${esc(t("Employee"))}</th><th>${esc(t("Check out"))}</th><th>${esc(t("Due"))}</th>
+          <th>${esc(t("Returned"))}</th><th>${esc(t("Notes"))}</th></tr></thead><tbody>
+          ${hist.map(x => `<tr><td><b>${dash(x.employee)}</b></td><td>${fmtDate(x.checkoutAt)}</td>
+            <td>${fmtDate(x.dueAt)}</td><td>${fmtDate(x.returnedAt)}</td><td>${dash(x.notes)}</td></tr>`).join("")}
+          </tbody></table></div>` : `<p class="empty">${esc(t("No history yet."))}</p>`}
+      </div>
+    </div>
+
+    <div>
+      <div class="card"><p class="eyebrow">${esc(t("QR & barcode"))}</p>
+        <div class="codes">${code ? `<div class="qr-box">${code.qr}</div><div class="bc">${code.barcode}</div>`
+          : `<p class="empty">${esc(t("Codes are generated on the server when the asset is saved."))}</p>`}</div>
+        <p class="muted" style="text-align:center;font-size:.8rem;margin:.6rem 0 0">
+          ${esc(t("These are real, scannable codes generated by the app."))}</p></div>
+
+      <div class="card"><p class="eyebrow">${esc(t("Status"))}</p>
+        <label for="st-sel">${esc(t("Change status"))}</label>
+        <select id="st-sel">${DATA.constants.statuses.map(s =>
+          `<option ${s === a.status ? "selected" : ""}>${esc(s)}</option>`).join("")}</select>
+        <button class="btn wide" data-act="set-status">${esc(t("Update status"))}</button></div>
+
+      <div class="card"><p class="eyebrow">${esc(t("Maintenance"))}</p>
+        ${maint.length ? `<ul class="feed">${maint.map(m => `<li>
+          <span class="badge s-${slug(m.status)}">${esc(t(m.status))}</span>
+          <span>${esc(m.title)}</span><span class="muted">${fmtDate(m.scheduledFor)}</span></li>`).join("")}</ul>`
+          : `<p class="empty">${esc(t("No maintenance history."))}</p>`}</div>
+    </div>
+  </div>`;
+}
+
+function defaultDue() {
+  const d = new Date(TODAY.getTime() + 30 * 86400000);
+  return d.toISOString().slice(0, 10);
+}
+
+function nextTag(categoryName) {
+  const cat = DATA.categories.find(c => c.name === categoryName);
+  const prefix = (cat && cat.prefix) || "AS";
+  const nums = DATA.assets.filter(a => a.tag.startsWith(prefix + "-"))
+    .map(a => parseInt(a.tag.split("-")[1], 10)).filter(n => !isNaN(n));
+  const next = (nums.length ? Math.max(...nums) : 0) + 1;
+  return prefix + "-" + String(next).padStart(4, "0");
+}
+
+function viewNewAsset() {
+  const sel = (id, arr, req) => `<select id="${id}" ${req ? "required" : ""}>
+    ${req ? "" : `<option value="">—</option>`}${arr.map(v => `<option>${esc(v)}</option>`).join("")}</select>`;
+  const firstCat = DATA.categories[0] ? DATA.categories[0].name : "";
+  return `
+  <div class="page-head"><h1>${esc(t("New Asset"))}</h1>
+    <button class="btn secondary" data-go="assets">← ${esc(t("Assets"))}</button></div>
+  <div class="card">
+    <div class="label-preview">
+      <div class="lp-qr"><div class="box" id="lp-qr-box" style="display:grid;place-items:center;color:#6b7480;font-size:.75rem">
+        ${esc(t("QR on save"))}</div><div class="lp-tag" id="lp-tag">${esc(nextTag(firstCat))}</div></div>
+      <div class="lp-info"><div class="lp-org">Mada Academy</div>
+        <div class="lp-grid">
+          <div><div class="lp-l">${esc(t("Name"))}</div><div class="lp-v" id="lp-name">—</div></div>
+          <div><div class="lp-l">${esc(t("Branch"))}</div><div class="lp-v" id="lp-branch">—</div></div>
+          <div><div class="lp-l">${esc(t("Serial number"))}</div><div class="lp-v" id="lp-serial">—</div></div>
+          <div><div class="lp-l">${esc(t("Floor"))}</div><div class="lp-v" id="lp-floor">—</div></div>
+        </div></div>
+    </div>
+    <form id="asset-form">
+      <div class="form-grid">
+        <div><label for="n-name">${esc(t("Name"))} *</label><input id="n-name" required></div>
+        <div><label for="n-category">${esc(t("Category"))}</label>${sel("n-category", DATA.categories.map(c => c.name), true)}</div>
+        <div><label for="n-status">${esc(t("Status"))}</label>${sel("n-status", DATA.constants.statuses, true)}</div>
+        <div><label for="n-condition">${esc(t("Condition"))}</label>${sel("n-condition", DATA.constants.conditions, true)}</div>
+        <div><label for="n-serial">${esc(t("Serial number"))}</label><input id="n-serial"></div>
+        <div><label for="n-manufacturer">${esc(t("Manufacturer"))}</label><input id="n-manufacturer"></div>
+        <div><label for="n-model">${esc(t("Model"))}</label><input id="n-model"></div>
+        <div><label for="n-branch">${esc(t("Branch"))}</label>${sel("n-branch", DATA.constants.branches)}</div>
+        <div><label for="n-building">${esc(t("Building"))}</label>${sel("n-building", DATA.constants.buildings)}</div>
+        <div><label for="n-floor">${esc(t("Floor"))}</label>${sel("n-floor", DATA.constants.floors)}</div>
+        <div><label for="n-department">${esc(t("Department"))}</label>${sel("n-department", DATA.departments.map(d => d.name))}</div>
+        <div><label for="n-vendor">${esc(t("Vendor"))}</label>${sel("n-vendor", DATA.vendors.map(v => v.name))}</div>
+        <div><label for="n-cost">${esc(t("Purchase cost"))}</label><input id="n-cost" type="number" step="0.01" min="0"></div>
+        <div><label for="n-pdate">${esc(t("Purchase date"))}</label><input id="n-pdate" type="date"></div>
+        <div><label for="n-warranty">${esc(t("Warranty expiry"))}</label><input id="n-warranty" type="date"></div>
+        <div class="full"><label for="n-notes">${esc(t("Notes"))}</label><textarea id="n-notes" rows="2"></textarea></div>
+      </div>
+      <div class="form-actions">
+        <button class="btn" type="submit">${esc(t("Save asset"))}</button>
+        <button class="btn secondary" type="button" data-go="assets">${esc(t("Cancel"))}</button>
+      </div>
+    </form>
+  </div>`;
+}
+
+function viewLending() {
+  const rows = DATA.assignments.slice().reverse();
+  return `<div class="page-head"><h1>${esc(t("Lending"))}</h1></div>
+  <div class="card"><p class="eyebrow">${DATA.assignments.filter(x => !x.returnedAt).length} ${esc(t("currently out"))}</p>
+  <div class="table-wrap"><table><thead><tr>
+    <th>${esc(t("Asset"))}</th><th>${esc(t("Name"))}</th><th>${esc(t("Employee"))}</th>
+    <th>${esc(t("Check out"))}</th><th>${esc(t("Due"))}</th><th>${esc(t("Returned"))}</th><th></th>
+  </tr></thead><tbody>${rows.length ? rows.map(x => `<tr>
+    <td><button class="linkish" data-go="asset" data-param="${esc(x.assetTag)}">${esc(x.assetTag)}</button></td>
+    <td>${dash(x.assetName)}</td><td>${dash(x.employee)}</td>
+    <td>${fmtDate(x.checkoutAt)}</td>
+    <td>${fmtDate(x.dueAt)} ${isOverdue(x) ? `<span class="red">${esc(t("Overdue"))}</span>` : ""}</td>
+    <td>${x.returnedAt ? fmtDate(x.returnedAt) : "—"}</td>
+    <td>${x.returnedAt ? "" : `<button class="btn sm" data-act="quick-checkin" data-param="${esc(x.assetTag)}">${esc(t("Check In"))}</button>`}</td>
+  </tr>`).join("") : `<tr><td colspan="7" class="empty">${esc(t("Nothing lent yet."))}</td></tr>`}
+  </tbody></table></div></div>`;
+}
+
+function viewLicenses() {
+  return `<div class="page-head"><h1>${esc(t("Licenses"))}</h1></div>
+  <div class="card"><div class="table-wrap"><table><thead><tr>
+    <th>${esc(t("Name"))}</th><th>${esc(t("Vendor"))}</th><th>${esc(t("Seats"))}</th>
+    <th>${esc(t("Expiry"))}</th><th>${esc(t("Cost"))}</th><th>${esc(t("Compliance"))}</th>
+  </tr></thead><tbody>${DATA.licenses.map(l => {
+    const pct = Math.min(100, Math.round((l.used / l.seats) * 100));
+    const over = l.used > l.seats;
+    const exp = parseDate(l.expiry);
+    const soon = exp && daysBetween(exp, TODAY) <= 90;
+    return `<tr><td><b>${esc(l.name)}</b></td><td>${dash(l.vendor)}</td>
+      <td>${l.used} / ${l.seats}<div class="seat-bar"><i class="${over ? "over" : ""}" style="width:${pct}%"></i></div></td>
+      <td>${fmtDate(l.expiry)} ${soon ? `<span class="red">${esc(t(exp < TODAY ? "expired" : "soon"))}</span>` : ""}</td>
+      <td>${money(l.cost)}</td>
+      <td><span class="badge ${over ? "s-damaged" : "s-available"}">${esc(t(over ? "Over-used" : "Compliant"))}</span></td></tr>`;
+  }).join("")}</tbody></table></div></div>`;
+}
+
+function viewMaintenance() {
+  return `<div class="page-head"><h1>${esc(t("Maintenance"))}</h1></div>
+  <div class="card"><div class="table-wrap"><table><thead><tr>
+    <th>${esc(t("Asset"))}</th><th>${esc(t("Title"))}</th><th>${esc(t("Kind"))}</th>
+    <th>${esc(t("Status"))}</th><th>${esc(t("Scheduled"))}</th><th>${esc(t("Cost"))}</th><th></th>
+  </tr></thead><tbody>${DATA.maintenance.map(m => `<tr>
+    <td><button class="linkish" data-go="asset" data-param="${esc(m.assetTag)}">${esc(m.assetTag)}</button></td>
+    <td>${esc(m.title)}</td><td>${esc(t(m.kind))}</td>
+    <td><span class="badge s-${slug(m.status)}">${esc(t(m.status))}</span></td>
+    <td>${fmtDate(m.scheduledFor)}</td><td>${money(m.cost)}</td>
+    <td>${m.status === "Completed" ? "" :
+      `<button class="btn sm" data-act="complete-maint" data-param="${m.id}">${esc(t("Complete"))}</button>`}</td>
+  </tr>`).join("")}</tbody></table></div></div>`;
+}
+
+function viewInventory() {
+  const missing = DATA.assets.filter(a => ["Lost", "Missing"].includes(a.status));
+  return `<div class="page-head"><h1>${esc(t("Inventory"))}</h1>
+    <button class="btn" data-act="start-audit">${esc(t("Start audit session"))}</button></div>
+  <div class="card"><p class="eyebrow">${esc(t("Physical audit"))}</p>
+    <p class="muted">${esc(t("Scan or tick each asset as found. Anything left unticked is reported missing."))}</p>
+    <div class="table-wrap"><table><thead><tr>
+      <th style="width:40px"></th><th>${esc(t("Tag"))}</th><th>${esc(t("Name"))}</th>
+      <th>${esc(t("Location"))}</th><th>${esc(t("Status"))}</th></tr></thead><tbody>
+      ${DATA.assets.map(a => `<tr><td><input type="checkbox" class="audit-tick" data-tag="${esc(a.tag)}"></td>
+        <td><button class="linkish" data-go="asset" data-param="${esc(a.tag)}">${esc(a.tag)}</button></td>
+        <td>${esc(a.name)}</td><td>${dash(a.locationPath)}</td>
+        <td><span class="badge s-${slug(a.status)}">${esc(t(a.status))}</span></td></tr>`).join("")}
+    </tbody></table></div>
+    <p id="audit-count" class="muted" style="margin-top:.8rem">0 ${esc(t("found"))} · ${DATA.assets.length} ${esc(t("outstanding"))}</p>
+  </div>
+  <div class="card"><p class="eyebrow">${esc(t("Missing assets"))}</p>
+    ${missing.length ? `<ul class="feed">${missing.map(a => `<li><b>${esc(a.tag)}</b> ${esc(a.name)}</li>`).join("")}</ul>`
+      : `<p class="empty">${esc(t("Nothing reported missing."))}</p>`}</div>`;
+}
+
+function viewLocations() {
+  const byParent = new Map();
+  DATA.locations.forEach(l => {
+    const k = l.parentId || 0;
+    if (!byParent.has(k)) byParent.set(k, []);
+    byParent.get(k).push(l);
+  });
+  const count = id => DATA.assets.filter(a => {
+    const loc = DATA.locations.find(l => l.id === id);
+    return loc && a.locationPath === loc.path;
+  }).length;
+  function branchHtml(pid) {
+    const kids = byParent.get(pid) || [];
+    if (!kids.length) return "";
+    return `<ul>${kids.map(l => `<li>${esc(l.name)}<span class="kind">${esc(l.kind)}</span>
+      ${count(l.id) ? `<span class="chip">${count(l.id)} ${esc(t("assets"))}</span>` : ""}
+      ${branchHtml(l.id)}</li>`).join("")}</ul>`;
+  }
+  return `<div class="page-head"><h1>${esc(t("Locations"))}</h1></div>
+  <div class="card"><p class="eyebrow">${esc(t("Branch → Building → Floor → Room"))}</p>
+    <ul class="tree">${(byParent.get(0) || []).map(l => `<li><b>${esc(l.name)}</b>
+      <span class="kind">${esc(l.kind)}</span>${branchHtml(l.id)}</li>`).join("")}</ul></div>`;
+}
+
+function viewEmployees() {
+  return `<div class="page-head"><h1>${esc(t("Employees"))}</h1></div>
+  <div class="card"><div class="table-wrap"><table><thead><tr>
+    <th>${esc(t("Name"))}</th><th>${esc(t("Code"))}</th><th>${esc(t("Type"))}</th>
+    <th>${esc(t("Title"))}</th><th>${esc(t("Department"))}</th><th>${esc(t("Holding"))}</th>
+  </tr></thead><tbody>${DATA.employees.map(e => {
+    const held = DATA.assignments.filter(x => x.employee === e.name && !x.returnedAt);
+    return `<tr><td><b>${esc(e.name)}</b><br><span class="muted" style="font-size:.8rem">${dash(e.email)}</span></td>
+      <td>${dash(e.code)}</td><td>${dash(e.type)}</td><td>${dash(e.title)}</td><td>${dash(e.department)}</td>
+      <td>${held.length ? held.map(h =>
+        `<button class="linkish" data-go="asset" data-param="${esc(h.assetTag)}">${esc(h.assetTag)}</button>`).join(", ") : "—"}</td></tr>`;
+  }).join("")}</tbody></table></div></div>`;
+}
+
+function viewDepartments() {
+  return `<div class="page-head"><h1>${esc(t("Departments"))}</h1></div>
+  <div class="card"><div class="table-wrap"><table><thead><tr>
+    <th>${esc(t("Name"))}</th><th>${esc(t("Cost center"))}</th><th>${esc(t("Assets"))}</th>
+    <th>${esc(t("Employees"))}</th><th>${esc(t("Value"))}</th></tr></thead><tbody>
+    ${DATA.departments.map(d => {
+      const as = DATA.assets.filter(a => a.department === d.name);
+      const val = as.reduce((s, a) => s + (a.purchaseCost || 0), 0);
+      return `<tr><td><b>${esc(d.name)}</b></td><td>${dash(d.costCenter)}</td><td>${as.length}</td>
+        <td>${DATA.employees.filter(e => e.department === d.name).length}</td><td>${money(val)}</td></tr>`;
+    }).join("")}</tbody></table></div></div>`;
+}
+
+function viewVendors() {
+  return `<div class="page-head"><h1>${esc(t("Vendors"))}</h1></div>
+  <div class="card"><div class="table-wrap"><table><thead><tr>
+    <th>${esc(t("Name"))}</th><th>${esc(t("Contact"))}</th><th>${esc(t("Email"))}</th>
+    <th>${esc(t("Phone"))}</th><th>${esc(t("Assets"))}</th><th>${esc(t("Licenses"))}</th>
+  </tr></thead><tbody>${DATA.vendors.map(v => `<tr>
+    <td><b>${esc(v.name)}</b>${v.website ? `<br><span class="muted" style="font-size:.8rem">${esc(v.website)}</span>` : ""}</td>
+    <td>${dash(v.contactName)}</td><td>${dash(v.email)}</td><td>${dash(v.phone)}</td>
+    <td>${v.assetCount}</td><td>${v.licenseCount}</td></tr>`).join("")}</tbody></table></div></div>`;
+}
+
+function viewScanner() {
+  return `<div class="page-head"><h1>${esc(t("QR Scanner"))}</h1></div>
+  <div class="two-col">
+    <div class="card"><p class="eyebrow">${esc(t("Camera scan"))}</p>
+      <p class="muted">${esc(t("In the real app this opens the device camera and reads the asset's QR or Code-128 label using the browser's built-in BarcodeDetector."))}</p>
+      <p class="muted">${esc(t("Camera access is disabled in this demo — use the manual lookup instead."))}</p></div>
+    <div class="card"><p class="eyebrow">${esc(t("Manual code lookup"))}</p>
+      <form id="scan-form">
+        <label for="scan-code">${esc(t("Asset tag"))}</label>
+        <input id="scan-code" placeholder="LT-0001" list="tag-list" autocomplete="off">
+        <datalist id="tag-list">${DATA.assets.map(a => `<option value="${esc(a.tag)}">`).join("")}</datalist>
+        <button class="btn wide" type="submit">${esc(t("Look up"))}</button>
+      </form>
+      <p class="muted" style="margin-top:.8rem;font-size:.85rem">${esc(t("Try"))}:
+        ${DATA.assets.slice(0, 4).map(a =>
+          `<button class="linkish" data-go="asset" data-param="${esc(a.tag)}">${esc(a.tag)}</button>`).join(" · ")}</p>
+    </div>
+  </div>`;
+}
+
+const REPORTS = {
+  assets: "Asset Register", departments: "Assets by Department",
+  locations: "Assets by Branch / Building", employees: "Employee Assignments",
+  maintenance: "Maintenance Log", warranty: "Warranty Status",
+  licenses: "License Compliance", financial: "Financial / Depreciation",
+  inventory: "Inventory & Missing Assets", lifecycle: "Lifecycle & End-of-Life",
+};
+
+function viewReports() {
+  return `<div class="page-head"><h1>${esc(t("Reports"))}</h1></div>
+  <div class="kpi-grid">
+    ${Object.entries(REPORTS).map(([k, label]) => `
+      <button class="kpi" data-go="report" data-param="${esc(k)}">
+        <span class="tile blue">${icon("report", 20)}</span>
+        <span><span class="k-value" style="font-size:1rem">${esc(t(label))}</span>
+        <span class="k-sub">${esc(t("Printable · CSV export"))}</span></span></button>`).join("")}
+  </div>`;
+}
+
+function reportTable(name) {
+  const A = DATA.assets;
+  if (name === "assets") return [["Tag", "Name", "Category", "Status", "Branch", "Location", "Cost"],
+    A.map(a => [a.tag, a.name, a.category, a.status, a.branch, a.locationPath, money(a.purchaseCost)])];
+  if (name === "departments") return [["Department", "Assets", "Value"],
+    DATA.departments.map(d => {
+      const as = A.filter(a => a.department === d.name);
+      return [d.name, as.length, money(as.reduce((s, a) => s + (a.purchaseCost || 0), 0))];
+    })];
+  if (name === "locations") return [["Branch", "Building", "Floor", "Assets"],
+    [...countBy(A, a => [a.branch, a.building, a.floor].join("|"))]
+      .map(([k, n]) => k.split("|").concat(n))];
+  if (name === "employees") return [["Employee", "Department", "Assets held"],
+    DATA.employees.map(e => [e.name, e.department,
+      DATA.assignments.filter(x => x.employee === e.name && !x.returnedAt).map(x => x.assetTag).join(", ") || "—"])];
+  if (name === "maintenance") return [["Asset", "Title", "Kind", "Status", "Scheduled", "Cost"],
+    DATA.maintenance.map(m => [m.assetTag, m.title, m.kind, m.status, fmtDate(m.scheduledFor), money(m.cost)])];
+  if (name === "warranty") return [["Tag", "Name", "Warranty expiry", "State"],
+    A.filter(a => a.warrantyExpiry).map(a => {
+      const w = parseDate(a.warrantyExpiry);
+      const days = daysBetween(w, TODAY);
+      return [a.tag, a.name, fmtDate(a.warrantyExpiry),
+        days < 0 ? "Expired" : days <= 90 ? "Expiring in " + days + " days" : "In warranty"];
+    })];
+  if (name === "licenses") return [["License", "Vendor", "Seats used", "Seats", "Expiry", "Compliance"],
+    DATA.licenses.map(l => [l.name, l.vendor, l.used, l.seats, fmtDate(l.expiry),
+      l.used > l.seats ? "Over-used" : "Compliant"])];
+  if (name === "financial") return [["Tag", "Name", "Purchase date", "Cost", "Current value"],
+    A.filter(a => a.purchaseCost).map(a => [a.tag, a.name, fmtDate(a.purchaseDate),
+      money(a.purchaseCost), money(currentValue(a))])];
+  if (name === "inventory") return [["Tag", "Name", "Status", "Location"],
+    A.map(a => [a.tag, a.name, a.status, a.locationPath])];
+  if (name === "lifecycle") return [["Tag", "Name", "Age (yrs)", "Status", "End of life"],
+    A.filter(a => a.purchaseDate).map(a => {
+      const age = daysBetween(TODAY, parseDate(a.purchaseDate)) / 365.25;
+      return [a.tag, a.name, age.toFixed(1), a.status,
+        age >= (a.depreciationYears || 5) ? "Due for replacement" : "In service"];
+    })];
+  return [["—"], []];
+}
+
+function viewReport() {
+  const name = state.param;
+  const label = REPORTS[name] || name;
+  const [head, rows] = reportTable(name);
+  return `<div class="page-head"><h1>${esc(t(label))}</h1>
+    <div class="actions-row">
+      <button class="btn secondary" data-go="reports">← ${esc(t("Reports"))}</button>
+      <button class="btn secondary" data-act="report-csv">${esc(t("Export CSV"))}</button>
+      <button class="btn secondary" data-act="print">${esc(t("Print"))}</button>
+    </div></div>
+  <div class="card"><p class="eyebrow">${rows.length} ${esc(t("rows"))}</p>
+    <div class="table-wrap"><table><thead><tr>${head.map(h => `<th>${esc(t(h))}</th>`).join("")}</tr></thead>
+    <tbody>${rows.length ? rows.map(r => `<tr>${r.map(c => `<td>${dash(c)}</td>`).join("")}</tr>`).join("")
+      : `<tr><td colspan="${head.length}" class="empty">${esc(t("No rows."))}</td></tr>`}</tbody></table></div></div>`;
+}
+
+function viewAnalytics() {
+  const A = DATA.assets;
+  const byCat = [...countBy(A, a => a.category)].sort((x, y) => y[1] - x[1]);
+  const valByDep = DATA.departments.map(d => [d.name,
+    Math.round(A.filter(a => a.department === d.name).reduce((s, a) => s + (a.purchaseCost || 0), 0))])
+    .filter(p => p[1] > 0).sort((x, y) => y[1] - x[1]);
+  const ages = A.filter(a => a.purchaseDate).map(a => {
+    const y = daysBetween(TODAY, parseDate(a.purchaseDate)) / 365.25;
+    return y < 1 ? "<1 yr" : y < 2 ? "1–2 yrs" : y < 3 ? "2–3 yrs" : "3+ yrs";
+  });
+  const agePairs = [...countBy(ages, x => x)];
+  const totalVal = A.reduce((s, a) => s + (a.purchaseCost || 0), 0);
+  const curVal = A.reduce((s, a) => s + (currentValue(a) || 0), 0);
+
+  return `<div class="page-head"><h1>${esc(t("Analytics"))}</h1></div>
+  <div class="kpi-grid">
+    <div class="kpi"><span class="tile deepgreen">${icon("dollar", 20)}</span><span>
+      <span class="k-label">${esc(t("Purchase value"))}</span><span class="k-value">${shortMoney(totalVal)}</span>
+      <span class="k-sub">${esc(t("across"))} ${A.length} ${esc(t("assets"))}</span></span></div>
+    <div class="kpi"><span class="tile teal">${icon("trend", 20)}</span><span>
+      <span class="k-label">${esc(t("Current book value"))}</span><span class="k-value">${shortMoney(curVal)}</span>
+      <span class="k-sub">${esc(t("straight-line depreciation"))}</span></span></div>
+    <div class="kpi"><span class="tile orange">${icon("clock", 20)}</span><span>
+      <span class="k-label">${esc(t("Depreciated"))}</span><span class="k-value">${shortMoney(totalVal - curVal)}</span>
+      <span class="k-sub">${totalVal ? Math.round((1 - curVal / totalVal) * 100) : 0}% ${esc(t("of purchase value"))}</span></span></div>
+  </div>
+  <div class="two-col">
+    <div class="card"><p class="eyebrow">${esc(t("Assets by Category"))}</p>${barChart(byCat, "#22a04a")}</div>
+    <div class="card"><p class="eyebrow">${esc(t("Age profile"))}</p>${donut(agePairs.map(p => [p[0], p[1]]))}</div>
+  </div>
+  <div class="card"><p class="eyebrow">${esc(t("Purchase value by department"))}</p>${barChart(valByDep, "#7c5cd6")}</div>`;
+}
+
+function viewUsers() {
+  const users = [
+    { name: "Administrator", username: "admin", role: "admin", active: true },
+    { name: "IT Technician", username: "tech", role: "technician", active: true },
+    { name: "Viewer", username: "viewer", role: "viewer", active: true },
+  ];
+  return `<div class="page-head"><h1>${esc(t("Users"))}</h1></div>
+  <div class="card"><div class="table-wrap"><table><thead><tr>
+    <th>${esc(t("Name"))}</th><th>${esc(t("Username"))}</th><th>${esc(t("Role"))}</th><th>${esc(t("Status"))}</th>
+  </tr></thead><tbody>${users.map(u => `<tr><td><b>${esc(u.name)}</b></td><td>${esc(u.username)}</td>
+    <td><span class="chip">${esc(u.role)}</span></td>
+    <td><span class="badge s-available">${esc(t("Active"))}</span></td></tr>`).join("")}
+  </tbody></table></div>
+  <p class="muted" style="margin-top:.9rem;font-size:.85rem">
+    ${esc(t("The real app has 13 roles and an editable permission matrix."))}</p></div>`;
+}
+
+function viewActivity() {
+  return `<div class="page-head"><h1>${esc(t("Activity"))}</h1></div>
+  <div class="card"><p class="eyebrow">${esc(t("This session"))}</p>
+    <ul class="feed">${recentActivityItems(50)}</ul></div>`;
+}
+
+function viewNotifications() {
+  return `<div class="page-head"><h1>${esc(t("Notifications"))}</h1>
+    <button class="btn secondary" data-act="mark-read">${esc(t("Mark all read"))}</button></div>
+  <div class="card"><ul class="alert-list">${state.notifications.map(n => `<li>
+    <span class="badge b-${slug(n.kind)}">${esc(t(n.kind))}</span>
+    <span style="${n.read ? "opacity:.55" : ""}">${esc(n.message)}</span>
+    <span class="muted">${fmtDate(n.createdAt)}</span></li>`).join("")}</ul></div>`;
+}
+
+function viewSettings() {
+  return `<div class="page-head"><h1>${esc(t("Settings"))}</h1></div>
+  <div class="two-col">
+    <div class="card"><p class="eyebrow">${esc(t("Application"))}</p>
+      <label for="s-name">${esc(t("Application name"))}</label><input id="s-name" value="ITAM Enterprise">
+      <label for="s-org">${esc(t("Organisation on labels"))}</label><input id="s-org" value="Mada Academy">
+      <label for="s-days">${esc(t("Default checkout period (days)"))}</label><input id="s-days" type="number" value="30">
+      <button class="btn wide" data-act="save-settings">${esc(t("Save settings"))}</button></div>
+    <div class="card"><p class="eyebrow">${esc(t("Backup & recovery"))}</p>
+      <p class="muted">${esc(t("The real app keeps the newest 14 daily SQLite backups and can restore or download any of them."))}</p>
+      <button class="btn secondary" data-act="backup">${esc(t("Create backup now"))}</button></div>
+  </div>
+  <div class="card"><p class="eyebrow">${esc(t("Demo build"))}</p>
+    <dl class="props">
+      <dt>${esc(t("Version"))}</dt><dd>v${esc(VERSION)}</dd>
+      <dt>${esc(t("Sample data"))}</dt><dd>${DATA.assets.length} ${esc(t("assets"))} · ${DATA.employees.length} ${esc(t("employees"))} · ${DATA.licenses.length} ${esc(t("licenses"))}</dd>
+      <dt>${esc(t("Storage"))}</dt><dd>${esc(t("In-memory — changes reset on reload"))}</dd>
+    </dl></div>`;
+}
+
+function viewSearch() {
+  const q = state.searchQ.toLowerCase().trim();
+  if (!q) return `<div class="card"><p class="empty">${esc(t("Type something to search."))}</p></div>`;
+  const hit = s => String(s || "").toLowerCase().includes(q);
+  const assets = DATA.assets.filter(a => hit(a.tag) || hit(a.name) || hit(a.serial) || hit(a.model) || hit(a.manufacturer));
+  const emps = DATA.employees.filter(e => hit(e.name) || hit(e.code) || hit(e.email) || hit(e.title));
+  const lics = DATA.licenses.filter(l => hit(l.name) || hit(l.vendor));
+  const vends = DATA.vendors.filter(v => hit(v.name) || hit(v.contactName) || hit(v.email));
+  const total = assets.length + emps.length + lics.length + vends.length;
+
+  const sec = (title, rows) => rows.length ? `<div class="card"><p class="eyebrow">${esc(t(title))} (${rows.length})</p>
+    <ul class="feed">${rows.join("")}</ul></div>` : "";
+
+  return `<div class="page-head"><h1>${esc(t("Search"))}: “${esc(state.searchQ)}”</h1></div>
+    <p class="muted" style="margin-bottom:1rem">${total} ${esc(t("results"))}</p>
+    ${sec("Assets", assets.map(a => `<li><button class="linkish" data-go="asset" data-param="${esc(a.tag)}">${esc(a.tag)}</button>
+      <span>${esc(a.name)}</span><span class="muted">${dash(a.locationPath)}</span></li>`))}
+    ${sec("Employees", emps.map(e => `<li><b>${esc(e.name)}</b><span>${dash(e.title)}</span>
+      <span class="muted">${dash(e.department)}</span></li>`))}
+    ${sec("Licenses", lics.map(l => `<li><b>${esc(l.name)}</b><span class="muted">${dash(l.vendor)}</span></li>`))}
+    ${sec("Vendors", vends.map(v => `<li><b>${esc(v.name)}</b><span class="muted">${dash(v.email)}</span></li>`))}
+    ${total ? "" : `<div class="card"><p class="empty">${esc(t("Nothing matched."))}</p></div>`}`;
+}
+
+function viewProfile() {
+  return `<div class="page-head"><h1>${esc(t("Profile"))}</h1></div>
+  <div class="card"><dl class="props">
+    <dt>${esc(t("Name"))}</dt><dd>Administrator</dd>
+    <dt>${esc(t("Username"))}</dt><dd>admin</dd>
+    <dt>${esc(t("Role"))}</dt><dd><span class="chip">admin</span></dd>
+    <dt>${esc(t("Language"))}</dt><dd>${state.lang === "ar" ? "العربية" : "English"}</dd>
+  </dl>
+  <p class="muted" style="margin-top:1rem;font-size:.85rem">
+    ${esc(t("The real app supports password change, API keys and per-user saved searches here."))}</p></div>`;
+}
+
+const VIEWS = {
+  dashboard: viewDashboard, assets: viewAssets, asset: viewAsset, newasset: viewNewAsset,
+  lending: viewLending, licenses: viewLicenses, maintenance: viewMaintenance,
+  inventory: viewInventory, locations: viewLocations, employees: viewEmployees,
+  departments: viewDepartments, vendors: viewVendors, scanner: viewScanner,
+  reports: viewReports, report: viewReport, analytics: viewAnalytics, users: viewUsers,
+  activity: viewActivity, notifications: viewNotifications, settings: viewSettings,
+  search: viewSearch, profile: viewProfile,
+};
+
+/* ------------------------------------------------------------------ shell */
+function loginScreen() {
+  return `<main class="auth-wrap">
+    <div class="auth-card">
+      <div class="auth-logo-img">${LOGO}</div>
+      <h1>ITAM Enterprise</h1>
+      <p class="muted">${esc(t("IT Asset Management"))}</p>
+      <form id="login-form">
+        <label for="l-user">${esc(t("Username"))}</label>
+        <input id="l-user" value="admin" autocomplete="username">
+        <label for="l-pass">${esc(t("Password"))}</label>
+        <input id="l-pass" type="password" value="admin123" autocomplete="current-password">
+        <button class="btn wide" type="submit">${esc(t("Log in"))}</button>
+      </form>
+      <p class="auth-hint">${esc(t("Demo sign-in"))} — <code>admin / admin123</code><br>
+        ${esc(t("Any credentials work here; nothing is sent anywhere."))}</p>
+    </div>
+  </main>`;
+}
+
+function appShell(inner) {
+  const unread = state.notifications.filter(n => !n.read).length;
+  const activeNav = NAV_PARENT[state.view] || state.view;
+  return `
+  <div class="shell ${state.navOpen ? "nav-open" : ""}">
+    <aside class="sidebar">
+      <div class="side-brand"><span class="brand-mark">${LOGO}</span><span><strong>Administrator</strong></span></div>
+      <nav>${NAV.map(([v, label, ic]) =>
+        `<a class="${activeNav === v ? "active" : ""}" data-go="${v}" tabindex="0" role="link">
+          ${icon(ic)}<span>${esc(t(label))}</span></a>`).join("")}</nav>
+      <div class="side-version">v${esc(VERSION)}</div>
+    </aside>
+    <div class="content">
+      <div class="demo-ribbon no-print">
+        <b>${esc(t("Interactive demo"))}</b>
+        <span>${esc(t("Real seeded data, running entirely in your browser. Changes reset on reload."))}</span>
+        <button data-act="reset">${esc(t("Reset demo"))}</button>
+      </div>
+      <header class="topbar no-print">
+        <button class="nav-btn" data-act="toggle-nav" aria-label="${esc(t("Menu"))}">${icon("menu")}</button>
+        <form class="global-search" id="search-form">
+          ${icon("search", 16)}
+          <input type="search" id="top-search" placeholder="${esc(t("Search"))}…"
+            value="${esc(state.view === "search" ? state.searchQ : "")}" aria-label="${esc(t("Search"))}">
+        </form>
+        <div class="top-actions">
+          <button class="top-icon" data-act="lang" title="${state.lang === "en" ? "العربية" : "English"}">
+            ${icon("globe")}<span class="lang-tag">${state.lang === "en" ? "ع" : "EN"}</span></button>
+          <button class="top-icon" data-go="notifications" title="${esc(t("Notifications"))}">
+            ${icon("bell")}${unread ? `<span class="bell-badge">${unread}</span>` : ""}</button>
+          <button class="user-chip" data-go="profile" title="${esc(t("Profile"))}">
+            <span class="avatar">A</span>
+            <span class="user-name">Administrator<small>admin</small></span></button>
+          <button class="top-icon" data-act="logout" title="${esc(t("Log out"))}">${icon("logout")}</button>
+        </div>
+      </header>
+      <main>${inner}</main>
+    </div>
+  </div>`;
+}
+
+function render() {
+  document.documentElement.lang = state.lang;
+  document.documentElement.dir = state.lang === "ar" ? "rtl" : "ltr";
+  const root = document.getElementById("root");
+  if (!state.authed) { root.innerHTML = loginScreen(); wire(); return; }
+  const fn = VIEWS[state.view] || viewDashboard;
+  root.innerHTML = appShell(fn());
+  wire();
+}
+
+/* ------------------------------------------------------------------ events */
+function download(filename, text) {
+  const blob = new Blob([text], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+function toCsv(head, rows) {
+  const q = v => `"${String(v == null ? "" : v).replace(/"/g, '""')}"`;
+  return "﻿" + [head.map(q).join(","), ...rows.map(r => r.map(q).join(","))].join("\r\n");
+}
+
+const ACTIONS = {
+  "toggle-nav": () => { state.navOpen = !state.navOpen; render(); },
+  logout: () => { state.authed = false; state.view = "dashboard"; render(); },
+  lang: () => { state.lang = state.lang === "en" ? "ar" : "en"; render(); },
+  reset: () => { location.reload(); },
+  print: () => window.print(),
+  "mark-read": () => { state.notifications.forEach(n => n.read = true); toast(t("All notifications marked read")); render(); },
+  "clear-filters": () => {
+    Object.keys(state.assetFilters).forEach(k => state.assetFilters[k] = "");
+    render();
+  },
+  "export-csv": () => {
+    const list = filteredAssets();
+    download("assets.csv", toCsv(
+      ["Tag", "Name", "Category", "Status", "Condition", "Branch", "Building", "Floor",
+       "Location", "Assigned to", "Department", "Vendor", "Serial", "Purchase cost", "Warranty expiry"],
+      list.map(a => [a.tag, a.name, a.category, a.status, a.condition, a.branch, a.building,
+        a.floor, a.locationPath, a.assignedTo, a.department, a.vendor, a.serial,
+        a.purchaseCost, a.warrantyExpiry])));
+    toast(list.length + " " + t("rows exported"));
+  },
+  "report-csv": () => {
+    const [head, rows] = reportTable(state.param);
+    download((state.param || "report") + ".csv", toCsv(head, rows));
+    toast(rows.length + " " + t("rows exported"));
+  },
+  labels: () => { toast(t("Label sheet opens the printable 6×3 layout in the real app.")); },
+  "print-label": () => {
+    document.body.classList.add("printing-label");
+    window.print();
+    setTimeout(() => document.body.classList.remove("printing-label"), 500);
+  },
+  clone: () => {
+    const a = assetByTag(state.param);
+    if (!a) return;
+    const copy = Object.assign({}, a, {
+      tag: nextTag(a.category), id: Date.now(), status: "Available",
+      serial: null, assignedTo: null, createdAt: new Date().toISOString().slice(0, 10),
+    });
+    DATA.assets.push(copy);
+    log("Clone", copy.tag + " " + t("cloned from") + " " + a.tag);
+    toast(t("Cloned as") + " " + copy.tag);
+    go("asset", copy.tag);
+  },
+  checkout: () => {
+    const a = assetByTag(state.param);
+    const emp = document.getElementById("co-emp").value;
+    const due = document.getElementById("co-due").value;
+    DATA.assignments.push({
+      id: Date.now(), assetTag: a.tag, assetName: a.name, employee: emp,
+      checkoutAt: new Date().toISOString().slice(0, 10), dueAt: due, returnedAt: null, notes: null,
+    });
+    a.status = "Checked Out";
+    a.assignedTo = emp;
+    log("Check out", a.tag + " → " + emp);
+    toast(a.tag + " " + t("checked out to") + " " + emp);
+    render();
+  },
+  checkin: () => {
+    const a = assetByTag(state.param);
+    const cond = document.getElementById("ci-cond").value;
+    doCheckin(a, cond);
+    render();
+  },
+  "quick-checkin": (param) => {
+    const a = assetByTag(param);
+    if (a) doCheckin(a, a.condition);
+    render();
+  },
+  "set-status": () => {
+    const a = assetByTag(state.param);
+    const val = document.getElementById("st-sel").value;
+    if (val === a.status) { toast(t("Status unchanged")); return; }
+    log("Status", a.tag + ": " + a.status + " → " + val);
+    a.status = val;
+    toast(a.tag + " → " + t(val));
+    render();
+  },
+  "complete-maint": (param) => {
+    const m = DATA.maintenance.find(x => String(x.id) === String(param));
+    if (!m) return;
+    m.status = "Completed";
+    m.completedAt = new Date().toISOString().slice(0, 10);
+    const a = assetByTag(m.assetTag);
+    if (a && a.status === "Under Maintenance") a.status = "Available";
+    log("Maintenance", m.assetTag + " " + t("marked complete"));
+    toast(m.assetTag + " " + t("maintenance completed"));
+    render();
+  },
+  "start-audit": () => {
+    document.querySelectorAll(".audit-tick").forEach(c => { c.checked = false; });
+    updateAuditCount();
+    toast(t("Audit session started — tick each asset you find."));
+  },
+  "save-settings": () => toast(t("Settings saved")),
+  backup: () => toast(t("Backup created (simulated)")),
+};
+
+function doCheckin(a, cond) {
+  const asn = openAssignment(a.tag);
+  if (asn) asn.returnedAt = new Date().toISOString().slice(0, 10);
+  a.status = "Available";
+  a.assignedTo = null;
+  if (cond) a.condition = cond;
+  log("Check in", a.tag + " " + t("returned"));
+  toast(a.tag + " " + t("checked in"));
+}
+
+function updateAuditCount() {
+  const el = document.getElementById("audit-count");
+  if (!el) return;
+  const ticks = document.querySelectorAll(".audit-tick");
+  const found = [...ticks].filter(c => c.checked).length;
+  el.textContent = `${found} ${t("found")} · ${ticks.length - found} ${t("outstanding")}`;
+}
+
+function wire() {
+  document.querySelectorAll("[data-go]").forEach(el => {
+    el.addEventListener("click", e => {
+      e.preventDefault();
+      go(el.dataset.go, el.dataset.param);
+    });
+    if (el.tagName === "A") {
+      el.addEventListener("keydown", e => {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(el.dataset.go, el.dataset.param); }
+      });
+    }
+  });
+  document.querySelectorAll("[data-act]").forEach(el => {
+    el.addEventListener("click", e => {
+      e.preventDefault();
+      const fn = ACTIONS[el.dataset.act];
+      if (fn) fn(el.dataset.param);
+    });
+  });
+  document.querySelectorAll("[data-kpi]").forEach(el => {
+    el.addEventListener("click", () => KPI_HANDLERS[+el.dataset.kpi] && KPI_HANDLERS[+el.dataset.kpi]());
+  });
+  document.querySelectorAll("th[data-sort]").forEach(th => {
+    const sort = () => {
+      const k = th.dataset.sort;
+      if (state.assetSort.key === k) state.assetSort.dir *= -1;
+      else state.assetSort = { key: k, dir: 1 };
+      render();
+    };
+    th.addEventListener("click", sort);
+    th.addEventListener("keydown", e => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); sort(); }
+    });
+  });
+
+  const lf = document.getElementById("login-form");
+  if (lf) lf.addEventListener("submit", e => {
+    e.preventDefault();
+    state.authed = true;
+    log("Login", "Administrator");
+    go("dashboard");
+  });
+
+  const sf = document.getElementById("search-form");
+  if (sf) sf.addEventListener("submit", e => {
+    e.preventDefault();
+    state.searchQ = document.getElementById("top-search").value;
+    go("search");
+  });
+
+  const scan = document.getElementById("scan-form");
+  if (scan) scan.addEventListener("submit", e => {
+    e.preventDefault();
+    const code = document.getElementById("scan-code").value.trim().toUpperCase();
+    const a = assetByTag(code);
+    if (a) { log("Scan", code); go("asset", code); }
+    else toast(t("No asset with tag") + " " + code);
+  });
+
+  ["q", "status", "category", "department", "branch", "building", "floor", "condition"].forEach(k => {
+    const el = document.getElementById("f-" + k);
+    if (!el) return;
+    const ev = k === "q" ? "input" : "change";
+    el.addEventListener(ev, () => {
+      state.assetFilters[k] = el.value;
+      const pos = el.selectionStart;
+      render();
+      if (k === "q") {
+        const again = document.getElementById("f-q");
+        again.focus();
+        try { again.setSelectionRange(pos, pos); } catch (_) {}
+      }
+    });
+  });
+
+  document.querySelectorAll(".audit-tick").forEach(c =>
+    c.addEventListener("change", updateAuditCount));
+
+  const af = document.getElementById("asset-form");
+  if (af) {
+    const sync = () => {
+      const cat = document.getElementById("n-category").value;
+      document.getElementById("lp-tag").textContent = nextTag(cat);
+      document.getElementById("lp-name").textContent = document.getElementById("n-name").value || "—";
+      document.getElementById("lp-serial").textContent = document.getElementById("n-serial").value || "—";
+      document.getElementById("lp-branch").textContent = document.getElementById("n-branch").value || "—";
+      document.getElementById("lp-floor").textContent = document.getElementById("n-floor").value || "—";
+    };
+    ["n-name", "n-serial", "n-category", "n-branch", "n-floor"].forEach(id => {
+      const el = document.getElementById(id);
+      el.addEventListener("input", sync);
+      el.addEventListener("change", sync);
+    });
+    af.addEventListener("submit", e => {
+      e.preventDefault();
+      const v = id => document.getElementById(id).value || null;
+      const cat = v("n-category");
+      const tag = nextTag(cat);
+      const branch = v("n-branch"), building = v("n-building"), floor = v("n-floor");
+      const parts = [branch, building, floor ? "Floor " + floor.replace(/^F/, "") : null].filter(Boolean);
+      DATA.assets.push({
+        id: Date.now(), tag, name: v("n-name"), category: cat, type: null,
+        serial: v("n-serial"), manufacturer: v("n-manufacturer"), model: v("n-model"),
+        status: v("n-status"), condition: v("n-condition"),
+        branch, building, floor,
+        locationPath: parts.length ? parts.join(" / ") : null, locationName: null,
+        department: v("n-department"), vendor: v("n-vendor"),
+        purchaseDate: v("n-pdate"), purchaseCost: v("n-cost") ? parseFloat(v("n-cost")) : null,
+        depreciationYears: 5, warrantyExpiry: v("n-warranty"), notes: v("n-notes"),
+        updatedBy: "Administrator", createdAt: new Date().toISOString().slice(0, 10),
+        assignedTo: null,
+      });
+      log("Create", tag + " " + v("n-name"));
+      toast(tag + " " + t("saved"));
+      go("asset", tag);
+    });
+    sync();
+  }
+}
+
+const KPI_HANDLERS = [];
+(function buildKpiHandlers() {
+  // rebuilt on each dashboard render via data-kpi index → same order as viewDashboard
+  KPI_HANDLERS.length = 0;
+  KPI_HANDLERS.push(
+    () => go("assets"), () => go("lending"), () => go("maintenance"),
+    () => go("report", "warranty"), () => go("report", "financial"), () => go("licenses"),
+    () => { state.assetFilters.status = "Available"; go("assets"); },
+    () => { state.assetFilters.status = "Lost"; go("assets"); },
+    () => { state.assetFilters.status = "Damaged"; go("assets"); },
+    () => { state.assetFilters.status = "Retired"; go("assets"); });
+})();
+
+render();
+</script>
