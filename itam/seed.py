@@ -58,7 +58,11 @@ def seed():
     lab = Location(name="Computer Lab", kind="Room", parent=floor1)
     office = Location(name="Admin Office", kind="Room", parent=floor1)
     storage = Location(name="IT Storage", kind="Storage Area", parent=floor1)
-    db.session.add_all([mada2, mada3])
+    bldg2 = Location(name="Building 2", kind="Building", parent=mada2)
+    floor2 = Location(name="Floor 2", kind="Floor", parent=bldg2)
+    staffroom = Location(name="Staff Room", kind="Room", parent=floor2)
+    lab2 = Location(name="Science Lab", kind="Room", parent=floor2)
+    db.session.add_all([mada2, mada3, bldg2, floor2, staffroom, lab2])
     vend = {
         "Dell": Vendor(name="Dell Technologies", contact_name="Sales Team",
                        email="sales@dell.com", website="https://dell.com"),
@@ -88,7 +92,24 @@ def seed():
     ]
     db.session.add_all(emps)
 
+    # Derive Branch/Building/Floor from where the location sits in the hierarchy,
+    # so seeded assets exercise those columns and filters too.
+    def place_of(loc):
+        found = {}
+        node = loc
+        while node is not None:
+            found[node.kind] = node.name
+            node = node.parent
+        floor = found.get("Floor", "")
+        return {
+            "branch": found.get("Branch"),
+            "building": found.get("Building"),
+            "floor": "F" + floor.split()[-1] if floor.startswith("Floor ") else None,
+        }
+
     def mk(tag, name, cat, dep, loc, vendor, status="Available", cond="Good", **kw):
+        for field, value in place_of(loc).items():
+            kw.setdefault(field, value)
         return Asset(tag=tag, name=name, category=cats[cat], department=deps[dep],
                      location=loc, vendor=vend[vendor], status=status,
                      condition=cond, **kw)
@@ -102,7 +123,7 @@ def seed():
            "TechMart", serial="PF3XKQ7T", manufacturer="Lenovo", model="Gen 11",
            purchase_date=today - timedelta(days=200), purchase_cost=1650,
            warranty_expiry=today + timedelta(days=895)),
-        mk("LT-0003", "Dell XPS 13", "Laptops", "Science Lab", lab, "Dell",
+        mk("LT-0003", "Dell XPS 13", "Laptops", "Science Lab", lab2, "Dell",
            status="Under Maintenance", cond="Fair", serial="8HTQZY3", model="9340",
            manufacturer="Dell", purchase_date=today - timedelta(days=700),
            purchase_cost=1299, warranty_expiry=today - timedelta(days=30)),
@@ -114,11 +135,11 @@ def seed():
            status="Checked Out", serial="CN0H1MON01", manufacturer="Dell",
            model="U2723QE", purchase_date=today - timedelta(days=380),
            purchase_cost=549),
-        mk("PH-0001", "iPhone 15", "Phones", "Administration", storage, "Apple",
+        mk("PH-0001", "iPhone 15", "Phones", "Administration", staffroom, "Apple",
            serial="F2LLD0AAPHN1", manufacturer="Apple", model="A3090",
            purchase_date=today - timedelta(days=150), purchase_cost=799,
            warranty_expiry=today + timedelta(days=215)),
-        mk("PR-0001", "HP LaserJet Pro", "Printers", "Administration", office,
+        mk("PR-0001", "HP LaserJet Pro", "Printers", "Administration", staffroom,
            "TechMart", manufacturer="HP", model="M404dn",
            purchase_date=today - timedelta(days=600), purchase_cost=329),
         mk("NW-0001", "Cisco Switch 24p", "Networking", "IT", storage, "TechMart",
