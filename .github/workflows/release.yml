@@ -92,6 +92,12 @@ jobs:
           gh release view $tag 2>$null
           if ($LASTEXITCODE -eq 0) {
             gh release upload $tag dist/AMS.exe --clobber
+            # Refresh the title and notes too, otherwise the page keeps
+            # advertising whatever the release was first created with.
+            gh release edit $tag --title "Mada AMS $tag" --notes $notes
+            # Drop the pre-rename executable so nobody downloads it by mistake.
+            gh release delete-asset $tag ITAM.exe --yes 2>$null
+            $global:LASTEXITCODE = 0
           } else {
             gh release create $tag dist/AMS.exe `
               --target "$env:GITHUB_SHA" `

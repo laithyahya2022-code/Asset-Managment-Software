@@ -48,16 +48,27 @@ def _wait_until_up(port, timeout=15):
     return False
 
 
+#: _open_app_window outcomes.
+WINDOW_CLOSED = "closed"      # we owned the window and the user shut it -> quit
+WINDOW_DETACHED = "detached"  # a window is up but we don't own its lifetime
+WINDOW_NONE = "none"          # nothing opened -> caller should fall back
+
+
 def _open_app_window(url, title):
-    """Show the app in its own desktop window. Returns True if a window was
-    opened and closed (meaning we should exit), False if we couldn't and the
-    caller should fall back to another method."""
+    """Show the app in its own desktop window."""
     # 1) Native window via pywebview (uses the built-in Edge WebView2 on Windows)
     try:
         import webview
+        # WebView2 cancels every download unless this is on, which silently
+        # breaks the Excel/CSV exports and the backup download inside the
+        # packaged app. Older pywebview builds have no such setting.
+        try:
+            webview.settings["ALLOW_DOWNLOADS"] = True
+        except (AttributeError, KeyError, TypeError):
+            pass
         webview.create_window(title, url, width=1280, height=840)
         webview.start()      # blocks until the window is closed
-        return True
+        return WINDOW_CLOSED
     except Exception:
         pass
     # 2) A clean "app mode" window in Edge or Chrome (no tabs, no address bar)
@@ -65,10 +76,10 @@ def _open_app_window(url, title):
         try:
             import subprocess
             subprocess.Popen([exe, f"--app={url}"])
-            return False     # window opened, but its lifetime is independent
+            return WINDOW_DETACHED
         except Exception:
             continue
-    return False
+    return WINDOW_NONE
 
 
 def _browser_app_candidates():
@@ -130,13 +141,16 @@ def main():
         return
 
     title = f"Mada AMS  —  network: http://{ip}:{port}"
-    if _open_app_window(url, title):
+    outcome = _open_app_window(url, title)
+    if outcome == WINDOW_CLOSED:
         return               # the app window was closed -> quit
-    # Last resort: default browser, then keep serving in the background.
-    try:
-        webbrowser.open(url)
-    except Exception:
-        pass
+    if outcome == WINDOW_NONE:
+        # Last resort: default browser. Only when nothing else opened, so an
+        # app-mode window doesn't get a duplicate tab piled on top of it.
+        try:
+            webbrowser.open(url)
+        except Exception:
+            pass
     server.join()
 
 
