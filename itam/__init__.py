@@ -83,6 +83,7 @@ def create_app(test_config=None, instance_path=None):
         short, full = app_name_parts()
         return dict(t=t, has_perm=has_perm, app_name=get_setting("app_name"),
                     app_short=short, app_full=full,
+                    label_org=get_setting("label_org"),
                     unread_count=unread, LANGS=LANGS, now=datetime.utcnow(),
                     app_version=APP_VERSION)
 

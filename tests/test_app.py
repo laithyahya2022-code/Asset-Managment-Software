@@ -533,3 +533,44 @@ def test_label_size_is_clamped_to_something_printable(app):
         set_setting("label_width_mm", "not a number")
         db.session.commit()
         assert label_size_mm()[0] == 152.4      # falls back to the default
+
+
+def test_label_prints_the_organisation_not_the_software_name(client, app):
+    """The sticker carries the school's name; AMS is the software."""
+    from itam.models import Category, Department
+    from itam.utils import set_setting
+
+    with app.app_context():
+        dept = Department(name="IT")
+        db.session.add(dept)
+        db.session.add(Asset(tag="LT-9100", name="ThinkPad", serial="SN-8842-XJ01",
+                             branch="Mada 3", department=dept, status="Available",
+                             condition="Good",
+                             category=db.session.scalar(db.select(Category))))
+        set_setting("label_org", "Mada International Academy")
+        db.session.commit()
+        asset_id = db.session.scalar(db.select(Asset.id).where(Asset.tag == "LT-9100"))
+
+    login(client)
+    page = client.get(f"/assets/{asset_id}/label").data.decode()
+    assert "Mada International Academy" in page
+    assert "(AMS)" not in page                 # software name stays off the label
+    for text in ("Branch", "Mada 3", "Department", "IT", "Serial", "SN-8842-XJ01"):
+        assert text in page, f"{text} missing from the label"
+
+
+def test_label_org_is_editable_from_settings(client, app):
+    from itam.utils import get_setting
+
+    login(client)
+    assert b"Organisation printed on labels" in client.get("/admin/settings").data
+    client.post("/admin/settings", data={
+        "app_name": "Mada Asset Management System (AMS)",
+        "label_org": "Another School", "label_width_mm": "50",
+        "label_height_mm": "30", "qr_prefix": "", "custom_asset_fields": "",
+        "checkout_days": "30", "warranty_alert_days": "90",
+        "license_alert_days": "90", "smtp_host": "", "smtp_port": "587",
+        "smtp_user": "", "smtp_password": "", "smtp_from": "",
+        "audit_retention_days": "365"}, follow_redirects=True)
+    with app.app_context():
+        assert get_setting("label_org") == "Another School"

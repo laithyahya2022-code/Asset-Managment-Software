@@ -15,10 +15,10 @@
         <div class="lp-tag" id="lbl-tag">{{ asset.tag if asset else "—" }}</div>
       </div>
       <div class="lp-info">
-        <div class="lp-org">{{ app_short }}</div>
+        <div class="lp-org">{{ label_org }}</div>
         <div class="lp-grid">
           <div><div class="lp-l">Branch</div><div class="lp-v" id="lbl-branch">{{ a.branch or "—" if a else "—" }}</div></div>
-          <div><div class="lp-l">Location</div><div class="lp-v" id="lbl-loc">{{ a.location_name or "—" if a else "—" }}</div></div>
+          <div><div class="lp-l">Department</div><div class="lp-v" id="lbl-dept">{{ a.department.name if a and a.department else "—" }}</div></div>
           <div class="lp-full"><div class="lp-l">Serial</div><div class="lp-v" id="lbl-serial">{{ a.serial or "—" if a else "—" }}</div></div>
         </div>
       </div>
@@ -140,10 +140,8 @@ function printLabelPreview() {
   var qrImg = document.getElementById("qr-live");
   var lblTag = document.getElementById("lbl-tag");
   var lblBranch = document.getElementById("lbl-branch");
-  var lblLoc = document.getElementById("lbl-loc");
   var lblSerial = document.getElementById("lbl-serial");
   var branch = document.getElementById("f-branch");
-  var place = document.getElementById("f-place");
   var serial = document.getElementById("f-serial");
   var userEdited = false;
 
@@ -160,12 +158,11 @@ function printLabelPreview() {
     lblTag.textContent = shown || "—";
     showQR(shown);
     if (branch) lblBranch.textContent = branch.value || "—";
-    if (place) lblLoc.textContent = place.value || "—";
     if (serial) lblSerial.textContent = serial.value || "—";
   }
   if (cat) cat.addEventListener("change", update);
   tag.addEventListener("input", function () { userEdited = true; update(); });
-  [branch, place, serial].forEach(function (el) {
+  [branch, serial].forEach(function (el) {
     if (el) el.addEventListener("input", update);
     if (el && el.tagName === "SELECT") el.addEventListener("change", update);
   });

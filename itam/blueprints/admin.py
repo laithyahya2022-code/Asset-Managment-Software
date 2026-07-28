@@ -116,7 +116,7 @@ def roles():
 
 SETTING_GROUPS = {
     "General": ["app_name", "qr_prefix", "custom_asset_fields", "checkout_days"],
-    "Printed labels": ["label_width_mm", "label_height_mm"],
+    "Printed labels": ["label_org", "label_width_mm", "label_height_mm"],
     "Alerts": ["warranty_alert_days", "license_alert_days"],
     "Email": ["email_enabled", "smtp_host", "smtp_port", "smtp_user",
               "smtp_password", "smtp_from"],

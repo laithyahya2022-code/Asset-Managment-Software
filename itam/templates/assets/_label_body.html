@@ -10,15 +10,16 @@
     {% if L.fields %}
     {% set values = {
       "name": asset.name, "branch": asset.branch, "serial": asset.serial,
-      "floor": asset.floor, "location": asset.location_name
+      "floor": asset.floor, "location": asset.location_name,
+      "department": asset.department.name if asset.department else None
     } %}
     {% set titles = {
       "name": "Name", "branch": "Branch", "serial": "Serial",
-      "floor": "Floor", "location": "Location"
+      "floor": "Floor", "location": "Location", "department": "Department"
     } %}
     <div class="grid">
       {% for key in L.fields %}
-      <div class="field {{ 'full' if key in ('name', 'location') }}">
+      <div class="field {{ 'full' if key in L.full_fields }}">
         <div class="lbl">{{ titles[key] }}</div>
         <div class="val">{{ values[key] or "—" }}</div>
       </div>
