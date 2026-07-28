@@ -416,3 +416,55 @@ def test_arabic_language_switch(client):
     resp = client.get("/lang/ar", follow_redirects=True)
     assert 'dir="rtl"'.encode() in resp.data
     assert "لوحة التحكم".encode() in resp.data
+
+
+def test_upgrading_over_an_older_database_adds_missing_columns(tmp_path):
+    """A database made by an older build must survive the upgrade.
+
+    db.create_all() only creates missing tables, so without _sync_schema()
+    every page touching an asset fails with "no such column".
+    """
+    import sqlite3
+
+    instance = tmp_path / "instance"
+    app = create_app(instance_path=str(instance))
+    with app.app_context():
+        db.session.add(Category(name="Laptops"))
+        db.session.commit()
+        db.session.add(Asset(tag="LT-0001", name="ThinkPad", branch="Mada 1",
+                             floor="F1", status="Available", condition="Good"))
+        db.session.commit()
+
+    # Strip columns that later releases introduced, as an older install lacks.
+    path = instance / "itam.sqlite"
+    con = sqlite3.connect(path)
+    for column in ("branch", "building", "floor", "updated_by", "cpu"):
+        con.execute(f"ALTER TABLE asset DROP COLUMN {column}")
+    con.commit()
+    con.close()
+
+    # Starting the current app over that database must repair it, not fail.
+    upgraded = create_app(instance_path=str(instance))
+    with upgraded.app_context():
+        asset = db.session.scalar(db.select(Asset).where(Asset.tag == "LT-0001"))
+        assert asset is not None, "existing rows must survive the upgrade"
+        assert asset.name == "ThinkPad"
+        assert asset.branch is None      # re-added, empty for old rows
+        asset.branch = "Mada 2"          # and writable again
+        db.session.commit()
+
+    client = upgraded.test_client()
+    client.post("/login", data={"username": "admin", "password": "admin123"},
+                follow_redirects=True)
+    for url in ("/", "/assets/", "/reports/assets", "/search?q=think"):
+        assert client.get(url).status_code == 200, f"{url} broke after upgrade"
+
+
+def test_schema_sync_is_idempotent(tmp_path):
+    from itam import _sync_schema
+
+    app = create_app(instance_path=str(tmp_path / "instance"))
+    with app.app_context():
+        added, skipped = _sync_schema()
+        assert added == [], "a current database needs no changes"
+        assert skipped == []

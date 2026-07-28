@@ -88,6 +88,7 @@ def create_app(test_config=None, instance_path=None):
 
     with app.app_context():
         db.create_all()
+        _sync_schema()
         _ensure_defaults()
 
     @app.cli.command("seed")
@@ -131,6 +132,59 @@ def _auto_backup(app, keep=14):
             os.remove(os.path.join(folder, old))
     except Exception:
         pass  # backups must never break a request
+
+
+def _sync_schema():
+    """Add columns that later releases introduced to an existing database.
+
+    db.create_all() only ever creates missing *tables*, so upgrading the app
+    over a database made by an older build leaves the new columns absent and
+    almost every page fails with "no such column". Compare each mapped table
+    against the live database and ALTER in whatever is missing. Adding a
+    column is non-destructive: existing rows get NULL (or the column default).
+
+    Anything this cannot express safely is skipped and reported rather than
+    risking a half-applied schema; renames and drops are deliberately not
+    handled, since guessing at those could lose data.
+    """
+    from sqlalchemy import inspect, text
+
+    inspector = inspect(db.engine)
+    existing_tables = set(inspector.get_table_names())
+    added, skipped = [], []
+
+    for table in db.metadata.sorted_tables:
+        if table.name not in existing_tables:
+            continue  # create_all() just made it, so it is already current
+        present = {c["name"] for c in inspector.get_columns(table.name)}
+        for column in table.columns:
+            if column.name in present:
+                continue
+            ddl = f'ALTER TABLE "{table.name}" ADD COLUMN "{column.name}" ' \
+                  f"{column.type.compile(db.engine.dialect)}"
+            default = getattr(column.default, "arg", None)
+            if not column.nullable:
+                # SQLite refuses a NOT NULL column without a usable default.
+                if default is None or callable(default):
+                    skipped.append(f"{table.name}.{column.name}")
+                    continue
+                literal = f"'{default}'" if isinstance(default, str) else default
+                ddl += f" NOT NULL DEFAULT {literal}"
+            elif default is not None and not callable(default):
+                literal = f"'{default}'" if isinstance(default, str) else default
+                ddl += f" DEFAULT {literal}"
+            try:
+                with db.engine.begin() as conn:
+                    conn.execute(text(ddl))
+                added.append(f"{table.name}.{column.name}")
+            except Exception as exc:                     # pragma: no cover
+                skipped.append(f"{table.name}.{column.name} ({exc.__class__.__name__})")
+
+    if added:
+        print(f"Database updated: added {len(added)} column(s) — {', '.join(added)}")
+    if skipped:
+        print(f"Database: could not add {', '.join(skipped)} automatically.")
+    return added, skipped
 
 
 def _ensure_defaults():
