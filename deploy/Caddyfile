@@ -1,10 +1,10 @@
-# ITAM Enterprise — reverse proxy with automatic HTTPS (Caddy)
+# Mada AMS — reverse proxy with automatic HTTPS (Caddy)
 # --------------------------------------------------------------
-# Put ITAM behind a real domain name that people just type and sign in.
+# Put AMS behind a real domain name that people just type and sign in.
 # Caddy gets and renews a free HTTPS certificate automatically.
 #
 # 1) Edit the domain below to yours.
-# 2) Run ITAM headless on the same machine, listening on 127.0.0.1:8080:
+# 2) Run AMS headless on the same machine, listening on 127.0.0.1:8080:
 #       Windows : set ITAM_NO_BROWSER=1 && set PORT=8080 && ITAM.exe
 #       Linux   : ITAM_NO_BROWSER=1 PORT=8080 python run_server.py
 # 3) Start Caddy in this folder:  caddy run
@@ -20,7 +20,7 @@ itam.madaacademy.edu.jo {
 }
 
 # --- INTERNAL only: same name, school network only ------------------
-# If ITAM should only work inside the school (no ports opened to the
+# If AMS should only work inside the school (no ports opened to the
 # internet), comment out the block above and use ONE of these instead.
 # Point INTERNAL DNS  itam.madaacademy.edu.jo -> the server's LAN IP.
 #

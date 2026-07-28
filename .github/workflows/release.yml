@@ -1,7 +1,7 @@
-name: Release ITAM.exe
+name: Release AMS.exe
 
-# Publishes ITAM.exe to a GitHub Release so the download link
-#   .../releases/latest/download/ITAM.exe
+# Publishes AMS.exe to a GitHub Release so the download link
+#   .../releases/latest/download/AMS.exe
 # is permanent and never expires. It refreshes the release on every push
 # to this branch, and also runs for any pushed version tag (v*).
 
@@ -40,9 +40,9 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
 
-      - name: Build ITAM.exe
+      - name: Build AMS.exe
         run: >
-          pyinstaller --onefile --name ITAM --noconsole
+          pyinstaller --onefile --name AMS --noconsole
           --icon itam/static/app.ico
           --add-data "itam/templates;itam/templates"
           --add-data "itam/static;itam/static"
@@ -56,9 +56,9 @@ jobs:
       - name: Smoke-test the executable
         shell: pwsh
         run: |
-          $env:ITAM_NO_BROWSER = "1"
+          $env:AMS_NO_BROWSER = "1"
           $env:PORT = "8099"
-          $proc = Start-Process -FilePath "dist\ITAM.exe" -PassThru
+          $proc = Start-Process -FilePath "dist\AMS.exe" -PassThru
           Start-Sleep -Seconds 6
           $resp = Invoke-WebRequest -Uri "http://127.0.0.1:8099/login" -UseBasicParsing
           if ($resp.StatusCode -ne 200) { throw "Executable did not serve the login page" }
@@ -70,12 +70,12 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $notes = @"
-          **ITAM Enterprise — IT Asset Management System**
+          **Mada Asset Management System (AMS)**
 
-          Download **ITAM.exe** below (Windows). Free, no time limit, no license key.
+          Download **AMS.exe** below (Windows). Free, no time limit, no license key.
 
           Getting started:
-          1. Put ITAM.exe in a folder and double-click it — it opens in its own app window.
+          1. Put AMS.exe in a folder and double-click it — it opens in its own app window.
           2. First login: admin / admin123 (change it right away).
           3. Import your assets and employees from Excel/CSV (Assets and Employees screens).
           4. To host it as a website on your own server, see deploy/HOST-AS-A-WEBSITE.md.
@@ -91,10 +91,10 @@ jobs:
           # Create the release if it doesn't exist yet, otherwise refresh the exe.
           gh release view $tag 2>$null
           if ($LASTEXITCODE -eq 0) {
-            gh release upload $tag dist/ITAM.exe --clobber
+            gh release upload $tag dist/AMS.exe --clobber
           } else {
-            gh release create $tag dist/ITAM.exe `
+            gh release create $tag dist/AMS.exe `
               --target "$env:GITHUB_SHA" `
-              --title "ITAM $tag" `
+              --title "Mada AMS $tag" `
               --notes $notes
           }

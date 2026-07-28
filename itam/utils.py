@@ -12,7 +12,7 @@ from .models import ActivityLog, Notification, Setting, db
 # ------------------------------------------------------------------ settings
 
 DEFAULT_SETTINGS = {
-    "app_name": "ITAM Enterprise",
+    "app_name": "Mada Asset Management System (AMS)",
     "qr_prefix": "",
     "smtp_host": "", "smtp_port": "587", "smtp_user": "", "smtp_password": "",
     "smtp_from": "", "email_enabled": "0",
@@ -59,7 +59,7 @@ def notify(kind, message, link=None, dedupe_key=None):
     db.session.add(Notification(kind=kind, message=message, link=link,
                                 dedupe_key=dedupe_key))
     if get_setting("email_enabled") == "1":
-        send_email(f"[ITAM] {kind}", message)
+        send_email(f"[AMS] {kind}", message)
 
 
 def send_email(subject, body, to=None):

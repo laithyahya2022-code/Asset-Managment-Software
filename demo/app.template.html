@@ -1,4 +1,4 @@
-<title>ITAM Enterprise — interactive demo</title>
+<title>Mada Asset Management System (AMS) — interactive demo</title>
 <style>
 /* ---- the real app's design tokens (itam/static/style.css) ---- */
 :root {
@@ -1024,7 +1024,7 @@ function viewSettings() {
   return `<div class="page-head"><h1>${esc(t("Settings"))}</h1></div>
   <div class="two-col">
     <div class="card"><p class="eyebrow">${esc(t("Application"))}</p>
-      <label for="s-name">${esc(t("Application name"))}</label><input id="s-name" value="ITAM Enterprise">
+      <label for="s-name">${esc(t("Application name"))}</label><input id="s-name" value="Mada Asset Management System (AMS)">
       <label for="s-org">${esc(t("Organisation on labels"))}</label><input id="s-org" value="Mada Academy">
       <label for="s-days">${esc(t("Default checkout period (days)"))}</label><input id="s-days" type="number" value="30">
       <button class="btn wide" data-act="save-settings">${esc(t("Save settings"))}</button></div>
@@ -1091,7 +1091,7 @@ function loginScreen() {
   return `<main class="auth-wrap">
     <div class="auth-card">
       <div class="auth-logo-img">${LOGO}</div>
-      <h1>ITAM Enterprise</h1>
+      <h1>Mada AMS</h1>
       <p class="muted">${esc(t("IT Asset Management"))}</p>
       <form id="login-form">
         <label for="l-user">${esc(t("Username"))}</label>

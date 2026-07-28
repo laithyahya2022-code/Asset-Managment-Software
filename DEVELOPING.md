@@ -1,4 +1,4 @@
-# Working on ITAM in Visual Studio Code
+# Working on AMS in Visual Studio Code
 
 How to open this project on your own computer, run it, make changes, and
 publish updates to GitHub — where the school server picks them up.

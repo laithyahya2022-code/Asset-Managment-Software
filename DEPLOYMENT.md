@@ -1,6 +1,6 @@
 # Server Installation Guide (School / On-Premises)
 
-This guide takes a fresh server to a running, shared ITAM website in about
+This guide takes a fresh server to a running, shared AMS website in about
 15 minutes. Cost: **$0** — everything used here is free software.
 
 After setup, everyone in the school opens the site in their browser at
@@ -9,7 +9,7 @@ logs in, and works on **one shared database**.
 
 Pick the section for your server:
 
-- [A. Windows — ready-made ITAM.exe (no Python needed)](#a-windows--ready-made-itamexe-easiest)
+- [A. Windows — ready-made AMS.exe (no Python needed)](#a-windows--ready-made-itamexe-easiest)
 - [B. Windows Server (from source)](#b-windows-server-from-source)
 - [C. Linux server (Ubuntu/Debian)](#c-linux-server-ubuntudebian)
 - [D. Docker (any OS, with PostgreSQL)](#d-docker-any-os)
@@ -17,7 +17,7 @@ Pick the section for your server:
 
 ---
 
-## A. Windows — ready-made ITAM.exe (easiest)
+## A. Windows — ready-made AMS.exe (easiest)
 
 Every update to this project automatically builds a Windows executable —
 no Python, no `pip install`, no command line. This is the fastest way to
@@ -25,9 +25,9 @@ get the system onto a Windows server or PC.
 
 1. Open the repository on GitHub → the **Actions** tab →
    **Build Windows executable** → click the newest successful run (green ✓).
-2. Under **Artifacts**, download **ITAM-windows-exe** (a small zip)
-   and extract it — you get **`ITAM.exe`**.
-3. Copy `ITAM.exe` to a folder on the server, e.g. `C:\ITAM\ITAM.exe`.
+2. Under **Artifacts**, download **AMS-windows-exe** (a small zip)
+   and extract it — you get **`AMS.exe`**.
+3. Copy `AMS.exe` to a folder on the server, e.g. `C:\AMS\AMS.exe`.
 4. Double-click it. A console window opens showing:
    ```
    On this computer:   http://localhost:8080
@@ -36,15 +36,15 @@ get the system onto a Windows server or PC.
    Your browser opens automatically. Share the **network** address with
    your team — that's the shared link everyone on the school network uses.
 5. The database, uploads, and backups are created automatically in an
-   `instance` folder next to `ITAM.exe`. Keep that folder — it **is** your
+   `instance` folder next to `AMS.exe`. Keep that folder — it **is** your
    data. Back up that folder the same way you'd back up any important file.
 
-**To start it automatically on boot:** put a shortcut to `ITAM.exe` in the
+**To start it automatically on boot:** put a shortcut to `AMS.exe` in the
 Windows **Startup** folder (`Win+R` → `shell:startup`), or set it up as a
 scheduled task the same way as the "start on boot" step in Section B below,
-just pointing at `ITAM.exe` instead of a `.bat` file.
+just pointing at `AMS.exe` instead of a `.bat` file.
 
-**Updating:** download the newest `ITAM.exe` from Actions the same way and
+**Updating:** download the newest `AMS.exe` from Actions the same way and
 replace the old file — your `instance` folder (all your data) is untouched.
 
 **Windows SmartScreen:** since the file isn't code-signed, Windows may show
@@ -83,12 +83,12 @@ The site is now live at `http://localhost:8080` on the server and
 
 ### 4. Open the firewall port (once, as Administrator)
 ```bat
-netsh advfirewall firewall add rule name="ITAM" dir=in action=allow protocol=TCP localport=8080
+netsh advfirewall firewall add rule name="AMS" dir=in action=allow protocol=TCP localport=8080
 ```
 
 ### 5. Start automatically with Windows
 Simplest reliable way — Task Scheduler:
-1. Create `C:\itam\start-itam.bat` containing:
+1. Create `C:\itam\start-ams.bat` containing:
    ```bat
    cd /d C:\itam
    .venv\Scripts\waitress-serve --host=0.0.0.0 --port=8080 app:app
@@ -96,7 +96,7 @@ Simplest reliable way — Task Scheduler:
 2. Open **Task Scheduler → Create Task**:
    - General: "Run whether user is logged on or not"
    - Triggers: **At startup**
-   - Actions: Start a program → `C:\itam\start-itam.bat`
+   - Actions: Start a program → `C:\itam\start-ams.bat`
 3. Reboot once to confirm the site comes back by itself.
 
 ---
@@ -117,7 +117,7 @@ sudo .venv/bin/flask --app app seed        # optional sample data
 ```bash
 sudo tee /etc/systemd/system/itam.service > /dev/null <<'EOF'
 [Unit]
-Description=ITAM Enterprise
+Description=Mada AMS
 After=network.target
 
 [Service]

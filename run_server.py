@@ -1,4 +1,4 @@
-"""Standalone launcher for ITAM Enterprise.
+"""Standalone launcher for the Mada Asset Management System (AMS).
 
 Used both for local development (`python run_server.py`) and as the entry
 point for the PyInstaller-built executable. Serves the app with Waitress
@@ -98,7 +98,7 @@ def main():
 
     banner = (
         "=" * 62 + "\n"
-        "  ITAM Enterprise -- IT Asset Management System\n" +
+        "  Mada Asset Management System (AMS)\n" +
         "=" * 62 + "\n"
         f"  On this computer:   {url}\n"
         f"  On the network:     http://{ip}:{port}\n"
@@ -110,7 +110,7 @@ def main():
     # In windowed mode there is no console, so leave the access details in a
     # text file next to the program for whoever sets it up.
     try:
-        with open(os.path.join(base, "ITAM - open on other devices.txt"),
+        with open(os.path.join(base, "AMS - open on other devices.txt"),
                   "w", encoding="utf-8") as fh:
             fh.write(banner)
     except OSError:
@@ -123,11 +123,13 @@ def main():
     server.start()
     _wait_until_up(port)
 
-    if os.environ.get("ITAM_NO_BROWSER") == "1":
+    # ITAM_NO_BROWSER is the pre-rename spelling, still honoured so existing
+    # server installs and scheduled tasks keep running headless.
+    if "1" in (os.environ.get("AMS_NO_BROWSER"), os.environ.get("ITAM_NO_BROWSER")):
         server.join()        # headless (e.g. CI smoke test / server install)
         return
 
-    title = f"ITAM Enterprise  —  network: http://{ip}:{port}"
+    title = f"Mada AMS  —  network: http://{ip}:{port}"
     if _open_app_window(url, title):
         return               # the app window was closed -> quit
     # Last resort: default browser, then keep serving in the background.

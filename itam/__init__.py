@@ -8,9 +8,9 @@ APP_VERSION = "2026.07.19"  # bumped on each release so users can confirm their 
 
 from .i18n import LANGS, t
 from .models import (DEFAULT_ROLE_PERMS, PERMISSIONS, ROLES, Notification,
-                     RolePermission, User, db)
+                     RolePermission, Setting, User, db)
 from .security import has_perm, load_user
-from .utils import get_setting
+from .utils import DEFAULT_SETTINGS, get_setting
 
 
 def create_app(test_config=None, instance_path=None):
@@ -35,7 +35,9 @@ def create_app(test_config=None, instance_path=None):
     # HTTPS for a domain like https://itam.yourschool.edu, trust the standard
     # forwarded headers so redirects and generated links use the right
     # scheme/host. Enabled by default; harmless for direct LAN access.
-    if os.environ.get("ITAM_BEHIND_PROXY", "1") == "1":
+    # ITAM_BEHIND_PROXY is the pre-rename spelling, still honoured.
+    if os.environ.get("AMS_BEHIND_PROXY",
+                      os.environ.get("ITAM_BEHIND_PROXY", "1")) == "1":
         from werkzeug.middleware.proxy_fix import ProxyFix
         app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1)
 
@@ -135,6 +137,11 @@ def _ensure_defaults():
         for role in ROLES:
             for perm in DEFAULT_ROLE_PERMS[role]:
                 db.session.add(RolePermission(role=role, permission=perm))
+    # Carry the ITAM -> AMS rename onto installs that had already saved the old
+    # name into their settings. A name the school chose themselves is left alone.
+    row = db.session.get(Setting, "app_name")
+    if row is not None and row.value in ("ITAM Enterprise", "ITAM"):
+        row.value = DEFAULT_SETTINGS["app_name"]
     # first-run admin account
     if not db.session.scalar(db.select(User).limit(1)):
         admin = User(username="admin", name="Administrator",

@@ -1,7 +1,7 @@
 {
   "id": "/",
-  "name": "ITAM Enterprise — IT Asset Management",
-  "short_name": "ITAM",
+  "name": "Mada Asset Management System (AMS)",
+  "short_name": "AMS",
   "description": "Track IT assets, licenses, maintenance and inventory for the school.",
   "start_url": "/",
   "scope": "/",

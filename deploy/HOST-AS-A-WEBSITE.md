@@ -1,4 +1,4 @@
-# Host ITAM as a website on your own server
+# Host AMS as a website on your own server
 
 Goal: people open a **name** in their browser — like `https://itam.madaacademy.edu.jo`
 or `http://itam` — and sign in. Everything stays on **your own on-premise
@@ -12,31 +12,31 @@ There are three layers. Pick the depth you need.
    │  browser  │ ───────────────► │  Caddy / IIS (name+HTTPS) │
    │  or phone │                  │            │              │
    └───────────┘                  │            ▼              │
-                                  │   ITAM app on :8080       │
+                                  │   AMS app on :8080        │
                                   │   (one shared database)   │
                                   └──────────────────────────┘
 ```
 
 ---
 
-## 1. Run ITAM as a background service (no window)
+## 1. Run AMS as a background service (no window)
 
-On the server, run ITAM headless so it just serves and never opens a window:
+On the server, run AMS headless so it just serves and never opens a window:
 
-- **Windows:** create a file `start-itam.bat` next to `ITAM.exe`:
+- **Windows:** create a file `start-ams.bat` next to `AMS.exe`:
   ```bat
-  set ITAM_NO_BROWSER=1
+  set AMS_NO_BROWSER=1
   set PORT=8080
   set SECRET_KEY=change-this-to-a-long-random-string
-  ITAM.exe
+  AMS.exe
   ```
   Run it, or install it as a service with NSSM so it starts on boot
-  (`nssm install ITAM "C:\itam\start-itam.bat"`).
+  (`nssm install AMS "C:\ams\start-ams.bat"`).
 
-- **Linux:** run `ITAM_NO_BROWSER=1 PORT=8080 python run_server.py` under
+- **Linux:** run `AMS_NO_BROWSER=1 PORT=8080 python run_server.py` under
   systemd or `pm2` so it restarts automatically.
 
-ITAM now answers on `http://SERVER-IP:8080`. That already works for every
+AMS now answers on `http://SERVER-IP:8080`. That already works for every
 device on the network — this is the whole point: **only the server runs the
 program, everyone else just opens the address.**
 
@@ -69,30 +69,30 @@ Caddy (step 3) for automatic HTTPS.
 trusted HTTPS certificate automatically.
 
 1. Put the `Caddyfile` from this folder next to `caddy.exe`, edit the domain.
-2. Keep ITAM running from step 1 on `127.0.0.1:8080`.
+2. Keep AMS running from step 1 on `127.0.0.1:8080`.
 3. Run `caddy run` (or install it as a service).
 
 Staff now open `https://itam.madaacademy.edu.jo` and sign in. Done.
 
-> ITAM already trusts the proxy's forwarded headers (`ITAM_BEHIND_PROXY=1`
+> AMS already trusts the proxy's forwarded headers (`AMS_BEHIND_PROXY=1`
 > by default), so links and redirects use the right `https://name` address.
 
 ## 4. "Install as an app" (PWA)
 
 Once the site loads over the name, any device can add it as an app:
 
-- **Android / Chrome / Edge:** a browser prompt offers **Install ITAM**, or use
+- **Android / Chrome / Edge:** a browser prompt offers **Install AMS**, or use
   the ⋮ menu → *Install app / Add to Home screen*.
 - **iPhone / Safari:** Share → **Add to Home Screen**.
 - **Windows / Edge:** address-bar **Install** icon.
 
-It gets the green ITAM icon and opens full-screen straight to the sign-in
+It gets the green AMS icon and opens full-screen straight to the sign-in
 page — a real app, backed by your on-prem server.
 
 ---
 
 ### Checklist
-- [ ] ITAM runs as a service on the server (`ITAM_NO_BROWSER=1`)
+- [ ] AMS runs as a service on the server (`AMS_NO_BROWSER=1`)
 - [ ] A DNS name points at the server (internal or public)
 - [ ] Ports forwarded (only if public) and Caddy running for HTTPS
 - [ ] `SECRET_KEY` set to a long random value

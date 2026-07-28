@@ -1,4 +1,4 @@
-# ITAM Enterprise — IT Asset Management System
+# Mada Asset Management System (AMS)
 
 A full-featured, self-hosted IT asset management web application built with
 Flask. Dark-sidebar dashboard UI, role-based access control, QR codes,

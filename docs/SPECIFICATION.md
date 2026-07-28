@@ -1,7 +1,7 @@
-# Enterprise IT Asset Management System (ITAM)
+# Mada Asset Management System (AMS)
 ## Version 3.0 – Final Professional Specification
 
-This is the official requirements specification for the school's ITAM system.
+This is the official requirements specification for the school's AMS system.
 Implementation status is tracked at the bottom of this document.
 
 ---
