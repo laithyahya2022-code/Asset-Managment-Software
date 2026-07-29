@@ -574,3 +574,131 @@ def test_label_org_is_editable_from_settings(client, app):
         "audit_retention_days": "365"}, follow_redirects=True)
     with app.app_context():
         assert get_setting("label_org") == "Another School"
+
+
+BULK_PAGES = [
+    ("/employees", "org.employees_bulk_delete"),
+    ("/departments", "org.departments_bulk_delete"),
+    ("/locations", "org.locations_bulk_delete"),
+    ("/licenses", "ops.licenses_bulk_delete"),
+    ("/maintenance", "ops.maintenance_bulk_delete"),
+    ("/checkouts", "ops.checkouts_bulk_checkin"),
+]
+
+
+@pytest.mark.parametrize("url,endpoint", BULK_PAGES)
+def test_list_pages_offer_select_all(client, app, url, endpoint):
+    """The toolbar only appears once a page has rows, so give each one."""
+    from itam.models import (Assignment, Category, Department, Employee,
+                             License, Location, Maintenance)
+
+    with app.app_context():
+        cat = db.session.scalar(db.select(Category))
+        emp = db.session.scalar(db.select(Employee))
+        db.session.add_all([Department(name="Dept One"),
+                            Location(name="Room One", kind="Room"),
+                            License(name="Office", seats=5)])
+        asset = Asset(tag="BK-9", name="Rig", status="Checked Out",
+                      condition="Good", category=cat)
+        db.session.add(asset)
+        db.session.flush()
+        db.session.add_all([Maintenance(asset=asset, title="Service"),
+                            Assignment(asset=asset, employee=emp)])
+        db.session.commit()
+
+    login(client)
+    body = client.get(url).data.decode()
+    assert 'class="bulk-form"' in body, f"{url} has no bulk form"
+    assert 'id="bulk"' in body, f"{url} bulk form needs an id for the button to target"
+    assert 'form="bulk"' in body, f"{url} action button must point at the form"
+
+
+def test_bulk_delete_skips_rows_still_in_use(client, app):
+    """A department with people in it must survive a bulk delete."""
+    from itam.models import Department, Employee
+
+    with app.app_context():
+        busy = Department(name="Busy")
+        spare = Department(name="Spare")
+        db.session.add_all([busy, spare])
+        db.session.flush()
+        db.session.add(Employee(name="Someone", department=busy))
+        db.session.commit()
+        busy_id, spare_id = busy.id, spare.id
+
+    login(client)
+    resp = client.post("/departments/bulk-delete",
+                       data={"ids": [busy_id, spare_id]}, follow_redirects=True)
+    assert resp.status_code == 200
+    with app.app_context():
+        assert db.session.get(Department, busy_id) is not None, "in-use row was deleted"
+        assert db.session.get(Department, spare_id) is None, "free row was not deleted"
+
+
+def test_bulk_delete_with_nothing_selected_is_harmless(client, app):
+    from itam.models import Department
+
+    with app.app_context():
+        db.session.add(Department(name="Untouched"))
+        db.session.commit()
+    login(client)
+    resp = client.post("/departments/bulk-delete", data={}, follow_redirects=True)
+    assert resp.status_code == 200
+    assert b"Nothing selected" in resp.data
+    with app.app_context():
+        assert db.session.scalar(db.select(Department).where(Department.name == "Untouched"))
+
+
+def test_departments_and_locations_can_be_edited(client, app):
+    """Both screens had no edit path at all before."""
+    from itam.models import Department, Location
+
+    login(client)
+    client.post("/departments", data={"name": "Science", "cost_center": "CC-1"},
+                follow_redirects=True)
+    with app.app_context():
+        dep = db.session.scalar(db.select(Department).where(Department.name == "Science"))
+        dep_id = dep.id
+    client.post("/departments", data={"id": dep_id, "name": "Science Lab",
+                                      "cost_center": "CC-2"}, follow_redirects=True)
+    with app.app_context():
+        dep = db.session.get(Department, dep_id)
+        assert (dep.name, dep.cost_center) == ("Science Lab", "CC-2")
+
+    client.post("/locations", data={"name": "Wing A", "kind": "Building"},
+                follow_redirects=True)
+    with app.app_context():
+        loc = db.session.scalar(db.select(Location).where(Location.name == "Wing A"))
+        loc_id = loc.id
+    client.post("/locations", data={"id": loc_id, "name": "Wing B", "kind": "Floor"},
+                follow_redirects=True)
+    with app.app_context():
+        loc = db.session.get(Location, loc_id)
+        assert (loc.name, loc.kind) == ("Wing B", "Floor")
+
+
+def test_bulk_checkin_returns_several_loans(client, app):
+    from itam.models import Assignment, Category, Employee
+
+    with app.app_context():
+        emp = db.session.scalar(db.select(Employee))
+        cat = db.session.scalar(db.select(Category))
+        ids = []
+        for tag in ("BK-1", "BK-2"):
+            asset = Asset(tag=tag, name=tag, status="Checked Out", condition="Good",
+                          category=cat)
+            db.session.add(asset)
+            db.session.flush()
+            asg = Assignment(asset=asset, employee=emp)
+            db.session.add(asg)
+            db.session.flush()
+            ids.append(asg.id)
+        db.session.commit()
+
+    login(client)
+    client.post("/checkouts/bulk-checkin", data={"ids": ids}, follow_redirects=True)
+    with app.app_context():
+        for asg_id in ids:
+            asg = db.session.get(Assignment, asg_id)
+            assert asg.returned_at is not None, "loan was not returned"
+            assert asg.asset.status == "Available"

@@ -287,3 +287,64 @@ def vendor_delete(vendor_id):
         db.session.commit()
         flash("Vendor deleted.", "success")
     return redirect(url_for("org.vendors"))
+
+
+# ------------------------------------------------------------- bulk actions
+
+def _bulk_delete(model, ids, blocked, endpoint, noun):
+    """Delete the chosen rows, skipping any that are still in use.
+
+    `blocked` returns a reason string when a row must be kept, so a bulk run
+    applies exactly the same rules as deleting the rows one at a time.
+    """
+    deleted, kept = 0, []
+    for row in db.session.scalars(db.select(model).where(model.id.in_(ids))):
+        reason = blocked(row)
+        if reason:
+            kept.append(reason)
+            continue
+        db.session.delete(row)
+        deleted += 1
+    db.session.commit()
+    if deleted:
+        flash(f"{deleted} {noun}{'' if deleted == 1 else 's'} deleted.", "success")
+    for reason in kept[:5]:
+        flash(reason, "error")
+    if len(kept) > 5:
+        flash(f"…and {len(kept) - 5} more could not be deleted.", "error")
+    if not deleted and not kept:
+        flash("Nothing selected.", "error")
+    return redirect(url_for(endpoint))
+
+
+@bp.post("/employees/bulk-delete")
+@perm_required("people.manage")
+def employees_bulk_delete():
+    ids = request.form.getlist("ids", type=int)
+    for emp in db.session.scalars(db.select(Employee).where(Employee.id.in_(ids))):
+        if not emp.current_assets:
+            for assignment in list(emp.assignments):
+                db.session.delete(assignment)
+            log_activity("employee_deleted", "employee", emp.id, emp.name)
+    return _bulk_delete(
+        Employee, ids,
+        lambda e: (f"{e.name} still has assets checked out." if e.current_assets else None),
+        "org.employees", "employee")
+
+
+@bp.post("/departments/bulk-delete")
+@perm_required("org.manage")
+def departments_bulk_delete():
+    return _bulk_delete(
+        Department, request.form.getlist("ids", type=int),
+        lambda d: (f"{d.name} has assets or employees." if d.assets or d.employees else None),
+        "org.departments", "department")
+
+
+@bp.post("/locations/bulk-delete")
+@perm_required("org.manage")
+def locations_bulk_delete():
+    return _bulk_delete(
+        Location, request.form.getlist("ids", type=int),
+        lambda l: (f"{l.name} has assets or sub-locations." if l.assets or l.children else None),
+        "org.locations", "location")

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import select_all_th, row_check, bulk_button %}
 {% block title %}{{ t("Employees") }}{% endblock %}
 {% block content %}
 <div class="page-head">
@@ -10,13 +11,16 @@
     {% endif %}
     <a class="btn secondary" href="{{ url_for('org.employees_export_xlsx') }}">Export Excel</a>
     <a class="btn secondary" href="{{ url_for('org.employees_export_csv') }}">{{ t("Export CSV") }}</a>
+    {% if has_perm("people.manage") and rows %}{{ bulk_button(t("Delete selected"), danger=True) }}{% endif %}
   </div>
 </div>
 {% if rows %}
+<form id="bulk" method="post" action="{{ url_for('org.employees_bulk_delete') }}" class="bulk-form">
 <div class="card table-wrap"><table>
-  <tr><th>{{ t("Name") }}</th><th>Employee ID</th><th>Type</th><th>Email</th><th>{{ t("Department") }}</th><th>Assets held</th><th>Active</th><th></th></tr>
+  <tr>{% if has_perm("people.manage") %}{{ select_all_th() }}{% endif %}<th>{{ t("Name") }}</th><th>Employee ID</th><th>Type</th><th>Email</th><th>{{ t("Department") }}</th><th>Assets held</th><th>Active</th><th></th></tr>
   {% for e in rows %}
   <tr>
+    {% if has_perm("people.manage") %}{{ row_check(e.id) }}{% endif %}
     <td><a href="{{ url_for('org.employee_detail', emp_id=e.id) }}">{{ e.name }}</a></td>
     <td>{{ e.emp_code or "—" }}</td>
     <td>{{ e.emp_type or "—" }}</td>
@@ -28,5 +32,6 @@
   </tr>
   {% endfor %}
 </table></div>
+</form>
 {% else %}<p class="empty">No employees yet.</p>{% endif %}
 {% endblock %}

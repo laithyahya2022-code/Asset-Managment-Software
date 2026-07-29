@@ -1,7 +1,16 @@
 {% extends "base.html" %}
+{% from "_macros.html" import select_all_th, row_check, bulk_button %}
 {% block title %}{{ t("Lending") }}{% endblock %}
 {% block content %}
-<div class="page-head"><h1>{{ t("Lending") }}</h1></div>
+<div class="page-head">
+  <h1>{{ t("Lending") }}</h1>
+  {% if has_perm("checkout.manage") %}
+  <div class="actions-row no-print">
+    <a class="btn" href="#lend-form">+ {{ t("Lend an asset") }}</a>
+    {% if rows %}{{ bulk_button(t("Check in selected"), danger=False) }}{% endif %}
+  </div>
+  {% endif %}
+</div>
 
 <div class="filters no-print">
   {% for key, label in [("active", "Active"), ("overdue", "Overdue"), ("all", "All history")] %}
@@ -10,22 +19,32 @@
 </div>
 
 {% if rows %}
+<form id="bulk" method="post" action="{{ url_for('ops.checkouts_bulk_checkin') }}" class="bulk-form">
 <div class="card table-wrap"><table>
-  <tr><th>Asset</th><th>{{ t("Employee") }}</th><th>Checked out</th><th>Due</th><th>Returned</th><th></th></tr>
+  <tr>{% if has_perm("checkout.manage") %}{{ select_all_th() }}{% endif %}<th>Asset</th><th>{{ t("Employee") }}</th><th>Checked out</th><th>Due</th><th>Returned</th><th></th></tr>
   {% for x in rows %}
   <tr>
+    {% if has_perm("checkout.manage") %}
+      {% if x.returned_at %}<td class="pick no-print"></td>{% else %}{{ row_check(x.id) }}{% endif %}
+    {% endif %}
     <td><a href="{{ url_for('assets.detail', asset_id=x.asset_id) }}">{{ x.asset.tag }}</a> — {{ x.asset.name }}</td>
     <td><a href="{{ url_for('org.employee_detail', emp_id=x.employee_id) }}">{{ x.employee.name }}</a></td>
     <td>{{ x.assigned_at.strftime("%Y-%m-%d") }}</td>
     <td>{{ x.due_at or "—" }}{% if x.overdue %} <span class="red">{{ t("Overdue") }}</span>{% endif %}</td>
     <td>{{ x.returned_at.strftime("%Y-%m-%d") if x.returned_at else "—" }}</td>
     <td>{% if not x.returned_at and has_perm("checkout.manage") %}
-      <form class="inline" method="post" action="{{ url_for('assets.checkin', asset_id=x.asset_id) }}">
-        <button class="btn secondary sm" type="submit">{{ t("Check In") }}</button>
-      </form>{% endif %}</td>
+      <button class="btn secondary sm" type="submit"
+              form="checkin-{{ x.id }}">{{ t("Check In") }}</button>{% endif %}</td>
   </tr>
   {% endfor %}
 </table></div>
+</form>
+{% if has_perm("checkout.manage") %}
+{% for x in rows %}{% if not x.returned_at %}
+<form id="checkin-{{ x.id }}" method="post"
+      action="{{ url_for('assets.checkin', asset_id=x.asset_id) }}" hidden></form>
+{% endif %}{% endfor %}
+{% endif %}
 {% else %}<p class="empty">No checkouts.</p>{% endif %}
 
 <div class="card">
@@ -48,7 +67,7 @@
 </div>
 
 {% if has_perm("checkout.manage") %}
-<div class="two-col no-print">
+<div class="two-col no-print" id="lend-form">
   <div class="card">
     <p class="eyebrow">{{ t("Check Out") }} — lend an asset</p>
     {% if available %}

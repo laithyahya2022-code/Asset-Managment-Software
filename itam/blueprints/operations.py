@@ -441,3 +441,56 @@ def inventory_export(audit_id):
     rows = [(c.asset.tag, c.asset.name, c.status, c.checked_at) for c in audit.checks]
     return csv_response(["Tag", "Name", "Result", "Checked At"], rows,
                         f"audit-{audit.id}.csv")
+
+
+# ------------------------------------------------------------- bulk actions
+
+@bp.post("/licenses/bulk-delete")
+@perm_required("licenses.manage")
+def licenses_bulk_delete():
+    ids = request.form.getlist("ids", type=int)
+    count = 0
+    for lic in db.session.scalars(db.select(License).where(License.id.in_(ids))):
+        log_activity("license_deleted", "license", lic.id, lic.name)
+        db.session.delete(lic)
+        count += 1
+    db.session.commit()
+    flash(f"{count} license{'' if count == 1 else 's'} deleted." if count
+          else "Nothing selected.", "success" if count else "error")
+    return redirect(url_for("ops.licenses"))
+
+
+@bp.post("/maintenance/bulk-delete")
+@perm_required("maintenance.manage")
+def maintenance_bulk_delete():
+    ids = request.form.getlist("ids", type=int)
+    count = 0
+    for task in db.session.scalars(db.select(Maintenance).where(Maintenance.id.in_(ids))):
+        log_activity("maintenance_deleted", "maintenance", task.id, task.title)
+        db.session.delete(task)
+        count += 1
+    db.session.commit()
+    flash(f"{count} task{'' if count == 1 else 's'} deleted." if count
+          else "Nothing selected.", "success" if count else "error")
+    return redirect(url_for("ops.maintenance_list"))
+
+
+@bp.post("/checkouts/bulk-checkin")
+@perm_required("checkout.manage")
+def checkouts_bulk_checkin():
+    """Return several loans at once, mirroring the single check-in."""
+    ids = request.form.getlist("ids", type=int)
+    count = 0
+    for asg in db.session.scalars(db.select(Assignment).where(
+            Assignment.id.in_(ids), Assignment.returned_at.is_(None))):
+        asg.returned_at = datetime.utcnow()
+        asset = asg.asset
+        if asset is not None and asset.status not in ("Damaged", "Lost", "Missing"):
+            asset.status = "Available"
+        log_activity("checked_in", "asset", asg.asset_id,
+                     f"{asset.tag if asset else '?'} ← {asg.employee.name}")
+        count += 1
+    db.session.commit()
+    flash(f"{count} asset{'' if count == 1 else 's'} checked in." if count
+          else "Nothing selected.", "success" if count else "error")
+    return redirect(url_for("ops.checkouts"))

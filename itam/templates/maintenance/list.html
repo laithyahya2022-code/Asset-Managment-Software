@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import select_all_th, row_check, bulk_button %}
 {% block title %}{{ t("Maintenance") }}{% endblock %}
 {% block content %}
 <div class="page-head">
@@ -8,6 +9,7 @@
     <a class="btn" href="{{ url_for('ops.maintenance_new') }}">+ New task</a>
     {% endif %}
     <a class="btn secondary" href="{{ url_for('ops.maintenance_export_xlsx') }}">Export Excel</a>
+    {% if has_perm("maintenance.manage") and rows %}{{ bulk_button(t("Delete selected"), danger=True) }}{% endif %}
   </div>
 </div>
 
@@ -19,11 +21,13 @@
 </div>
 
 {% if rows %}
+<form id="bulk" method="post" action="{{ url_for('ops.maintenance_bulk_delete') }}" class="bulk-form">
 <div class="card table-wrap"><table>
-  <tr><th>Asset</th><th>Title</th><th>Kind</th><th>{{ t("Status") }}</th><th>Scheduled</th>
+  <tr>{% if has_perm("maintenance.manage") %}{{ select_all_th() }}{% endif %}<th>Asset</th><th>Title</th><th>Kind</th><th>{{ t("Status") }}</th><th>Scheduled</th>
       <th>Technician</th><th>Cost</th><th></th></tr>
   {% for m in rows %}
   <tr>
+    {% if has_perm("maintenance.manage") %}{{ row_check(m.id) }}{% endif %}
     <td><a href="{{ url_for('assets.detail', asset_id=m.asset_id) }}">{{ m.asset.tag }}</a></td>
     <td>{{ m.title }}{% if m.parts %} <span class="muted">(parts: {{ m.parts }})</span>{% endif %}</td>
     <td><span class="chip">{{ m.kind }}</span></td>
@@ -35,18 +39,28 @@
       {% if has_perm("maintenance.manage") %}
       <a class="btn secondary sm" href="{{ url_for('ops.maintenance_edit', mid=m.id) }}">{{ t("Edit") }}</a>
       {% if m.status not in ("Completed", "Cancelled") %}
-      <form class="inline" method="post" action="{{ url_for('ops.maintenance_status', mid=m.id) }}">
-        {% if m.status == "Scheduled" %}
-        <button class="btn secondary sm" name="status" value="In Progress" type="submit">Start</button>
-        {% endif %}
-        <button class="btn sm" name="status" value="Completed" type="submit">Complete</button>
-        <button class="btn secondary sm" name="status" value="Cancelled" type="submit">{{ t("Cancel") }}</button>
-      </form>
+      {# The status form lives outside the table: a form cannot nest inside the
+         bulk-select form, so the buttons reach it through form=. #}
+      {% if m.status == "Scheduled" %}
+      <button class="btn secondary sm" form="mstatus-{{ m.id }}" name="status"
+              value="In Progress" type="submit">Start</button>
+      {% endif %}
+      <button class="btn sm" form="mstatus-{{ m.id }}" name="status"
+              value="Completed" type="submit">Complete</button>
+      <button class="btn secondary sm" form="mstatus-{{ m.id }}" name="status"
+              value="Cancelled" type="submit">{{ t("Cancel") }}</button>
       {% endif %}
       {% endif %}
     </td>
   </tr>
   {% endfor %}
 </table></div>
+</form>
+{% if has_perm("maintenance.manage") %}
+{% for m in rows %}{% if m.status not in ("Completed", "Cancelled") %}
+<form id="mstatus-{{ m.id }}" method="post"
+      action="{{ url_for('ops.maintenance_status', mid=m.id) }}" hidden></form>
+{% endif %}{% endfor %}
+{% endif %}
 {% else %}<p class="empty">No maintenance tasks.</p>{% endif %}
 {% endblock %}

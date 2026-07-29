@@ -1,37 +1,83 @@
 {% extends "base.html" %}
+{% from "_macros.html" import select_all_th, row_check, bulk_button %}
 {% block title %}{{ t("Departments") }}{% endblock %}
 {% block content %}
-<div class="page-head"><h1>{{ t("Departments") }}</h1></div>
+<div class="page-head">
+  <h1>{{ t("Departments") }}</h1>
+  {% if has_perm("org.manage") %}
+  <div class="actions-row no-print">
+    <button class="btn" type="button" id="dep-new">+ {{ t("New department") }}</button>
+    {% if rows %}{{ bulk_button(t("Delete selected"), danger=True) }}{% endif %}
+  </div>
+  {% endif %}
+</div>
 
 {% if has_perm("org.manage") %}
-<div class="card no-print">
+<div class="card no-print" id="dep-editor">
+  <p class="eyebrow" id="dep-title">{{ t("New department") }}</p>
   <form method="post" class="filters" style="margin:0">
-    <input name="name" placeholder="Department name" required>
-    <input name="cost_center" placeholder="Cost center (e.g. CC-100)">
-    <button class="btn" type="submit">Add department</button>
+    <input type="hidden" name="id" id="dep-id">
+    <input name="name" id="dep-name" placeholder="{{ t('Department name') }}" required>
+    <input name="cost_center" id="dep-cc" placeholder="Cost center (e.g. CC-100)">
+    <button class="btn" type="submit" id="dep-save">{{ t("Add department") }}</button>
+    <button class="btn secondary" type="button" id="dep-cancel"
+            hidden>{{ t("Cancel") }}</button>
   </form>
 </div>
 {% endif %}
 
 {% if rows %}
+<form id="bulk" method="post" action="{{ url_for('org.departments_bulk_delete') }}" class="bulk-form">
 <div class="card table-wrap"><table>
-  <tr><th>{{ t("Name") }}</th><th>Cost center</th><th>{{ t("Employees") }}</th><th>{{ t("Assets") }}</th><th>Asset value</th><th></th></tr>
+  <tr>
+    {% if has_perm("org.manage") %}{{ select_all_th() }}{% endif %}
+    <th>{{ t("Name") }}</th><th>Cost center</th><th>{{ t("Employees") }}</th>
+    <th>{{ t("Assets") }}</th><th>Asset value</th><th></th>
+  </tr>
   {% for d in rows %}
   <tr>
+    {% if has_perm("org.manage") %}{{ row_check(d.id) }}{% endif %}
     <td>{{ d.name }}</td>
     <td>{{ d.cost_center or "—" }}</td>
     <td>{{ d.employees | length }}</td>
     <td><a href="{{ url_for('assets.list_', department=d.id) }}">{{ d.assets | length }}</a></td>
     <td>${{ "%.2f" | format(d.assets | map(attribute="purchase_cost") | select | map("float") | sum) }}</td>
     <td class="no-print">
-      {% if has_perm("org.manage") and not d.assets and not d.employees %}
-      <form class="inline" method="post" action="{{ url_for('org.department_delete', dep_id=d.id) }}">
-        <button class="btn danger sm" type="submit">{{ t("Delete") }}</button>
-      </form>
+      {% if has_perm("org.manage") %}
+      <button class="btn secondary sm dep-edit" type="button" data-id="{{ d.id }}"
+              data-name="{{ d.name }}" data-cc="{{ d.cost_center or '' }}">{{ t("Edit") }}</button>
       {% endif %}
     </td>
   </tr>
   {% endfor %}
 </table></div>
+</form>
 {% else %}<p class="empty">No departments yet.</p>{% endif %}
+
+{% if has_perm("org.manage") %}
+<script>
+// Load a row into the editor at the top, or reset it for a new department.
+// Values come from data-* attributes, which Jinja escapes correctly for an
+// HTML attribute; tojson does not escape double quotes and breaks out of one.
+function depEdit(id, name, costCenter) {
+  document.getElementById("dep-id").value = id || "";
+  document.getElementById("dep-name").value = name || "";
+  document.getElementById("dep-cc").value = costCenter || "";
+  document.getElementById("dep-title").textContent = id ? "Edit " + name : "{{ t('New department') }}";
+  document.getElementById("dep-save").textContent = id ? "{{ t('Save changes') }}" : "{{ t('Add department') }}";
+  document.getElementById("dep-cancel").hidden = !id;
+  document.getElementById("dep-editor").scrollIntoView({ block: "nearest" });
+  document.getElementById("dep-name").focus();
+}
+document.querySelectorAll(".dep-edit").forEach(function (b) {
+  b.addEventListener("click", function () {
+    depEdit(b.dataset.id, b.dataset.name, b.dataset.cc);
+  });
+});
+["dep-new", "dep-cancel"].forEach(function (id) {
+  var el = document.getElementById(id);
+  if (el) el.addEventListener("click", function () { depEdit(); });
+});
+</script>
+{% endif %}
 {% endblock %}

@@ -71,3 +71,49 @@ if (startBtn) {
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/static/sw.js").catch(() => {});
 }
+
+// ---------------------------------------------------------------- bulk select
+// Wires the select-all checkbox, the row ticks and the bulk action button on
+// every list page that uses the bulk_form/select_all_th/row_check macros.
+document.querySelectorAll("form.bulk-form").forEach((form) => {
+  const all = form.querySelector(".bulk-all");
+  const picks = [...form.querySelectorAll(".bulk-pick")];
+  // The action button sits in the page head and points back with form=,
+  // so look outside the form as well as inside it.
+  const buttons = [...new Set([
+    ...form.querySelectorAll(".bulk-go"),
+    ...(form.id ? document.querySelectorAll(`.bulk-go[form="${form.id}"]`) : []),
+  ])];
+  if (!picks.length || !buttons.length) return;
+
+  const sync = () => {
+    const chosen = picks.filter((p) => p.checked).length;
+    buttons.forEach((b) => {
+      b.disabled = chosen === 0;
+      b.textContent = chosen ? `${b.dataset.label} (${chosen})` : b.dataset.label;
+    });
+    if (all) {
+      all.checked = chosen === picks.length;
+      // Partial selection reads as neither on nor off.
+      all.indeterminate = chosen > 0 && chosen < picks.length;
+    }
+  };
+
+  if (all) {
+    all.addEventListener("change", () => {
+      picks.forEach((p) => { p.checked = all.checked; });
+      sync();
+    });
+  }
+  picks.forEach((p) => p.addEventListener("change", sync));
+
+  form.addEventListener("submit", (e) => {
+    const chosen = picks.filter((p) => p.checked).length;
+    if (!chosen) { e.preventDefault(); return; }
+    const verb = e.submitter && e.submitter.dataset.label
+      ? e.submitter.dataset.label.toLowerCase() : "apply to";
+    if (!window.confirm(`${chosen} selected — ${verb}?`)) e.preventDefault();
+  });
+
+  sync();
+});

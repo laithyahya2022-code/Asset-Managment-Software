@@ -1,3 +1,29 @@
 {% macro status_badge(status) -%}
 <span class="badge s-{{ status | lower | replace(' ', '-') }}">{{ t(status) }}</span>
 {%- endmacro %}
+
+{# ---------------------------------------------------------------- bulk select
+
+   A list page wraps its table in bulk_form(), puts select_all_th() first in the
+   header row and row_check(id) first in each body row. The button is disabled
+   until something is ticked, so it can never fire on an empty selection. #}
+
+{% macro select_all_th() -%}
+<th class="pick no-print">
+  <input type="checkbox" class="bulk-all" aria-label="{{ t('Select all') }}">
+</th>
+{%- endmacro %}
+
+{% macro row_check(row_id) -%}
+<td class="pick no-print">
+  <input type="checkbox" class="bulk-pick" name="ids" value="{{ row_id }}"
+         aria-label="{{ t('Select row') }}">
+</td>
+{%- endmacro %}
+
+{# The button lives in the page head, outside the table's form, so it has to
+   name the form it submits. Without form= it would be inert. #}
+{% macro bulk_button(label, danger=True, form_id="bulk") -%}
+<button class="btn {{ 'danger' if danger else 'secondary' }} bulk-go" type="submit"
+        form="{{ form_id }}" disabled data-label="{{ label }}">{{ label }}</button>
+{%- endmacro %}

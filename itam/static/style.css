@@ -307,3 +307,11 @@ dl.props dd { margin: 0; }
 
 /* RTL tweaks */
 [dir="rtl"] .chart .cl { direction: ltr; }
+
+/* bulk selection on list pages */
+th.pick, td.pick { width: 34px; padding-inline-end: 0; }
+th.pick input, td.pick input { cursor: pointer; }
+tr.picked td { background: #f2f9f4 !important; }
+.bulk-go[disabled] { opacity: 0.45; cursor: not-allowed; }
+.bulk-go[disabled]:hover { background: var(--danger); }
+.bulk-go.secondary[disabled]:hover { background: var(--surface); }
