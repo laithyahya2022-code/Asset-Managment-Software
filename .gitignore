@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+instance/
+*.sqlite
+.pytest_cache/
+build/
+dist/
+*.spec
+# runtime file written next to the running app
+ITAM - open on other devices.txt
+

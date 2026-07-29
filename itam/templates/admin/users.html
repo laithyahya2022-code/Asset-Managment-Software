@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}{{ t("Users") }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ t("Users") }}</h1>
+  <div class="actions-row no-print">
+    <a class="btn" href="{{ url_for('admin.user_form') }}">+ New user</a>
+    <a class="btn secondary" href="{{ url_for('admin.roles') }}">{{ t("Roles") }} & permissions</a>
+  </div>
+</div>
+<div class="card table-wrap"><table>
+  <tr><th>Username</th><th>{{ t("Name") }}</th><th>Email</th><th>Role</th><th>Active</th>
+      <th>Last login</th><th>API key</th><th></th></tr>
+  {% for u in rows %}
+  <tr>
+    <td><a href="{{ url_for('admin.user_form', user_id=u.id) }}">{{ u.username }}</a></td>
+    <td>{{ u.name }}</td>
+    <td>{{ u.email }}</td>
+    <td><span class="chip">{{ u.role }}</span></td>
+    <td>{{ "Yes" if u.active else "No" }}</td>
+    <td>{{ u.last_login.strftime("%Y-%m-%d %H:%M") if u.last_login else "never" }}</td>
+    <td>{{ "set" if u.api_key else "—" }}</td>
+    <td class="no-print">
+      <form class="inline" method="post" action="{{ url_for('admin.user_apikey', user_id=u.id) }}">
+        <button class="btn secondary sm" type="submit">New API key</button>
+      </form>
+      {% if u.id != g.user.id %}
+      <form class="inline" method="post" action="{{ url_for('admin.user_delete', user_id=u.id) }}">
+        <button class="btn danger sm" type="submit" data-confirm="Delete user {{ u.username }}?">{{ t("Delete") }}</button>
+      </form>
+      {% endif %}
+    </td>
+  </tr>
+  {% endfor %}
+</table></div>
+{% endblock %}

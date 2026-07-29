@@ -1,0 +1,175 @@
+{% extends "base.html" %}
+{% block title %}{{ "Edit " ~ asset.tag if asset else t("New Asset") }}{% endblock %}
+{% block content %}
+{% set a = asset or source %}
+<div class="page-head"><h1>{{ "Edit asset" if asset else (t("New Asset") ~ (" (clone of " ~ source.tag ~ ")" if source else "")) }}</h1></div>
+<div class="card">
+  <form method="post">
+    <div class="actions-row no-print" style="justify-content:space-between;align-items:center;margin-bottom:.5rem">
+      <p class="eyebrow" style="margin:0">Label preview {% if not asset %}· Asset ID is generated from the category{% endif %}</p>
+      <button type="button" class="btn secondary sm" onclick="printLabelPreview()">{{ t("Print") }} label (6×3)</button>
+    </div>
+    <div class="label-preview" id="label-preview">
+      <div class="lp-qr">
+        <div class="box"><img id="qr-live" alt="QR code"></div>
+        <div class="lp-tag" id="lbl-tag">{{ asset.tag if asset else "—" }}</div>
+      </div>
+      <div class="lp-info">
+        <div class="lp-org">{{ app_name }}</div>
+        <div class="lp-grid">
+          <div><div class="lp-l">Branch</div><div class="lp-v" id="lbl-branch">{{ a.branch or "—" if a else "—" }}</div></div>
+          <div><div class="lp-l">Location</div><div class="lp-v" id="lbl-loc">{{ a.location_name or "—" if a else "—" }}</div></div>
+          <div class="lp-full"><div class="lp-l">Serial</div><div class="lp-v" id="lbl-serial">{{ a.serial or "—" if a else "—" }}</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="form-grid">
+      <div><label for="f-name">{{ t("Name") }} *</label>
+        <input id="f-name" name="name" required value="{{ a.name if a else '' }}"></div>
+      <div><label for="f-cat">{{ t("Category") }}</label>
+        <select id="f-cat" name="category_id"><option value="">—</option>
+          {% for c in categories %}<option value="{{ c.id }}" {{ 'selected' if a and a.category_id == c.id }}>{{ c.name }}</option>{% endfor %}
+        </select></div>
+      <div><label for="f-tag">Asset ID {{ "*" if asset else "" }}</label>
+        <input id="f-tag" name="tag" {{ "required" if asset }} value="{{ asset.tag if asset else '' }}"
+               placeholder="Auto — pick a category"></div>
+      <div><label for="f-cond">Condition</label>
+        <select id="f-cond" name="condition">
+          {% for c in conditions %}<option {{ 'selected' if a and a.condition == c }}>{{ c }}</option>{% endfor %}
+        </select></div>
+      <div><label for="f-status">{{ t("Status") }}</label>
+        <select id="f-status" name="status">
+          {% for s in statuses %}<option {{ 'selected' if a and a.status == s }}>{{ s }}</option>{% endfor %}
+        </select></div>
+      <div><label for="f-type">Type</label>
+        <input id="f-type" name="asset_type" value="{{ a.asset_type or '' if a else '' }}" placeholder="Laptop, Printer…"></div>
+      <div><label for="f-serial">Serial number</label>
+        <input id="f-serial" name="serial" value="{{ '' if source else (a.serial or '' if a else '') }}"></div>
+      <div><label for="f-mfr">Manufacturer</label>
+        <input id="f-mfr" name="manufacturer" value="{{ a.manufacturer or '' if a else '' }}"></div>
+      <div><label for="f-model">Model</label>
+        <input id="f-model" name="model" value="{{ a.model or '' if a else '' }}"></div>
+      <div><label for="f-branch">Branch</label>
+        <select id="f-branch" name="branch"><option value="">—</option>
+          {% for b in branches %}<option {{ 'selected' if a and a.branch == b }}>{{ b }}</option>{% endfor %}
+        </select></div>
+      <div><label for="f-building">Building</label>
+        <select id="f-building" name="building"><option value="">—</option>
+          {% for b in buildings %}<option {{ 'selected' if a and a.building == b }}>{{ b }}</option>{% endfor %}
+        </select></div>
+      <div><label for="f-floor">Floor</label>
+        <select id="f-floor" name="floor"><option value="">—</option>
+          {% for fl in floors %}<option {{ 'selected' if a and a.floor == fl }}>{{ fl }}</option>{% endfor %}
+        </select></div>
+      <div><label for="f-place">{{ t("Location") }}</label>
+        <input id="f-place" name="location_name" list="place-list"
+               value="{{ a.location_name or '' if a else '' }}" placeholder="Choose or type a location">
+        <datalist id="place-list">
+          {% for pl in places %}<option value="{{ pl }}">{% endfor %}
+        </datalist></div>
+      <div><label for="f-assign">Assign to</label>
+        <select id="f-assign" name="assign_employee_id"><option value="">— (unassigned)</option>
+          {% for e in employees %}<option value="{{ e.id }}"
+            {{ 'selected' if asset and asset.current_assignment and asset.current_assignment.employee_id == e.id }}>{{ e.name }}{{ " (" ~ e.emp_code ~ ")" if e.emp_code }}</option>{% endfor %}
+        </select></div>
+      <div><label for="f-updby">Updated by (data entry)</label>
+        <input id="f-updby" name="updated_by" value="{{ a.updated_by or '' if a else (g.user.name if g.user else '') }}"></div>
+      <div><label for="f-vendor">Vendor</label>
+        <select id="f-vendor" name="vendor_id"><option value="">—</option>
+          {% for v in vendors %}<option value="{{ v.id }}" {{ 'selected' if a and a.vendor_id == v.id }}>{{ v.name }}</option>{% endfor %}
+        </select></div>
+      <div><label for="f-pdate">Purchase date</label>
+        <input id="f-pdate" name="purchase_date" type="date" value="{{ a.purchase_date or '' if a else '' }}"></div>
+      <div><label for="f-cost">Purchase cost</label>
+        <input id="f-cost" name="purchase_cost" type="number" step="0.01" min="0" value="{{ a.purchase_cost or '' if a else '' }}"></div>
+      <div><label for="f-dep">Depreciation (years)</label>
+        <input id="f-dep" name="depreciation_years" type="number" min="0" max="50" value="{{ a.depreciation_years or 5 if a else 5 }}"></div>
+      <div><label for="f-warr">Warranty expiry</label>
+        <input id="f-warr" name="warranty_expiry" type="date" value="{{ a.warranty_expiry or '' if a else '' }}"></div>
+      <div><label for="f-invoice">Invoice number</label>
+        <input id="f-invoice" name="invoice_number" value="{{ a.invoice_number or '' if a else '' }}"></div>
+      <div><label for="f-parent">Part of (parent asset)</label>
+        <select id="f-parent" name="parent_id"><option value="">—</option>
+          {% for p in parents %}{% if not asset or p.id != asset.id %}<option value="{{ p.id }}" {{ 'selected' if a and a.parent_id == p.id }}>{{ p.tag }} — {{ p.name }}</option>{% endif %}{% endfor %}
+        </select></div>
+      <div class="full"><p class="eyebrow" style="margin:1rem 0 0">Technical specifications</p></div>
+      <div><label for="f-os">Operating system</label>
+        <input id="f-os" name="os_name" value="{{ a.os_name or '' if a else '' }}" placeholder="Windows 11 Pro"></div>
+      <div><label for="f-osv">OS version</label>
+        <input id="f-osv" name="os_version" value="{{ a.os_version or '' if a else '' }}" placeholder="23H2"></div>
+      <div><label for="f-cpu">CPU</label>
+        <input id="f-cpu" name="cpu" value="{{ a.cpu or '' if a else '' }}" placeholder="Intel Core i5-1335U"></div>
+      <div><label for="f-ram">RAM</label>
+        <input id="f-ram" name="ram" value="{{ a.ram or '' if a else '' }}" placeholder="16 GB"></div>
+      <div><label for="f-storage">Storage</label>
+        <input id="f-storage" name="storage" value="{{ a.storage or '' if a else '' }}" placeholder="512 GB SSD"></div>
+      <div><label for="f-gpu">Graphics card</label>
+        <input id="f-gpu" name="gpu" value="{{ a.gpu or '' if a else '' }}"></div>
+      <div><label for="f-host">Device name / hostname</label>
+        <input id="f-host" name="hostname" value="{{ a.hostname or '' if a else '' }}"></div>
+      <div><label for="f-mac">MAC address</label>
+        <input id="f-mac" name="mac_address" value="{{ a.mac_address or '' if a else '' }}"></div>
+      <div><label for="f-ip">IP address</label>
+        <input id="f-ip" name="ip_address" value="{{ a.ip_address or '' if a else '' }}"></div>
+      {% for name in custom_names %}
+      <div><label for="f-cust{{ loop.index0 }}">{{ name }}</label>
+        <input id="f-cust{{ loop.index0 }}" name="custom_{{ loop.index0 }}" value="{{ a.custom.get(name, '') if a else '' }}"></div>
+      {% endfor %}
+      <div class="full"><label for="f-notes">Notes</label>
+        <textarea id="f-notes" name="notes" rows="3">{{ a.notes or '' if a else '' }}</textarea></div>
+    </div>
+    <div class="form-actions">
+      <button class="btn" type="submit">{{ "Save changes" if asset else "Create asset" }}</button>
+      {% if asset %}<a class="btn secondary" href="{{ url_for('assets.label', asset_id=asset.id) }}" target="_blank" rel="noopener">{{ t("Print") }} label (6×3)</a>{% endif %}
+      <a class="btn secondary" href="{{ url_for('assets.detail', asset_id=asset.id) if asset else url_for('assets.list_') }}">{{ t("Cancel") }}</a>
+    </div>
+  </form>
+</div>
+
+<script>
+function printLabelPreview() {
+  document.body.classList.add("printing-label");
+  window.print();
+  setTimeout(function () { document.body.classList.remove("printing-label"); }, 500);
+}
+(function () {
+  var isNew = {{ 'false' if asset else 'true' }};
+  var nextTags = {{ next_tags | tojson }};
+  var cat = document.getElementById("f-cat");
+  var tag = document.getElementById("f-tag");
+  var qrImg = document.getElementById("qr-live");
+  var lblTag = document.getElementById("lbl-tag");
+  var lblBranch = document.getElementById("lbl-branch");
+  var lblLoc = document.getElementById("lbl-loc");
+  var lblSerial = document.getElementById("lbl-serial");
+  var branch = document.getElementById("f-branch");
+  var place = document.getElementById("f-place");
+  var serial = document.getElementById("f-serial");
+  var userEdited = false;
+
+  function showQR(value) {
+    if (!value) { qrImg.removeAttribute("src"); return; }
+    qrImg.src = "{{ url_for('assets.qr_preview') }}?data=" + encodeURIComponent(value);
+  }
+  function update() {
+    if (isNew && cat) {
+      var id = nextTags[cat.value];
+      if (id && !userEdited) { tag.value = id; }
+    }
+    var shown = tag.value || "";
+    lblTag.textContent = shown || "—";
+    showQR(shown);
+    if (branch) lblBranch.textContent = branch.value || "—";
+    if (place) lblLoc.textContent = place.value || "—";
+    if (serial) lblSerial.textContent = serial.value || "—";
+  }
+  if (cat) cat.addEventListener("change", update);
+  tag.addEventListener("input", function () { userEdited = true; update(); });
+  [branch, place, serial].forEach(function (el) {
+    if (el) el.addEventListener("input", update);
+    if (el && el.tagName === "SELECT") el.addEventListener("change", update);
+  });
+  update();
+})();
+</script>
+{% endblock %}

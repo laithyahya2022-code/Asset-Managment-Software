@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}{{ t("Notifications") }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ t("Notifications") }}</h1>
+  <form class="inline no-print" method="post" action="{{ url_for('main.notifications_read') }}">
+    <button class="btn secondary" type="submit">Mark all read</button>
+  </form>
+</div>
+{% if items %}
+<div class="card">
+  <ul class="alert-list">
+    {% for n in items %}
+    <li style="{{ 'opacity:0.55' if n.read }}">
+      <span class="badge b-{{ n.kind | lower }}">{{ n.kind }}</span>
+      {% if n.link %}<a href="{{ n.link }}">{{ n.message }}</a>{% else %}{{ n.message }}{% endif %}
+      <span class="muted">{{ n.created_at.strftime("%Y-%m-%d %H:%M") }}</span>
+      {% if not n.read %}
+      <form class="inline" method="post" action="{{ url_for('main.notifications_read') }}">
+        <input type="hidden" name="id" value="{{ n.id }}">
+        <button class="btn secondary sm" type="submit">Read</button>
+      </form>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+{% else %}<p class="empty">No notifications.</p>{% endif %}
+{% endblock %}

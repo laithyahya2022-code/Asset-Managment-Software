@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Roles & permissions{% endblock %}
+{% block content %}
+<div class="page-head"><h1>Roles & permissions</h1></div>
+<div class="card">
+  <p class="muted">Tick which permissions each role has. The <strong>admin</strong> role always has every permission.</p>
+  <form method="post">
+    <div class="table-wrap"><table>
+      <tr><th>Permission</th>{% for r in roles %}<th>{{ r }}</th>{% endfor %}</tr>
+      {% for p in permissions %}
+      <tr>
+        <td><code>{{ p }}</code></td>
+        {% for r in roles %}
+        <td>
+          <input type="checkbox" name="perm_{{ r }}" value="{{ p }}"
+                 {{ 'checked disabled' if r == 'admin' else ('checked' if p in matrix[r]) }}>
+        </td>
+        {% endfor %}
+      </tr>
+      {% endfor %}
+    </table></div>
+    <div class="form-actions">
+      <button class="btn" type="submit">Save permissions</button>
+      <a class="btn secondary" href="{{ url_for('admin.users') }}">{{ t("Cancel") }}</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

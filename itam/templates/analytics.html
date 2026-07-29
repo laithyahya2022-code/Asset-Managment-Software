@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}{{ t("Analytics") }}{% endblock %}
+{% block content %}
+<div class="page-head"><h1>{{ t("Analytics") }} & executive insights</h1></div>
+
+<div class="kpi-grid">
+  <div class="kpi"><span class="tile blue">%</span>
+    <div><span class="k-label">Asset utilization</span><span class="k-value">{{ utilization }}%</span>
+    <span class="k-sub">of active assets checked out</span></div></div>
+</div>
+
+<div class="card"><p class="eyebrow">Assets added per month (last 12 months)</p>{{ added_chart }}</div>
+<div class="card"><p class="eyebrow">Purchase spend per month ($)</p>{{ spend_chart }}</div>
+<div class="card"><p class="eyebrow">Maintenance cost per month ($)</p>{{ mnt_chart }}</div>
+
+<div class="card">
+  <p class="eyebrow">Cost analysis by department</p>
+  <div class="table-wrap"><table>
+    <tr><th>{{ t("Department") }}</th><th>{{ t("Assets") }}</th><th>Purchase cost</th><th>Current value</th></tr>
+    {% for name, d in dept_rows %}
+    <tr><td>{{ name }}</td><td>{{ d.count }}</td>
+        <td>${{ "%.2f" | format(d.cost) }}</td><td>${{ "%.2f" | format(d.value) }}</td></tr>
+    {% else %}
+    <tr><td colspan="4" class="empty">No data.</td></tr>
+    {% endfor %}
+  </table></div>
+</div>
+{% endblock %}

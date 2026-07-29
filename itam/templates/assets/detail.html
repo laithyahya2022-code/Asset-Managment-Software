@@ -1,0 +1,236 @@
+{% extends "base.html" %}
+{% from "_macros.html" import status_badge %}
+{% block title %}{{ asset.tag }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ asset.tag }} — {{ asset.name }}</h1>
+  <div class="actions-row no-print">
+    {% if has_perm("assets.manage") %}
+    <a class="btn secondary" href="{{ url_for('assets.edit', asset_id=asset.id) }}">{{ t("Edit") }}</a>
+    <a class="btn secondary" href="{{ url_for('assets.new', clone=asset.id) }}">Clone</a>
+    <a class="btn secondary" href="{{ url_for('ops.maintenance_new', asset=asset.id) }}">+ {{ t("Maintenance") }}</a>
+    <form class="inline" method="post" action="{{ url_for('assets.delete', asset_id=asset.id) }}">
+      <button class="btn danger" type="submit" data-confirm="Delete this asset and all of its history?">{{ t("Delete") }}</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+
+<div class="two-col">
+  <div>
+    <div class="card">
+      <p class="eyebrow">Details</p>
+      <dl class="props">
+        <dt>{{ t("Status") }}</dt><dd>{{ status_badge(asset.status) }}</dd>
+        <dt>Condition</dt><dd>{{ asset.condition }}</dd>
+        <dt>{{ t("Category") }}</dt><dd>{{ asset.category.name if asset.category else "—" }}</dd>
+        <dt>Type</dt><dd>{{ asset.asset_type or "—" }}</dd>
+        <dt>Serial number</dt><dd>{{ asset.serial or "—" }}</dd>
+        <dt>Manufacturer</dt><dd>{{ asset.manufacturer or "—" }}</dd>
+        <dt>Model</dt><dd>{{ asset.model or "—" }}</dd>
+        {% if asset.os_name %}<dt>Operating system</dt><dd>{{ asset.os_name }}{{ " " ~ asset.os_version if asset.os_version }}</dd>{% endif %}
+        {% if asset.cpu %}<dt>CPU</dt><dd>{{ asset.cpu }}</dd>{% endif %}
+        {% if asset.ram %}<dt>RAM</dt><dd>{{ asset.ram }}</dd>{% endif %}
+        {% if asset.storage %}<dt>Storage</dt><dd>{{ asset.storage }}</dd>{% endif %}
+        {% if asset.gpu %}<dt>Graphics card</dt><dd>{{ asset.gpu }}</dd>{% endif %}
+        {% if asset.hostname %}<dt>Hostname</dt><dd>{{ asset.hostname }}</dd>{% endif %}
+        {% if asset.mac_address %}<dt>MAC address</dt><dd style="font-family:ui-monospace,monospace">{{ asset.mac_address }}</dd>{% endif %}
+        {% if asset.ip_address %}<dt>IP address</dt><dd style="font-family:ui-monospace,monospace">{{ asset.ip_address }}</dd>{% endif %}
+        {% if asset.invoice_number %}<dt>Invoice number</dt><dd>{{ asset.invoice_number }}</dd>{% endif %}
+        {% if asset.parent %}<dt>Part of</dt><dd><a href="{{ url_for('assets.detail', asset_id=asset.parent_id) }}">{{ asset.parent.tag }} — {{ asset.parent.name }}</a></dd>{% endif %}
+        {% if last_check %}<dt>Last inventory</dt><dd>{{ last_check.checked_at.strftime("%Y-%m-%d") }} — {{ last_check.status }}</dd>{% endif %}
+        <dt>Branch</dt><dd>{{ asset.branch or "—" }}</dd>
+        <dt>Building</dt><dd>{{ asset.building or "—" }}</dd>
+        <dt>Floor</dt><dd>{{ asset.floor or "—" }}</dd>
+        <dt>{{ t("Location") }}</dt><dd>{{ asset.location_name or "—" }}</dd>
+        <dt>Vendor</dt><dd>{% if asset.vendor %}<a href="{{ url_for('org.vendor_detail', vendor_id=asset.vendor_id) }}">{{ asset.vendor.name }}</a>{% else %}—{% endif %}</dd>
+        <dt>Purchase date</dt><dd>{{ asset.purchase_date or "—" }}</dd>
+        <dt>Purchase cost</dt><dd>{{ "$%.2f" | format(asset.purchase_cost) if asset.purchase_cost else "—" }}</dd>
+        <dt>Current value</dt><dd>{{ "$%.2f" | format(asset.current_value) if asset.current_value is not none else "—" }}
+          <span class="muted">(straight-line over {{ asset.depreciation_years or 5 }} yrs)</span></dd>
+        <dt>Warranty expiry</dt>
+        <dd>{% if asset.warranty_expiry %}{{ asset.warranty_expiry }}{% if asset.warranty_expired %} <span class="red">(expired)</span>{% endif %}{% else %}—{% endif %}</dd>
+        {% for name, value in asset.custom.items() %}
+        <dt>{{ name }}</dt><dd>{{ value }}</dd>
+        {% endfor %}
+        <dt>Notes</dt><dd>{{ asset.notes or "—" }}</dd>
+        <dt>Updated by</dt><dd>{{ asset.updated_by or "—" }}</dd>
+        <dt>Added</dt><dd>{{ asset.created_at.strftime("%Y-%m-%d %H:%M") }}</dd>
+      </dl>
+    </div>
+
+    <div class="card">
+      <p class="eyebrow">Assignment</p>
+      {% set cur = asset.current_assignment %}
+      {% if cur %}
+        <p>{{ t("Checked Out") }} → <a href="{{ url_for('org.employee_detail', emp_id=cur.employee_id) }}">{{ cur.employee.name }}</a>
+          since {{ cur.assigned_at.strftime("%Y-%m-%d") }}
+          {% if cur.due_at %} · due {{ cur.due_at }}{% if cur.overdue %} <span class="red">({{ t("Overdue") }})</span>{% endif %}{% endif %}</p>
+        {% if has_perm("checkout.manage") %}
+        <form method="post" action="{{ url_for('assets.checkin', asset_id=asset.id) }}">
+          <div class="form-grid">
+            <div><label for="ci-cond">Condition after return</label>
+              <select id="ci-cond" name="return_condition">
+                <option value="">Unchanged ({{ asset.condition }})</option>
+                {% for c in conditions %}<option>{{ c }}</option>{% endfor %}
+              </select></div>
+            <div><label for="ci-notes">Inspection / damage notes</label>
+              <input id="ci-notes" name="return_notes" placeholder="Optional"></div>
+          </div>
+          <div class="form-actions"><button class="btn" type="submit">{{ t("Check In") }}</button></div>
+        </form>
+        {% endif %}
+      {% elif asset.status in ("Retired", "Disposed", "Lost", "Missing") %}
+        <p class="empty">This asset is {{ asset.status | lower }} and cannot be checked out.</p>
+      {% elif has_perm("checkout.manage") and employees %}
+        <form method="post" action="{{ url_for('assets.checkout', asset_id=asset.id) }}">
+          <div class="form-grid">
+            <div><label for="co-emp">{{ t("Employee") }}</label>
+              <select id="co-emp" name="employee_id" required>
+                {% for e in employees %}<option value="{{ e.id }}">{{ e.name }}{{ " (" ~ e.department.name ~ ")" if e.department }}</option>{% endfor %}
+              </select></div>
+            <div><label for="co-due">Due date</label>
+              <input id="co-due" name="due_at" type="date" value="{{ default_due }}"></div>
+            <div><label for="co-notes">Notes</label>
+              <input id="co-notes" name="notes" placeholder="Optional"></div>
+          </div>
+          <div class="form-actions"><button class="btn" type="submit">{{ t("Check Out") }}</button></div>
+        </form>
+      {% else %}
+        <p class="empty">No employees available for checkout.</p>
+      {% endif %}
+    </div>
+
+    {% if has_perm("checkout.manage") %}
+    <div class="card no-print">
+      <p class="eyebrow">Transfer & Reservation</p>
+      <form method="post" action="{{ url_for('assets.transfer', asset_id=asset.id) }}" class="filters">
+        <select name="location_id" required>
+          <option value="">Transfer to location…</option>
+          {% for l in locations %}<option value="{{ l.id }}" {{ 'disabled' if asset.location_id == l.id }}>{{ l.path }}</option>{% endfor %}
+        </select>
+        <input name="notes" placeholder="Notes (optional)" style="max-width:200px">
+        <button class="btn secondary" type="submit">Transfer</button>
+      </form>
+      <form method="post" action="{{ url_for('assets.reserve', asset_id=asset.id) }}" class="filters" style="margin-bottom:0">
+        <select name="employee_id" required>
+          <option value="">Reserve for…</option>
+          {% for e in employees %}<option value="{{ e.id }}">{{ e.name }}</option>{% endfor %}
+        </select>
+        <input name="start_date" type="date" required aria-label="From">
+        <input name="end_date" type="date" required aria-label="To">
+        <button class="btn secondary" type="submit">Reserve</button>
+      </form>
+    </div>
+    {% endif %}
+  </div>
+
+  <div>
+    <div class="card" style="text-align:center">
+      <p class="eyebrow">QR & Barcode</p>
+      <img src="{{ url_for('assets.qr', asset_id=asset.id) }}" alt="QR code for {{ asset.tag }}" width="150" height="150">
+      <img src="{{ url_for('assets.barcode', asset_id=asset.id) }}" alt="Barcode for {{ asset.tag }}" style="max-width:100%">
+      <div class="actions-row no-print" style="justify-content:center">
+        <a class="btn sm" href="{{ url_for('assets.label', asset_id=asset.id) }}" target="_blank" rel="noopener">{{ t("Print") }} label (6×3)</a>
+      </div>
+    </div>
+
+    <div class="card">
+      <p class="eyebrow">Files & Images</p>
+      {% if asset.files %}
+      <ul class="feed">
+        {% for f in asset.files %}
+        <li>
+          <a href="{{ url_for('assets.get_file', file_id=f.id) }}" target="_blank" rel="noopener">{{ f.orig_name }}</a>
+          <span class="chip">{{ f.kind }}</span>
+          <a class="muted" href="{{ url_for('assets.get_file', file_id=f.id, dl=1) }}">download</a>
+          {% if has_perm("assets.manage") %}
+          <form class="inline" method="post" action="{{ url_for('assets.delete_file', file_id=f.id) }}">
+            <button class="btn danger sm" type="submit" data-confirm="Delete this file?">×</button>
+          </form>
+          {% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}<p class="empty">No files yet.</p>{% endif %}
+      {% if has_perm("assets.manage") %}
+      <form method="post" action="{{ url_for('assets.upload_file', asset_id=asset.id) }}"
+            enctype="multipart/form-data" class="filters no-print" style="margin:0.8rem 0 0">
+        <input type="file" name="file" required style="max-width:220px">
+        <select name="kind" style="width:auto">
+          <option value="image">Image</option><option value="invoice">Invoice</option>
+          <option value="warranty">Warranty</option><option value="manual">Manual</option>
+          <option value="document" selected>Document</option>
+        </select>
+        <button class="btn secondary sm" type="submit">Upload</button>
+      </form>
+      {% endif %}
+    </div>
+
+    <div class="card">
+      <p class="eyebrow">{{ t("Maintenance") }}</p>
+      {% if asset.maintenance %}
+      <ul class="feed">
+        {% for m in asset.maintenance[:6] %}
+        <li><span class="chip">{{ m.kind }}</span> {{ m.title }}
+          <span class="muted">{{ m.status }}{{ " · " ~ m.scheduled_for if m.scheduled_for }}</span></li>
+        {% endfor %}
+      </ul>
+      {% else %}<p class="empty">No maintenance history.</p>{% endif %}
+    </div>
+
+    {% if asset.components %}
+    <div class="card">
+      <p class="eyebrow">Attached components</p>
+      <ul class="feed">
+        {% for c in asset.components %}
+        <li><a href="{{ url_for('assets.detail', asset_id=c.id) }}">{{ c.tag }}</a> {{ c.name }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+
+    <div class="card">
+      <p class="eyebrow">Timeline</p>
+      {% if timeline %}
+      <ul class="feed">
+        {% for log in timeline %}
+        <li><span class="chip">{{ log.action | replace("_", " ") }}</span>
+          <span class="muted">{{ log.user.name if log.user else "system" }} · {{ log.created_at.strftime("%Y-%m-%d %H:%M") }}</span></li>
+        {% endfor %}
+      </ul>
+      {% else %}<p class="empty">No recorded events.</p>{% endif %}
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <p class="eyebrow">Assignment History</p>
+  {% if asset.assignments %}
+  <div class="table-wrap"><table>
+    <tr><th>{{ t("Employee") }}</th><th>{{ t("Check Out") }}</th><th>Due</th><th>Returned</th><th>Notes</th></tr>
+    {% for x in asset.assignments %}
+    <tr>
+      <td><a href="{{ url_for('org.employee_detail', emp_id=x.employee_id) }}">{{ x.employee.name }}</a></td>
+      <td>{{ x.assigned_at.strftime("%Y-%m-%d %H:%M") }}</td>
+      <td>{{ x.due_at or "—" }}</td>
+      <td>{{ x.returned_at.strftime("%Y-%m-%d %H:%M") if x.returned_at else "—" }}</td>
+      <td>{{ x.notes or "—" }}</td>
+    </tr>
+    {% endfor %}
+  </table></div>
+  {% else %}<p class="empty">Never assigned.</p>{% endif %}
+
+  {% if asset.transfers %}
+  <p class="eyebrow" style="margin-top:1rem">Transfer History</p>
+  <div class="table-wrap"><table>
+    <tr><th>From</th><th>To</th><th>When</th><th>Notes</th></tr>
+    {% for tr in asset.transfers %}
+    <tr><td>{{ tr.from_location.path if tr.from_location else "—" }}</td>
+        <td>{{ tr.to_location.path if tr.to_location else "—" }}</td>
+        <td>{{ tr.at.strftime("%Y-%m-%d %H:%M") }}</td><td>{{ tr.notes or "—" }}</td></tr>
+    {% endfor %}
+  </table></div>
+  {% endif %}
+</div>
+{% endblock %}

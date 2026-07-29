@@ -1,0 +1,57 @@
+name: Build Windows executable
+
+on:
+  push:
+    branches: [main, "claude/**"]
+    paths:
+      - "itam/**"
+      - "run_server.py"
+      - "requirements.txt"
+      - ".github/workflows/build-exe.yml"
+  workflow_dispatch: {}
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build ITAM.exe
+        run: >
+          pyinstaller --onefile --name ITAM --noconsole
+          --icon itam/static/app.ico
+          --add-data "itam/templates;itam/templates"
+          --add-data "itam/static;itam/static"
+          --collect-submodules sqlalchemy.dialects.sqlite
+          --collect-submodules webview
+          --hidden-import waitress
+          --hidden-import qrcode.image.svg
+          --hidden-import barcode.writer
+          run_server.py
+
+      - name: Smoke-test the executable
+        shell: pwsh
+        run: |
+          $env:ITAM_NO_BROWSER = "1"
+          $env:PORT = "8099"
+          $proc = Start-Process -FilePath "dist\ITAM.exe" -PassThru
+          Start-Sleep -Seconds 6
+          $resp = Invoke-WebRequest -Uri "http://127.0.0.1:8099/login" -UseBasicParsing
+          if ($resp.StatusCode -ne 200) { throw "Executable did not serve the login page" }
+          Stop-Process -Id $proc.Id -Force
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ITAM-windows-exe
+          path: dist/ITAM.exe
+          retention-days: 90

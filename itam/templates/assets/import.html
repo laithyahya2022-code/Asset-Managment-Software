@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Import assets{% endblock %}
+{% block content %}
+<div class="page-head"><h1>Import assets from Excel or CSV</h1></div>
+
+{% if preview is none %}
+<div class="card">
+  <p>Upload an <strong>Excel file (.xlsx)</strong> or a CSV file. The first row must be
+     column headers. Recognized columns:</p>
+  <p><code>{{ cols | join(", ") }}</code></p>
+  <p class="muted">Column names are matched flexibly (e.g. <em>Serial No.</em>, <em>Asset Status</em>,
+     <em>Assigned to</em>, <em>Dept</em> are all understood) and the order doesn't matter. Only
+     <strong>Name</strong> is required — a unique <strong>Asset ID is generated automatically</strong>
+     when your file has no tag or reuses the same tag. Dates accept both <code>YYYY-MM-DD</code> and
+     <code>DD/MM/YYYY</code>. Missing categories and departments are created for you.</p>
+  <form method="post" enctype="multipart/form-data" class="filters">
+    <input type="file" name="file" accept=".xlsx,.xlsm,.csv,text/csv" required>
+    <button class="btn" type="submit">Upload & preview</button>
+  </form>
+</div>
+{% else %}
+<div class="card">
+  <p class="eyebrow">Import preview — {{ preview | length }} rows,
+     {{ preview | selectattr("_error") | list | length }} with problems</p>
+  {% if errors %}
+  <div class="flash flash-error"><ul style="margin:0;padding-inline-start:1.2rem">
+    {% for e in errors[:15] %}<li>{{ e }}</li>{% endfor %}
+    {% if errors | length > 15 %}<li>… and {{ errors | length - 15 }} more</li>{% endif %}
+  </ul></div>
+  {% endif %}
+  <div class="table-wrap"><table>
+    <tr><th>#</th><th>tag</th><th>name</th><th>category</th><th>status</th><th>result</th></tr>
+    {% for r in preview[:50] %}
+    <tr>
+      <td>{{ r._line }}</td>
+      <td>{% if r._auto_tag %}<span class="muted">(auto)</span>{% else %}{{ r.tag }}{% endif %}</td>
+      <td>{{ r.name }}</td>
+      <td>{{ r.category }}</td><td>{{ r.status }}</td>
+      <td>{% if r._error %}<span class="red">{{ r._error }}</span>{% else %}<span style="color:var(--accent-dark)">ok</span>{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </table></div>
+  <form method="post" class="form-actions">
+    <input type="hidden" name="token" value="{{ token }}">
+    <button class="btn" type="submit">Import {{ preview | rejectattr("_error") | list | length }} valid rows</button>
+    <a class="btn secondary" href="{{ url_for('assets.import_') }}">Start over</a>
+  </form>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,17 @@
+{
+  "id": "/",
+  "name": "ITAM Enterprise — IT Asset Management",
+  "short_name": "ITAM",
+  "description": "Track IT assets, licenses, maintenance and inventory for the school.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0F1826",
+  "theme_color": "#0F1826",
+  "icons": [
+    { "src": "/static/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/static/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/static/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

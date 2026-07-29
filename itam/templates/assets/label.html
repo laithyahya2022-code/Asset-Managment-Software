@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Label {{ asset.tag }}</title>
+  <style>
+    /* 6 x 3 inch asset label */
+    @page { size: 6in 3in; margin: 0; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { background: #f4f5f7; font-family: -apple-system, BlinkMacSystemFont,
+      "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: #1d2530; }
+    .toolbar { text-align: center; padding: 16px; }
+    .btn { display: inline-block; padding: 10px 22px; border-radius: 8px; border: none;
+      background: #1e9e4e; color: #fff; font-size: 15px; font-weight: 700; cursor: pointer;
+      text-decoration: none; }
+    .btn.secondary { background: #fff; color: #1d2530; border: 1px solid #d1d5db; margin-left: 8px; }
+
+    .label {
+      width: 6in; height: 3in; margin: 0 auto; background: #fff;
+      border: 2px dashed #c9ced6; border-radius: 16px;
+      display: flex; align-items: center; gap: 0.28in; padding: 0.28in 0.36in;
+    }
+    .qr-col { flex-shrink: 0; text-align: center; }
+    .qr-col .box {
+      width: 2in; height: 2in; border: 1px solid #e4e7ec; border-radius: 10px;
+      padding: 0.08in; background: #fff;
+    }
+    .qr-col .box img, .qr-col .box svg { width: 100%; height: 100%; display: block; }
+    .qr-col .tag {
+      margin-top: 0.12in; font-size: 22px; font-weight: 600; letter-spacing: 0.01em;
+      font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
+    }
+    .info { flex: 1; min-width: 0; }
+    .org { font-size: 26px; font-weight: 800; letter-spacing: -0.01em; margin-bottom: 0.22in;
+      line-height: 1.15; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.22in 0.3in; }
+    .field .lbl { font-size: 15px; color: #6b7480; margin-bottom: 2px; }
+    .field .val { font-size: 21px; font-weight: 700; word-break: break-word; }
+    .field.full { grid-column: 1 / -1; }
+
+    @media print {
+      html, body { background: #fff; }
+      .toolbar { display: none; }
+      .label { border-color: #c9ced6; }
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <button class="btn" onclick="window.print()">Print label (6 × 3 in)</button>
+    <a class="btn secondary" href="{{ url_for('assets.detail', asset_id=asset.id) }}">Back to asset</a>
+  </div>
+
+  <div class="label">
+    <div class="qr-col">
+      <div class="box"><img src="{{ url_for('assets.qr', asset_id=asset.id) }}" alt="QR {{ asset.tag }}"></div>
+      <div class="tag">{{ asset.tag }}</div>
+    </div>
+    <div class="info">
+      <div class="org">{{ app_name }}</div>
+      <div class="grid">
+        <div class="field"><div class="lbl">Branch</div><div class="val">{{ asset.branch or "—" }}</div></div>
+        <div class="field"><div class="lbl">Location</div><div class="val">{{ asset.location_name or "—" }}</div></div>
+        <div class="field full"><div class="lbl">Serial</div><div class="val">{{ asset.serial or "—" }}</div></div>
+      </div>
+    </div>
+  </div>
+
+  {% if auto %}<script>window.addEventListener("load", function () { setTimeout(function () { window.print(); }, 250); });</script>{% endif %}
+</body>
+</html>

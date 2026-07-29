@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% from "_icons.html" import icon %}
+{% block title %}{{ t("Dashboard") }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ t("Dashboard") }}</h1>
+  <div class="actions-row no-print">
+    {% if has_perm("assets.manage") %}<a class="btn" href="{{ url_for('assets.new') }}">+ {{ t("Add Asset") }}</a>{% endif %}
+    <a class="btn secondary" href="{{ url_for('main.scanner') }}">{{ t("QR Scanner") }}</a>
+    {% if has_perm("reports.view") %}<a class="btn secondary" href="{{ url_for('reports.index') }}">{{ t("Reports") }}</a>{% endif %}
+  </div>
+</div>
+
+<div class="kpi-grid">
+  <a class="kpi" href="{{ url_for('assets.list_') }}">
+    <span class="tile green">{{ icon("asset") }}</span>
+    <div><span class="k-label">{{ t("Total Assets") }}</span><span class="k-value">{{ total }}</span>
+    <span class="k-sub">{{ added_month }} added this month</span></div>
+  </a>
+  <a class="kpi" href="{{ url_for('ops.checkouts') }}">
+    <span class="tile blue">{{ icon("checkout") }}</span>
+    <div><span class="k-label">{{ t("Checked Out") }}</span><span class="k-value">{{ counts.get("Checked Out", 0) }}</span>
+    <span class="k-sub {{ 'red' if overdue }}">{{ overdue }} {{ t("Overdue") | lower }}</span></div>
+  </a>
+  <a class="kpi" href="{{ url_for('ops.maintenance_list') }}">
+    <span class="tile orange">{{ icon("wrench") }}</span>
+    <div><span class="k-label">{{ t("Under Maintenance") }}</span><span class="k-value">{{ counts.get("Under Maintenance", 0) }}</span>
+    <span class="k-sub">{{ scheduled }} tasks scheduled</span></div>
+  </a>
+  <a class="kpi" href="{{ url_for('reports.show', name='warranty') }}">
+    <span class="tile red">{{ icon("alert") }}</span>
+    <div><span class="k-label">{{ t("Expiring Warranties") }}</span><span class="k-value">{{ expiring }}</span>
+    <span class="k-sub red">in the next 90 days</span></div>
+  </a>
+  <a class="kpi" href="{{ url_for('reports.show', name='financial') }}">
+    <span class="tile deepgreen">{{ icon("dollar") }}</span>
+    <div><span class="k-label">{{ t("Total Asset Value") }}</span><span class="k-value">{{ value_short }}</span>
+    <span class="k-sub">{{ counts.get("Available", 0) }} assets available</span></div>
+  </a>
+  <a class="kpi" href="{{ url_for('ops.licenses') }}">
+    <span class="tile purple">{{ icon("license") }}</span>
+    <div><span class="k-label">{{ t("Active Licenses") }}</span><span class="k-value">{{ active_lic }}</span>
+    <span class="k-sub">{{ lic_soon }} expiring soon</span></div>
+  </a>
+  <a class="kpi" href="{{ url_for('assets.list_', status='Available') }}">
+    <span class="tile teal">{{ icon("check") }}</span>
+    <div><span class="k-label">{{ t("Available Assets") }}</span><span class="k-value">{{ counts.get("Available", 0) }}</span>
+    <span class="k-sub">Ready for checkout</span></div>
+  </a>
+  <a class="kpi" href="{{ url_for('assets.list_', status='Lost') }}">
+    <span class="tile red">{{ icon("alert") }}</span>
+    <div><span class="k-label">{{ t("Lost") }}</span><span class="k-value">{{ counts.get("Lost", 0) + counts.get("Missing", 0) }}</span>
+    <span class="k-sub">Lost or missing assets</span></div>
+  </a>
+  <a class="kpi" href="{{ url_for('assets.list_', status='Damaged') }}">
+    <span class="tile orange">{{ icon("wrench") }}</span>
+    <div><span class="k-label">{{ t("Damaged") }}</span><span class="k-value">{{ counts.get("Damaged", 0) }}</span>
+    <span class="k-sub">Need repair or disposal</span></div>
+  </a>
+  <a class="kpi" href="{{ url_for('assets.list_', status='Retired') }}">
+    <span class="tile grey">{{ icon("box") }}</span>
+    <div><span class="k-label">{{ t("Retired / Disposed") }}</span><span class="k-value">{{ counts.get("Retired", 0) + counts.get("Disposed", 0) }}</span>
+    <span class="k-sub">End of life assets</span></div>
+  </a>
+</div>
+
+<div class="two-col">
+  <div class="card">
+    <p class="eyebrow">{{ t("Assets by Category") }}</p>
+    {{ cat_chart }}
+  </div>
+  <div class="card">
+    <p class="eyebrow">{{ t("Assets by Status") }}</p>
+    {{ donut }}
+  </div>
+</div>
+
+<div class="two-col">
+  <div class="card">
+    <p class="eyebrow">Assets by Department</p>
+    {{ dept_chart }}
+  </div>
+  <div class="card">
+    <p class="eyebrow">Assets due for return</p>
+    {% if due_soon %}
+    <div class="table-wrap"><table>
+      <tr><th>Asset</th><th>{{ t("Employee") }}</th><th>Due</th></tr>
+      {% for x in due_soon %}
+      <tr>
+        <td><a href="{{ url_for('assets.detail', asset_id=x.asset_id) }}">{{ x.asset.tag }}</a></td>
+        <td>{{ x.employee.name }}</td>
+        <td>{{ x.due_at }}{% if x.due_at < today %} <span class="red">{{ t("Overdue") }}</span>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </table></div>
+    {% else %}<p class="empty">Nothing due in the next 7 days.</p>{% endif %}
+  </div>
+</div>
+
+{% if alerts %}
+<div class="card">
+  <p class="eyebrow">{{ t("Notifications") }}</p>
+  <ul class="alert-list">
+    {% for n in alerts %}
+    <li><span class="badge b-{{ n.kind | lower }}">{{ n.kind }}</span>
+      {% if n.link %}<a href="{{ n.link }}">{{ n.message }}</a>{% else %}{{ n.message }}{% endif %}
+      <span class="muted">{{ n.created_at.strftime("%Y-%m-%d") }}</span></li>
+    {% endfor %}
+  </ul>
+  <a class="muted" href="{{ url_for('main.notifications') }}">View all →</a>
+</div>
+{% endif %}
+
+<div class="card">
+  <p class="eyebrow">{{ t("Recent Activity") }}</p>
+  {% if recent %}
+  <ul class="feed">
+    {% for log in recent %}
+    <li>
+      <span class="chip">{{ log.action | replace("_", " ") }}</span>
+      <span>{{ log.details or (log.entity_type ~ " #" ~ log.entity_id if log.entity_type else "") }}</span>
+      <span class="muted">{{ log.user.name if log.user else "system" }} · {{ log.created_at.strftime("%Y-%m-%d %H:%M") }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}<p class="empty">Nothing yet.</p>{% endif %}
+</div>
+{% endblock %}

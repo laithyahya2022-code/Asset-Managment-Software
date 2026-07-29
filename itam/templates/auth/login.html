@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}{{ t("Log in") }}{% endblock %}
+{% block auth_content %}
+<div class="auth-card">
+  <img class="auth-logo-img" src="{{ url_for('static', filename='icon.svg') }}" alt="" width="72" height="72">
+  <h1>{{ app_name }}</h1>
+  <p class="muted">{{ t("Log in") }}</p>
+  <form method="post">
+    <label for="username">Username</label>
+    <input id="username" name="username" required autofocus autocomplete="username">
+    <label for="password">Password</label>
+    <input id="password" name="password" type="password" required autocomplete="current-password">
+    <button class="btn wide" type="submit">{{ t("Log in") }}</button>
+  </form>
+  <p class="auth-links"><a href="{{ url_for('auth.forgot') }}">Forgot password?</a></p>
+</div>
+{% endblock %}

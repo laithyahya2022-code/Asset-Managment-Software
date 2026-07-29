@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% from "_macros.html" import status_badge %}
+{% block title %}{{ emp.name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ emp.name }}</h1>
+  {% if has_perm("people.manage") %}
+  <div class="actions-row no-print">
+    <a class="btn secondary" href="{{ url_for('org.employee_form', emp_id=emp.id) }}">{{ t("Edit") }}</a>
+    <form class="inline" method="post" action="{{ url_for('org.employee_delete', emp_id=emp.id) }}">
+      <button class="btn danger" type="submit" data-confirm="Delete this employee and their history?">{{ t("Delete") }}</button>
+    </form>
+  </div>
+  {% endif %}
+</div>
+
+<div class="card">
+  <dl class="props">
+    <dt>Email</dt><dd>{{ emp.email }}</dd>
+    <dt>Phone</dt><dd>{{ emp.phone or "—" }}</dd>
+    <dt>Title</dt><dd>{{ emp.title or "—" }}</dd>
+    <dt>{{ t("Department") }}</dt><dd>{{ emp.department.name if emp.department else "—" }}</dd>
+    <dt>Active</dt><dd>{{ "Yes" if emp.active else "No" }}</dd>
+  </dl>
+</div>
+
+<div class="card">
+  <p class="eyebrow">Currently checked out ({{ emp.current_assets | length }})</p>
+  {% if emp.current_assets %}
+  <div class="table-wrap"><table>
+    <tr><th>Tag</th><th>{{ t("Name") }}</th><th>{{ t("Status") }}</th></tr>
+    {% for a in emp.current_assets %}
+    <tr><td><a href="{{ url_for('assets.detail', asset_id=a.id) }}">{{ a.tag }}</a></td>
+        <td>{{ a.name }}</td><td>{{ status_badge(a.status) }}</td></tr>
+    {% endfor %}
+  </table></div>
+  {% else %}<p class="empty">Nothing checked out.</p>{% endif %}
+</div>
+
+<div class="card">
+  <p class="eyebrow">Assignment history</p>
+  {% if emp.assignments %}
+  <div class="table-wrap"><table>
+    <tr><th>Asset</th><th>Checked out</th><th>Returned</th><th>Notes</th></tr>
+    {% for x in emp.assignments | sort(attribute="assigned_at", reverse=true) %}
+    <tr>
+      <td><a href="{{ url_for('assets.detail', asset_id=x.asset_id) }}">{{ x.asset.tag }}</a></td>
+      <td>{{ x.assigned_at.strftime("%Y-%m-%d") }}</td>
+      <td>{{ x.returned_at.strftime("%Y-%m-%d") if x.returned_at else "—" }}</td>
+      <td>{{ x.notes or "—" }}</td>
+    </tr>
+    {% endfor %}
+  </table></div>
+  {% else %}<p class="empty">No history.</p>{% endif %}
+</div>
+{% endblock %}

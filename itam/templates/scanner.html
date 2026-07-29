@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}{{ t("QR Scanner") }}{% endblock %}
+{% block content %}
+<div class="page-head"><h1>{{ t("QR Scanner") }}</h1></div>
+<div class="two-col">
+  <div class="card">
+    <p class="eyebrow">Camera scan</p>
+    <p class="muted">Point the camera at an asset's QR code or barcode. Works on phones and laptops
+       with a camera (Chrome/Edge). If the camera can't start, use manual entry.</p>
+    <video id="scan-video" autoplay muted playsinline hidden></video>
+    <p id="scan-status" class="muted"></p>
+    <button class="btn" id="scan-start" type="button">Start camera</button>
+  </div>
+  <div class="card">
+    <p class="eyebrow">Manual entry</p>
+    <form method="get" action="{{ url_for('main.scan_go') }}">
+      <label for="code">Asset tag or serial number</label>
+      <input id="code" name="code" required placeholder="LT-0001" autofocus>
+      <div class="form-actions"><button class="btn" type="submit">Open asset</button></div>
+    </form>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}{{ t("Backups") }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ t("Backups") }} & recovery</h1>
+  {% if sqlite %}
+  <form class="inline no-print" method="post" action="{{ url_for('admin.backup_create') }}">
+    <button class="btn" type="submit">Create backup now</button>
+  </form>
+  {% endif %}
+</div>
+
+{% if not sqlite %}
+<div class="card"><p>This deployment uses PostgreSQL. Back up with
+  <code>pg_dump $DATABASE_URL > backup.sql</code> and restore with
+  <code>psql $DATABASE_URL < backup.sql</code> (see README).</p></div>
+{% endif %}
+
+<div class="card">
+  <p class="eyebrow">Stored backups</p>
+  {% if files %}
+  <div class="table-wrap"><table>
+    <tr><th>File</th><th>Size</th><th></th></tr>
+    {% for name, size in files %}
+    <tr>
+      <td>{{ name }}</td>
+      <td>{{ "%.1f" | format(size / 1024) }} KB</td>
+      <td class="no-print">
+        <a class="btn secondary sm" href="{{ url_for('admin.backup_download', name=name) }}">Download</a>
+        <form class="inline" method="post" action="{{ url_for('admin.backup_restore', name=name) }}">
+          <button class="btn secondary sm" type="submit"
+                  data-confirm="Restore the database from this backup? Current data will be replaced.">Restore</button>
+        </form>
+        <form class="inline" method="post" action="{{ url_for('admin.backup_delete', name=name) }}">
+          <button class="btn danger sm" type="submit" data-confirm="Delete this backup file?">{{ t("Delete") }}</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </table></div>
+  {% else %}<p class="empty">No backups yet.</p>{% endif %}
+  <p class="muted">Disaster recovery: keep a copy of the newest backup file on a different machine or drive.
+     Restoring replaces the live database with the backup contents.</p>
+</div>
+{% endblock %}

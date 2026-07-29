@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}{{ t("Departments") }}{% endblock %}
+{% block content %}
+<div class="page-head"><h1>{{ t("Departments") }}</h1></div>
+
+{% if has_perm("org.manage") %}
+<div class="card no-print">
+  <form method="post" class="filters" style="margin:0">
+    <input name="name" placeholder="Department name" required>
+    <input name="cost_center" placeholder="Cost center (e.g. CC-100)">
+    <button class="btn" type="submit">Add department</button>
+  </form>
+</div>
+{% endif %}
+
+{% if rows %}
+<div class="card table-wrap"><table>
+  <tr><th>{{ t("Name") }}</th><th>Cost center</th><th>{{ t("Employees") }}</th><th>{{ t("Assets") }}</th><th>Asset value</th><th></th></tr>
+  {% for d in rows %}
+  <tr>
+    <td>{{ d.name }}</td>
+    <td>{{ d.cost_center or "—" }}</td>
+    <td>{{ d.employees | length }}</td>
+    <td><a href="{{ url_for('assets.list_', department=d.id) }}">{{ d.assets | length }}</a></td>
+    <td>${{ "%.2f" | format(d.assets | map(attribute="purchase_cost") | select | map("float") | sum) }}</td>
+    <td class="no-print">
+      {% if has_perm("org.manage") and not d.assets and not d.employees %}
+      <form class="inline" method="post" action="{{ url_for('org.department_delete', dep_id=d.id) }}">
+        <button class="btn danger sm" type="submit">{{ t("Delete") }}</button>
+      </form>
+      {% endif %}
+    </td>
+  </tr>
+  {% endfor %}
+</table></div>
+{% else %}<p class="empty">No departments yet.</p>{% endif %}
+{% endblock %}

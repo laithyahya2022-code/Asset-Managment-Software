@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}{{ "Edit " + employee.name if employee else "New employee" }}{% endblock %}
+{% block content %}
+<h1>{{ "Edit employee" if employee else "New employee" }}</h1>
+<div class="card">
+  <form method="post">
+    <div class="form-grid">
+      <div>
+        <label for="name">Name *</label>
+        <input id="name" name="name" required value="{{ employee.name if employee else '' }}">
+      </div>
+      <div>
+        <label for="email">Email *</label>
+        <input id="email" name="email" type="email" required value="{{ employee.email if employee else '' }}">
+      </div>
+      <div>
+        <label for="department">Department</label>
+        <input id="department" name="department" value="{{ employee.department or '' if employee else '' }}">
+      </div>
+    </div>
+    <div class="form-actions">
+      <button class="btn" type="submit">{{ "Save changes" if employee else "Create employee" }}</button>
+      <a class="btn btn-secondary" href="{{ url_for('itam.employee_detail', employee_id=employee.id) if employee else url_for('itam.employee_list') }}">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

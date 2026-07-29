@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}{{ t("Lending") }}{% endblock %}
+{% block content %}
+<div class="page-head"><h1>{{ t("Lending") }}</h1></div>
+
+<div class="filters no-print">
+  {% for key, label in [("active", "Active"), ("overdue", "Overdue"), ("all", "All history")] %}
+  <a class="btn {{ 'secondary' if show != key }}" href="{{ url_for('ops.checkouts', show=key) }}">{{ label }}</a>
+  {% endfor %}
+</div>
+
+{% if rows %}
+<div class="card table-wrap"><table>
+  <tr><th>Asset</th><th>{{ t("Employee") }}</th><th>Checked out</th><th>Due</th><th>Returned</th><th></th></tr>
+  {% for x in rows %}
+  <tr>
+    <td><a href="{{ url_for('assets.detail', asset_id=x.asset_id) }}">{{ x.asset.tag }}</a> — {{ x.asset.name }}</td>
+    <td><a href="{{ url_for('org.employee_detail', emp_id=x.employee_id) }}">{{ x.employee.name }}</a></td>
+    <td>{{ x.assigned_at.strftime("%Y-%m-%d") }}</td>
+    <td>{{ x.due_at or "—" }}{% if x.overdue %} <span class="red">{{ t("Overdue") }}</span>{% endif %}</td>
+    <td>{{ x.returned_at.strftime("%Y-%m-%d") if x.returned_at else "—" }}</td>
+    <td>{% if not x.returned_at and has_perm("checkout.manage") %}
+      <form class="inline" method="post" action="{{ url_for('assets.checkin', asset_id=x.asset_id) }}">
+        <button class="btn secondary sm" type="submit">{{ t("Check In") }}</button>
+      </form>{% endif %}</td>
+  </tr>
+  {% endfor %}
+</table></div>
+{% else %}<p class="empty">No checkouts.</p>{% endif %}
+
+<div class="card">
+  <p class="eyebrow">Active reservations</p>
+  {% if reservations %}
+  <div class="table-wrap"><table>
+    <tr><th>Asset</th><th>{{ t("Employee") }}</th><th>From</th><th>To</th><th></th></tr>
+    {% for r in reservations %}
+    <tr>
+      <td><a href="{{ url_for('assets.detail', asset_id=r.asset_id) }}">{{ r.asset.tag }}</a></td>
+      <td>{{ r.employee.name }}</td><td>{{ r.start_date }}</td><td>{{ r.end_date }}</td>
+      <td>{% if has_perm("checkout.manage") %}
+        <form class="inline" method="post" action="{{ url_for('ops.reservation_cancel', res_id=r.id) }}">
+          <button class="btn secondary sm" type="submit">{{ t("Cancel") }}</button>
+        </form>{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </table></div>
+  {% else %}<p class="empty">No reservations. Reserve assets from the asset page.</p>{% endif %}
+</div>
+
+{% if has_perm("checkout.manage") %}
+<div class="two-col no-print">
+  <div class="card">
+    <p class="eyebrow">{{ t("Check Out") }} — lend an asset</p>
+    {% if available %}
+    <form method="post" action="{{ url_for('ops.lend') }}">
+      <label for="co-asset">Asset</label>
+      <select id="co-asset" name="asset_id" required>
+        {% for a in available %}<option value="{{ a.id }}">{{ a.tag }} — {{ a.name }}</option>{% endfor %}
+      </select>
+      <label for="co-emp">{{ t("Employee") }}</label>
+      <select id="co-emp" name="employee_id" required>
+        {% for e in employees %}<option value="{{ e.id }}">{{ e.name }}{{ " (" ~ e.emp_code ~ ")" if e.emp_code }}</option>{% endfor %}
+      </select>
+      <label for="co-due">Due date</label>
+      <input id="co-due" name="due_at" type="date">
+      <div class="form-actions"><button class="btn" type="submit">{{ t("Check Out") }}</button></div>
+    </form>
+    {% else %}<p class="empty">No available assets to lend right now.</p>{% endif %}
+  </div>
+  <div class="card">
+    <p class="eyebrow">{{ t("Check In") }} — return an asset</p>
+    {% if out_assets %}
+    <form method="post" action="{{ url_for('ops.return_asset') }}">
+      <label for="ci-asset">Asset currently out</label>
+      <select id="ci-asset" name="asset_id" required>
+        {% for a in out_assets %}<option value="{{ a.id }}">{{ a.tag }} — {{ a.name }}{{ " (" ~ a.current_assignment.employee.name ~ ")" if a.current_assignment }}</option>{% endfor %}
+      </select>
+      <div class="form-actions"><button class="btn secondary" type="submit">{{ t("Check In") }}</button></div>
+    </form>
+    {% else %}<p class="empty">Nothing is currently checked out.</p>{% endif %}
+  </div>
+</div>
+{% endif %}
+{% endblock %}

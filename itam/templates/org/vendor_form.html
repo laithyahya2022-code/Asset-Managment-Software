@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}{{ "Edit " ~ vendor.name if vendor else "New vendor" }}{% endblock %}
+{% block content %}
+<div class="page-head"><h1>{{ "Edit vendor" if vendor else "New vendor" }}</h1></div>
+<div class="card">
+  <form method="post">
+    <div class="form-grid">
+      <div><label for="v-name">{{ t("Name") }} *</label>
+        <input id="v-name" name="name" required value="{{ vendor.name if vendor else '' }}"></div>
+      <div><label for="v-contact">Contact person</label>
+        <input id="v-contact" name="contact_name" value="{{ vendor.contact_name or '' if vendor else '' }}"></div>
+      <div><label for="v-email">Email</label>
+        <input id="v-email" name="email" type="email" value="{{ vendor.email or '' if vendor else '' }}"></div>
+      <div><label for="v-phone">Phone</label>
+        <input id="v-phone" name="phone" value="{{ vendor.phone or '' if vendor else '' }}"></div>
+      <div><label for="v-web">Website</label>
+        <input id="v-web" name="website" value="{{ vendor.website or '' if vendor else '' }}"></div>
+      <div class="full"><label for="v-notes">Notes</label>
+        <textarea id="v-notes" name="notes" rows="2">{{ vendor.notes or '' if vendor else '' }}</textarea></div>
+    </div>
+    <div class="form-actions">
+      <button class="btn" type="submit">{{ t("Save") }}</button>
+      <a class="btn secondary" href="{{ url_for('org.vendors') }}">{{ t("Cancel") }}</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,13 @@
+Flask>=3.0
+Flask-SQLAlchemy>=3.1
+qrcode>=7.4
+python-barcode>=0.15
+gunicorn>=21.2
+pytest>=8.0
+# Uncomment for PostgreSQL deployments:
+# psycopg2-binary>=2.9
+waitress>=3.0
+openpyxl>=3.1
+# Desktop app window for the packaged Windows build (falls back to a browser).
+# Only needed/installed on Windows; ignored elsewhere.
+pywebview>=5.0 ; sys_platform == "win32"

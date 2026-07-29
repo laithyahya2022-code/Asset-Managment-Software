@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% from "_macros.html" import status_badge %}
+{% block title %}{{ t("Search") }}{% endblock %}
+{% block content %}
+<div class="page-head"><h1>{{ t("Search") }}{% if q %}: “{{ q }}”{% endif %}</h1></div>
+
+{% if not q %}
+<p class="empty">Type in the search box above to search assets, employees, licenses, vendors, and purchase orders.</p>
+{% else %}
+{% set total = results.values() | map("length") | sum %}
+{% if total == 0 %}<p class="empty">No results for “{{ q }}”.</p>{% endif %}
+
+{% if results.assets %}
+<div class="card">
+  <p class="eyebrow">{{ t("Assets") }} ({{ results.assets | length }})</p>
+  <div class="table-wrap"><table>
+    {% for a in results.assets %}
+    <tr><td><a href="{{ url_for('assets.detail', asset_id=a.id) }}">{{ a.tag }}</a></td>
+        <td>{{ a.name }}</td><td>{{ status_badge(a.status) }}</td>
+        <td>{{ a.serial or "" }}</td></tr>
+    {% endfor %}
+  </table></div>
+</div>
+{% endif %}
+
+{% if results.employees %}
+<div class="card">
+  <p class="eyebrow">{{ t("Employees") }} ({{ results.employees | length }})</p>
+  <div class="table-wrap"><table>
+    {% for e in results.employees %}
+    <tr><td><a href="{{ url_for('org.employee_detail', emp_id=e.id) }}">{{ e.name }}</a></td>
+        <td>{{ e.email }}</td><td>{{ e.department.name if e.department else "" }}</td></tr>
+    {% endfor %}
+  </table></div>
+</div>
+{% endif %}
+
+{% if results.licenses %}
+<div class="card">
+  <p class="eyebrow">{{ t("Licenses") }} ({{ results.licenses | length }})</p>
+  <div class="table-wrap"><table>
+    {% for l in results.licenses %}
+    <tr><td><a href="{{ url_for('ops.license_detail', license_id=l.id) }}">{{ l.name }}</a></td>
+        <td>{{ l.seats_used }}/{{ l.seats }} seats</td></tr>
+    {% endfor %}
+  </table></div>
+</div>
+{% endif %}
+
+{% if results.vendors %}
+<div class="card">
+  <p class="eyebrow">{{ t("Vendors") }} ({{ results.vendors | length }})</p>
+  <div class="table-wrap"><table>
+    {% for v in results.vendors %}
+    <tr><td><a href="{{ url_for('org.vendor_detail', vendor_id=v.id) }}">{{ v.name }}</a></td>
+        <td>{{ v.email or "" }}</td></tr>
+    {% endfor %}
+  </table></div>
+</div>
+{% endif %}
+
+{% endif %}
+{% endblock %}

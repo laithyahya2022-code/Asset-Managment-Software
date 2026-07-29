@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}{{ "Edit maintenance task" if m else "New maintenance task" }}{% endblock %}
+{% block content %}
+<div class="page-head"><h1>{{ "Edit maintenance task" if m else "New maintenance task" }}</h1></div>
+<div class="card">
+  <form method="post">
+    <div class="form-grid">
+      <div><label for="m-asset">Asset *</label>
+        <select id="m-asset" name="asset_id" required>
+          {% for a in assets %}<option value="{{ a.id }}" {{ 'selected' if preselect == a.id }}>{{ a.tag }} — {{ a.name }}</option>{% endfor %}
+        </select></div>
+      <div><label for="m-kind">Kind</label>
+        <select id="m-kind" name="kind">{% for k in kinds %}<option {{ 'selected' if m and m.kind == k }}>{{ k }}</option>{% endfor %}</select></div>
+      <div><label for="m-title">Title *</label>
+        <input id="m-title" name="title" required placeholder="Replace battery…" value="{{ m.title if m else '' }}"></div>
+      <div><label for="m-date">Scheduled for</label>
+        <input id="m-date" name="scheduled_for" type="date" value="{{ m.scheduled_for or '' if m else '' }}"></div>
+      <div><label for="m-tech">Technician</label>
+        <select id="m-tech" name="technician_id"><option value="">—</option>
+          {% for u in techs %}<option value="{{ u.id }}" {{ 'selected' if m and m.technician_id == u.id }}>{{ u.name }}</option>{% endfor %}
+        </select></div>
+      <div><label for="m-cost">Estimated cost</label>
+        <input id="m-cost" name="cost" type="number" step="0.01" min="0" value="{{ m.cost or '' if m else '' }}"></div>
+      <div><label for="m-parts">Spare parts</label>
+        <input id="m-parts" name="parts" placeholder="SSD 512GB, thermal paste…" value="{{ m.parts or '' if m else '' }}"></div>
+      {% if not m %}
+      <div><label for="m-set">&nbsp;</label>
+        <label style="display:flex;gap:0.4rem;align-items:center;margin:0">
+          <input type="checkbox" id="m-set" name="set_status" value="1"> Set asset status to Under Maintenance now</label></div>
+      {% endif %}
+      <div class="full"><label for="m-desc">Problem description</label>
+        <textarea id="m-desc" name="description" rows="3">{{ m.description or '' if m else '' }}</textarea></div>
+      <div class="full"><label for="m-sol">Solution (fill when known)</label>
+        <textarea id="m-sol" name="solution" rows="2">{{ m.solution or '' if m else '' }}</textarea></div>
+    </div>
+    <div class="form-actions">
+      <button class="btn" type="submit">{{ "Save changes" if m else "Create task" }}</button>
+      <a class="btn secondary" href="{{ url_for('ops.maintenance_list') }}">{{ t("Cancel") }}</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

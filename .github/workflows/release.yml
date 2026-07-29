@@ -1,0 +1,100 @@
+name: Release ITAM.exe
+
+# Publishes ITAM.exe to a GitHub Release so the download link
+#   .../releases/latest/download/ITAM.exe
+# is permanent and never expires. It refreshes the release on every push
+# to this branch, and also runs for any pushed version tag (v*).
+
+on:
+  push:
+    branches: ["main", "claude/**"]
+    paths:
+      - "itam/**"
+      - "run_server.py"
+      - "requirements.txt"
+      - ".github/workflows/release.yml"
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version tag to create (e.g. v1.0.0)"
+        required: true
+        default: "v1.0.0"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build ITAM.exe
+        run: >
+          pyinstaller --onefile --name ITAM --noconsole
+          --icon itam/static/app.ico
+          --add-data "itam/templates;itam/templates"
+          --add-data "itam/static;itam/static"
+          --collect-submodules sqlalchemy.dialects.sqlite
+          --collect-submodules webview
+          --hidden-import waitress
+          --hidden-import qrcode.image.svg
+          --hidden-import barcode.writer
+          run_server.py
+
+      - name: Smoke-test the executable
+        shell: pwsh
+        run: |
+          $env:ITAM_NO_BROWSER = "1"
+          $env:PORT = "8099"
+          $proc = Start-Process -FilePath "dist\ITAM.exe" -PassThru
+          Start-Sleep -Seconds 6
+          $resp = Invoke-WebRequest -Uri "http://127.0.0.1:8099/login" -UseBasicParsing
+          if ($resp.StatusCode -ne 200) { throw "Executable did not serve the login page" }
+          Stop-Process -Id $proc.Id -Force
+
+      - name: Publish GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $notes = @"
+          **ITAM Enterprise — IT Asset Management System**
+
+          Download **ITAM.exe** below (Windows). Free, no time limit, no license key.
+
+          Getting started:
+          1. Put ITAM.exe in a folder and double-click it — it opens in its own app window.
+          2. First login: admin / admin123 (change it right away).
+          3. Import your assets and employees from Excel/CSV (Assets and Employees screens).
+          4. To host it as a website on your own server, see deploy/HOST-AS-A-WEBSITE.md.
+
+          This download link is permanent and does not expire.
+          "@
+          # Choose the tag: dispatch input, or the pushed tag, else default v1.0.0
+          $tag = "${{ github.event.inputs.version }}"
+          if (-not $tag) {
+            if ("$env:GITHUB_REF" -like "refs/tags/*") { $tag = "$env:GITHUB_REF_NAME" }
+            else { $tag = "v1.0.0" }
+          }
+          # Create the release if it doesn't exist yet, otherwise refresh the exe.
+          gh release view $tag 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $tag dist/ITAM.exe --clobber
+          } else {
+            gh release create $tag dist/ITAM.exe `
+              --target "$env:GITHUB_SHA" `
+              --title "ITAM $tag" `
+              --notes $notes
+          }

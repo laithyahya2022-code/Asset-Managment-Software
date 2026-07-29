@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}{{ lic.name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ lic.name }}</h1>
+  {% if has_perm("licenses.manage") %}
+  <div class="actions-row no-print">
+    <a class="btn secondary" href="{{ url_for('ops.license_form', license_id=lic.id) }}">{{ t("Edit") }}</a>
+    <form class="inline" method="post" action="{{ url_for('ops.license_delete', license_id=lic.id) }}">
+      <button class="btn danger" type="submit" data-confirm="Delete this license and its assignments?">{{ t("Delete") }}</button>
+    </form>
+  </div>
+  {% endif %}
+</div>
+
+<div class="two-col">
+  <div class="card">
+    <p class="eyebrow">Details</p>
+    <dl class="props">
+      <dt>Vendor</dt><dd>{{ lic.vendor.name if lic.vendor else "—" }}</dd>
+      <dt>License key</dt><dd style="font-family:ui-monospace,monospace">{{ lic.key or "—" }}</dd>
+      <dt>Seats</dt><dd>{{ lic.seats_used }} / {{ lic.seats }} used</dd>
+      <dt>Compliance</dt><dd>{% if lic.compliant %}<span class="badge s-available">Compliant</span>{% else %}<span class="badge s-missing">Over-used by {{ lic.seats_used - lic.seats }}</span>{% endif %}</dd>
+      <dt>Purchase date</dt><dd>{{ lic.purchase_date or "—" }}</dd>
+      <dt>Expiry</dt><dd>{% if lic.expiry_date %}{{ lic.expiry_date }}{% if lic.expired %} <span class="red">expired — renew now</span>{% endif %}{% else %}Perpetual{% endif %}</dd>
+      <dt>Cost</dt><dd>{{ "$%.2f" | format(lic.cost) if lic.cost else "—" }}</dd>
+      <dt>Notes</dt><dd>{{ lic.notes or "—" }}</dd>
+    </dl>
+  </div>
+
+  <div class="card">
+    <p class="eyebrow">Assign a seat</p>
+    {% if has_perm("licenses.manage") %}
+    <form method="post" action="{{ url_for('ops.license_assign', license_id=lic.id) }}">
+      <label for="la-asset">To asset</label>
+      <select id="la-asset" name="asset_id"><option value="">—</option>
+        {% for a in assets %}<option value="{{ a.id }}">{{ a.tag }} — {{ a.name }}</option>{% endfor %}
+      </select>
+      <label for="la-emp">or to employee</label>
+      <select id="la-emp" name="employee_id"><option value="">—</option>
+        {% for e in employees %}<option value="{{ e.id }}">{{ e.name }}</option>{% endfor %}
+      </select>
+      <div class="form-actions"><button class="btn" type="submit">Assign seat</button></div>
+    </form>
+    {% else %}<p class="empty">You need the licenses permission to assign seats.</p>{% endif %}
+  </div>
+</div>
+
+<div class="card">
+  <p class="eyebrow">Seat assignments</p>
+  {% if lic.assignments %}
+  <div class="table-wrap"><table>
+    <tr><th>Assigned to</th><th>Since</th><th>Revoked</th><th></th></tr>
+    {% for la in lic.assignments %}
+    <tr>
+      <td>{% if la.asset %}<a href="{{ url_for('assets.detail', asset_id=la.asset_id) }}">{{ la.asset.tag }}</a>{% elif la.employee %}<a href="{{ url_for('org.employee_detail', emp_id=la.employee_id) }}">{{ la.employee.name }}</a>{% else %}—{% endif %}</td>
+      <td>{{ la.assigned_at.strftime("%Y-%m-%d") }}</td>
+      <td>{{ la.revoked_at.strftime("%Y-%m-%d") if la.revoked_at else "—" }}</td>
+      <td>{% if not la.revoked_at and has_perm("licenses.manage") %}
+        <form class="inline" method="post" action="{{ url_for('ops.license_revoke', la_id=la.id) }}">
+          <button class="btn secondary sm" type="submit">Revoke</button>
+        </form>{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </table></div>
+  {% else %}<p class="empty">No seats assigned.</p>{% endif %}
+</div>
+{% endblock %}

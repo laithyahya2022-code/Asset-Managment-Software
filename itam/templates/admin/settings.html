@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}{{ t("Settings") }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ t("Settings") }}</h1>
+  <a class="btn secondary no-print" href="{{ url_for('admin.backups') }}">{{ t("Backups") }}</a>
+</div>
+<form method="post">
+  {% set labels = {
+    "app_name": "Application name", "qr_prefix": "QR code prefix (e.g. https://itam.school.local/scan-go?code=)",
+    "custom_asset_fields": "Custom asset fields (comma-separated)", "checkout_days": "Default checkout period (days)",
+    "warranty_alert_days": "Warranty alert period (days before expiry)",
+    "license_alert_days": "License alert period (days before expiry)",
+    "email_enabled": "Send email notifications", "smtp_host": "SMTP host", "smtp_port": "SMTP port",
+    "smtp_user": "SMTP username", "smtp_password": "SMTP password", "smtp_from": "From address",
+    "backup_auto": "Automatic daily database backup", "audit_retention_days": "Activity log retention (days)"
+  } %}
+  {% for group, keys in groups.items() %}
+  <div class="card">
+    <p class="eyebrow">{{ group }}</p>
+    <div class="form-grid">
+      {% for key in keys %}
+      <div>
+        {% if key in ("email_enabled", "backup_auto") %}
+        <label style="display:flex;gap:0.4rem;align-items:center;margin-top:1.4rem">
+          <input type="checkbox" name="{{ key }}" value="1" {{ 'checked' if values[key] == '1' }}>
+          {{ labels[key] }}</label>
+        {% else %}
+        <label for="s-{{ key }}">{{ labels[key] }}</label>
+        <input id="s-{{ key }}" name="{{ key }}" value="{{ values[key] }}"
+               {{ 'type=password' if 'password' in key }}>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+  <button class="btn" type="submit">Save settings</button>
+</form>
+{% endblock %}
