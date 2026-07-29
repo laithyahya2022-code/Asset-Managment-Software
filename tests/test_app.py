@@ -702,3 +702,81 @@ def test_bulk_checkin_returns_several_loans(client, app):
             asg = db.session.get(Assignment, asg_id)
             assert asg.returned_at is not None, "loan was not returned"
             assert asg.asset.status == "Available"
+
+
+def test_asset_form_has_no_parent_field(client):
+    """"Part of (parent asset)" was removed from the asset form."""
+    login(client)
+    body = client.get("/assets/new").data.decode()
+    assert 'name="parent_id"' not in body
+    assert "Part of (parent asset)" not in body
+
+
+def test_editing_keeps_an_existing_parent_link(client, app):
+    """The field is gone, so a save must leave the stored link alone."""
+    from itam.models import Category
+
+    with app.app_context():
+        cat = db.session.scalar(db.select(Category))
+        parent = Asset(tag="PA-1", name="Dock", status="Available",
+                       condition="Good", category=cat)
+        db.session.add(parent)
+        db.session.flush()
+        child = Asset(tag="CH-1", name="Monitor", status="Available",
+                      condition="Good", category=cat, parent_id=parent.id)
+        db.session.add(child)
+        db.session.commit()
+        child_id, parent_id = child.id, parent.id
+
+    login(client)
+    client.post(f"/assets/{child_id}/edit", data={
+        "name": "Monitor", "tag": "CH-1", "status": "Available",
+        "condition": "Good", "depreciation_years": "5"}, follow_redirects=True)
+    with app.app_context():
+        assert db.session.get(Asset, child_id).parent_id == parent_id, \
+            "saving the form unlinked an asset from its parent"
+
+
+def test_new_asset_form_defaults_purchase_date_to_today(client, app):
+    from datetime import date
+
+    login(client)
+    assert date.today().isoformat() in client.get("/assets/new").data.decode()
+
+    # An existing asset keeps its own date rather than being reset to today.
+    with app.app_context():
+        from itam.models import Category
+        a = Asset(tag="PD-1", name="Old", status="Available", condition="Good",
+                  category=db.session.scalar(db.select(Category)),
+                  purchase_date=date(2020, 1, 15))
+        db.session.add(a)
+        db.session.commit()
+        aid = a.id
+    body = client.get(f"/assets/{aid}/edit").data.decode()
+    assert "2020-01-15" in body
+
+
+def test_operating_system_is_a_combo_box(client):
+    """A datalist, so the listed systems are offered but free text still works."""
+    from itam.models import OPERATING_SYSTEMS
+
+    login(client)
+    body = client.get("/assets/new").data.decode()
+    assert 'list="os-list"' in body and '<datalist id="os-list">' in body
+    for name in ("Windows 11 Pro", "macOS", "Android", "iOS", "ChromeOS"):
+        assert name in body, f"{name} missing from the OS list"
+    assert len(OPERATING_SYSTEMS) >= 10
+
+
+def test_asset_detail_still_renders(client, app):
+    """Regression: a `today` name clash in the form lookups 500'd this page."""
+    from itam.models import Category
+
+    with app.app_context():
+        a = Asset(tag="DT-1", name="Rig", status="Available", condition="Good",
+                  category=db.session.scalar(db.select(Category)))
+        db.session.add(a)
+        db.session.commit()
+        aid = a.id
+    login(client)
+    assert client.get(f"/assets/{aid}").status_code == 200

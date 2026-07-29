@@ -11,7 +11,8 @@ from sqlalchemy import or_
 from werkzeug.utils import secure_filename
 
 from ..models import (ASSET_CONDITIONS, ASSET_STATUSES, BRANCHES, BUILDINGS,
-                      BLOCKED_CHECKOUT_STATUSES, FLOORS, PLACES, Asset,
+                      BLOCKED_CHECKOUT_STATUSES, FLOORS, OPERATING_SYSTEMS,
+                      PLACES, Asset,
                       Assignment, Category, Department, Employee, Location,
                       Reservation, Transfer, Vendor, db)
 from ..security import has_perm, login_required, perm_required
@@ -33,9 +34,9 @@ def _lookups():
         vendors=db.session.scalars(db.select(Vendor).order_by(Vendor.name)).all(),
         employees=db.session.scalars(db.select(Employee).where(Employee.active)
                                      .order_by(Employee.name)).all(),
-        parents=db.session.scalars(db.select(Asset).order_by(Asset.tag)).all(),
         statuses=ASSET_STATUSES, conditions=ASSET_CONDITIONS,
         branches=BRANCHES, buildings=BUILDINGS, floors=FLOORS, places=PLACES,
+        operating_systems=OPERATING_SYSTEMS, today_iso=date.today().isoformat(),
         custom_names=custom_field_names(),
     )
 
@@ -89,8 +90,12 @@ def _from_form(a, form):
     custom = {name: form.get(f"custom_{i}", "").strip()
               for i, name in enumerate(custom_field_names())}
     a.custom_fields = json.dumps({k: v for k, v in custom.items() if v})
-    parent = form.get("parent_id")
-    a.parent_id = int(parent) if parent and (not a.id or int(parent) != a.id) else None
+    # The asset form no longer offers "Part of (parent asset)". Only touch the
+    # link when a form actually submits the field, otherwise saving an edit
+    # would silently unlink assets that already have a parent.
+    if "parent_id" in form:
+        parent = form.get("parent_id")
+        a.parent_id = int(parent) if parent and (not a.id or int(parent) != a.id) else None
 
 
 def _apply_assignment(a, form):

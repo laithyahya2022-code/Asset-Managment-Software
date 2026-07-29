@@ -22,6 +22,15 @@ FLOORS = ["B1", "GF", "F1", "F2", "F3", "F4", "F5"]
 PLACES = ["Reception", "Admin Office", "Registration office", "Teachers Room",
           "Supervisor Room", "Principal", "Secretary Office", "Class Room"]
 LOCATION_KINDS = ["Branch", "Building", "Floor", "Room", "Storage Area"]
+# Suggestions for the asset form's Operating system box. The field stays free
+# text, so anything not listed here (or already imported) is still accepted.
+OPERATING_SYSTEMS = [
+    "Windows 11 Pro", "Windows 11 Home", "Windows 10 Pro", "Windows 10 Home",
+    "Windows Server 2022", "Windows Server 2019",
+    "macOS", "iOS", "iPadOS", "Android", "ChromeOS",
+    "Ubuntu Linux", "Debian Linux", "Fedora Linux", "Red Hat Enterprise Linux",
+    "Linux (other)", "Printer firmware", "Switch firmware", "Embedded / none",
+]
 MAINTENANCE_KINDS = ["Preventive", "Corrective"]
 MAINTENANCE_STATUSES = ["Scheduled", "In Progress", "Completed", "Cancelled"]
 PO_STATUSES = ["Requested", "Approved", "Ordered", "Received", "Cancelled"]

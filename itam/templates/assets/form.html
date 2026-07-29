@@ -79,7 +79,10 @@
           {% for v in vendors %}<option value="{{ v.id }}" {{ 'selected' if a and a.vendor_id == v.id }}>{{ v.name }}</option>{% endfor %}
         </select></div>
       <div><label for="f-pdate">Purchase date</label>
-        <input id="f-pdate" name="purchase_date" type="date" value="{{ a.purchase_date or '' if a else '' }}"></div>
+        {# New assets default to today; an existing one keeps whatever it has,
+           including deliberately blank. #}
+        <input id="f-pdate" name="purchase_date" type="date"
+               value="{{ (a.purchase_date or '') if a else today_iso }}"></div>
       <div><label for="f-cost">Purchase cost</label>
         <input id="f-cost" name="purchase_cost" type="number" step="0.01" min="0" value="{{ a.purchase_cost or '' if a else '' }}"></div>
       <div><label for="f-dep">Depreciation (years)</label>
@@ -88,13 +91,15 @@
         <input id="f-warr" name="warranty_expiry" type="date" value="{{ a.warranty_expiry or '' if a else '' }}"></div>
       <div><label for="f-invoice">Invoice number</label>
         <input id="f-invoice" name="invoice_number" value="{{ a.invoice_number or '' if a else '' }}"></div>
-      <div><label for="f-parent">Part of (parent asset)</label>
-        <select id="f-parent" name="parent_id"><option value="">—</option>
-          {% for p in parents %}{% if not asset or p.id != asset.id %}<option value="{{ p.id }}" {{ 'selected' if a and a.parent_id == p.id }}>{{ p.tag }} — {{ p.name }}</option>{% endif %}{% endfor %}
-        </select></div>
       <div class="full"><p class="eyebrow" style="margin:1rem 0 0">Technical specifications</p></div>
       <div><label for="f-os">Operating system</label>
-        <input id="f-os" name="os_name" value="{{ a.os_name or '' if a else '' }}" placeholder="Windows 11 Pro"></div>
+        {# Combo box: pick from the list or type anything else, so imported
+           values that aren't listed still round-trip. #}
+        <input id="f-os" name="os_name" list="os-list" autocomplete="off"
+               value="{{ a.os_name or '' if a else '' }}" placeholder="Choose or type an OS">
+        <datalist id="os-list">
+          {% for os in operating_systems %}<option value="{{ os }}">{% endfor %}
+        </datalist></div>
       <div><label for="f-osv">OS version</label>
         <input id="f-osv" name="os_version" value="{{ a.os_version or '' if a else '' }}" placeholder="23H2"></div>
       <div><label for="f-cpu">CPU</label>
