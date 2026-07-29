@@ -175,7 +175,7 @@
   }
 </style>
 
-<div class="demo-note"><strong>Live demo</strong> — <span id="note-txt">v8 · everything is clickable; data saves in this browser only. The real system (on your school server) shares one database for everyone.</span></div>
+<div class="demo-note"><strong>Live demo</strong> — <span id="note-txt">v9 · everything is clickable; data saves in this browser only. The real system (on your school server) shares one database for everyone.</span></div>
 <div id="app-root"></div>
 <div id="toast" role="status"></div>
 
@@ -295,6 +295,13 @@ function seed(){
 }
 let db;
 try{ db = JSON.parse(localStorage.getItem(KEY)) || seed(); }catch(e){ db = seed(); }
+// give sample assets a Branch / Building / Floor so those columns show data
+(function(){ let changed=false;
+  (db.assets||[]).forEach((a,i)=>{ if(!a.branch){
+    a.branch=BRANCHES[i%3]; a.building=BUILDINGS[i%3];
+    a.floor=FLOORS[(i%5)+1]; changed=true; }});
+  if(changed){ try{ localStorage.setItem(KEY, JSON.stringify(db)); }catch(e){} }
+})();
 const save = ()=>{ try{ localStorage.setItem(KEY, JSON.stringify(db)); }catch(e){} };
 const nid = ()=>db.nextId++;
 
@@ -626,38 +633,53 @@ function vDashboard(){
 }
 
 function vAssets(params){
-  const q=(params.get("q")||"").toLowerCase(), st=params.get("status")||"", c=params.get("cat")||"";
+  const q=(params.get("q")||"").toLowerCase(), st=params.get("status")||"", c=params.get("cat")||"",
+        br=params.get("branch")||"", bu=params.get("building")||"", fl=params.get("floor")||"";
   let rows=[...db.assets].sort((a,b)=>a.tag<b.tag?-1:1);
   if(q) rows=rows.filter(a=>[a.tag,a.name,a.serial,a.mfr,a.model,a.host,a.mac,a.ip,a.os].some(v=>(v||"").toLowerCase().includes(q)));
   if(st) rows=rows.filter(a=>a.status===st);
   if(c) rows=rows.filter(a=>a.cat===+c);
+  if(br) rows=rows.filter(a=>a.branch===br);
+  if(bu) rows=rows.filter(a=>a.building===bu);
+  if(fl) rows=rows.filter(a=>a.floor===fl);
   return `<div class="page-head"><h1>${t("Assets")}</h1>
     <div class="actions-row"><a class="btn" href="#/asset-new">+ ${t("Add Asset")}</a>
     <button class="btn secondary" onclick="document.getElementById('imp-file').click()">Import Excel/CSV</button>
     <input type="file" id="imp-file" accept=".csv,text/csv,.xlsx" hidden onchange="importAssets(this)">
-    <button class="btn secondary" onclick="exportAssets()">Export CSV</button></div></div>
+    <button class="btn secondary" onclick="exportAssets()">Export Excel / CSV</button></div></div>
   <form class="filters" onsubmit="return filterAssets(this)">
     <input name="q" value="${esc(params.get("q")||"")}" placeholder="${t("Search")}…">
     <select name="status"><option value="">All statuses</option>
       ${STATUSES.map(s=>`<option ${st===s?"selected":""}>${s}</option>`).join("")}</select>
     <select name="cat"><option value="">All categories</option>
       ${db.categories.map(x=>`<option value="${x.id}" ${c==x.id?"selected":""}>${esc(x.name)}</option>`).join("")}</select>
+    <select name="branch"><option value="">All branches</option>
+      ${BRANCHES.map(b=>`<option ${br===b?"selected":""}>${b}</option>`).join("")}</select>
+    <select name="building"><option value="">All buildings</option>
+      ${BUILDINGS.map(b=>`<option ${bu===b?"selected":""}>${b}</option>`).join("")}</select>
+    <select name="floor"><option value="">All floors</option>
+      ${FLOORS.map(f=>`<option ${fl===f?"selected":""}>${f}</option>`).join("")}</select>
     <button class="btn secondary" type="submit">Filter</button>
-    ${(q||st||c)?'<a class="btn secondary" href="#/assets">Clear</a>':""}
+    ${(q||st||c||br||bu||fl)?'<a class="btn secondary" href="#/assets">Clear</a>':""}
   </form>
   ${rows.length?`<div class="card table-wrap"><table>
     <tr><th>Tag</th><th>${t("Name")}</th><th>${t("Category")}</th><th>${t("Status")}</th>
-        <th>Condition</th><th>Assigned to</th><th>${t("Location")}</th></tr>
+        <th>Branch</th><th>Floor</th><th>${t("Location")}</th><th>Assigned to</th><th></th></tr>
     ${rows.map(a=>{const cu=curAsg(a);return `<tr>
       <td><a href="#/asset/${a.id}">${esc(a.tag)}</a></td><td>${esc(a.name)}</td>
-      <td>${cat(a.cat)?esc(cat(a.cat).name):"—"}</td><td>${badge(a.status)}</td><td>${a.cond}</td>
+      <td>${cat(a.cat)?esc(cat(a.cat).name):"—"}</td><td>${badge(a.status)}</td>
+      <td>${esc(a.branch||"—")}</td><td>${esc(a.floor||"—")}</td>
+      <td>${a.place?esc(a.place):(a.loc?esc(locPath(a.loc)):"—")}</td>
       <td>${cu?`<a href="#/employee/${cu.emp}">${esc(empl(cu.emp).name)}</a>`:"—"}</td>
-      <td>${a.place?esc(a.place):(a.loc?esc(locPath(a.loc)):"—")}</td></tr>`;}).join("")}
+      <td style="white-space:nowrap"><a class="btn secondary sm" href="#/asset-edit/${a.id}">${t("Edit")}</a>
+        <button class="btn secondary sm" onclick="printLabel(${a.id})">${t("Print")}</button></td></tr>`;}).join("")}
   </table></div>`:"<p class='empty'>No assets found.</p>"}`;
 }
 window.filterAssets=function(f){ const p=new URLSearchParams();
   if(f.q.value.trim())p.set("q",f.q.value.trim()); if(f.status.value)p.set("status",f.status.value);
   if(f.cat.value)p.set("cat",f.cat.value);
+  if(f.branch.value)p.set("branch",f.branch.value); if(f.building.value)p.set("building",f.building.value);
+  if(f.floor.value)p.set("floor",f.floor.value);
   location.hash="#/assets"+(p.toString()?"?"+p:""); return false; };
 window.importAssets=function(input){
   const file=input.files[0]; if(!file) return; input.value="";
