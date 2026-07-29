@@ -188,6 +188,9 @@ dl.props dd { margin: 0; }
 .seat-bar { background: var(--bg); border-radius: 999px; height: 7px; overflow: hidden; min-width: 90px; margin-top: 4px; }
 .seat-bar > i { display: block; height: 100%; background: var(--accent); }
 .seat-bar > i.over { background: var(--danger); }
+th.pick, td.pick { width: 34px; padding-inline-end: 0; }
+th.pick input, td.pick input { cursor: pointer; }
+.bulk-go[disabled] { opacity: .45; cursor: not-allowed; }
 
 .tree { list-style: none; margin: 0; padding: 0; }
 .tree ul { list-style: none; margin: 0; padding-inline-start: 1.3rem;
@@ -281,6 +284,8 @@ const state = {
   assetSort: { key: "tag", dir: 1 },
   searchQ: "",
   activity: [],
+  picked: new Set(),
+  bulk: null,
   notifications: DATA.notifications.map(n => Object.assign({ read: false }, n)),
 };
 
@@ -385,6 +390,23 @@ function donut(pairs) {
     <div class="legend">${legend}</div></div>`;
 }
 
+/* ------------------------------------------------- bulk select (list pages) */
+function pickTh() {
+  return `<th class="pick"><input type="checkbox" id="pick-all"
+    aria-label="${esc(t("Select all"))}"></th>`;
+}
+function pickTd(id) {
+  const on = state.picked.has(String(id)) ? "checked" : "";
+  return `<td class="pick"><input type="checkbox" class="pick-row" data-id="${esc(id)}"
+    ${on} aria-label="${esc(t("Select row"))}"></td>`;
+}
+function bulkBar(label, danger, run) {
+  state.bulk = { label, run };
+  const n = state.picked.size;
+  return `<button class="btn ${danger ? "danger" : "secondary"} bulk-go"
+    data-act="bulk-go" ${n ? "" : "disabled"}>${esc(label)}${n ? ` (${n})` : ""}</button>`;
+}
+
 /* ------------------------------------------------------------------ nav */
 const NAV = [
   ["dashboard", "Dashboard", "dashboard"], ["assets", "Assets", "asset"],
@@ -401,6 +423,8 @@ const NAV_PARENT = { asset: "assets", newasset: "assets", report: "reports" };
 function go(view, param) {
   state.view = view;
   state.param = param || null;
+  state.picked = new Set();   // a selection never carries across screens
+  state.bulk = null;
   state.navOpen = false;
   render();
   window.scrollTo(0, 0);
@@ -602,7 +626,7 @@ function viewAsset() {
 
   <div class="label-preview">
     <div class="lp-qr"><div class="box">${code ? code.qr : ""}</div><div class="lp-tag">${esc(a.tag)}</div></div>
-    <div class="lp-info"><div class="lp-org">Mada Academy</div>
+    <div class="lp-info"><div class="lp-org">Mada International Academy</div>
       <div class="lp-grid">
         <div><div class="lp-l">${esc(t("Name"))}</div><div class="lp-v">${esc(a.name)}</div></div>
         <div><div class="lp-l">${esc(t("Branch"))}</div><div class="lp-v">${dash(a.branch)}</div></div>
@@ -690,7 +714,7 @@ function viewNewAsset() {
     <div class="label-preview">
       <div class="lp-qr"><div class="box" id="lp-qr-box" style="display:grid;place-items:center;color:#6b7480;font-size:.75rem">
         ${esc(t("QR on save"))}</div><div class="lp-tag" id="lp-tag">${esc(nextTag(firstCat))}</div></div>
-      <div class="lp-info"><div class="lp-org">Mada Academy</div>
+      <div class="lp-info"><div class="lp-org">Mada International Academy</div>
         <div class="lp-grid">
           <div><div class="lp-l">${esc(t("Name"))}</div><div class="lp-v" id="lp-name">—</div></div>
           <div><div class="lp-l">${esc(t("Branch"))}</div><div class="lp-v" id="lp-branch">—</div></div>
@@ -727,33 +751,46 @@ function viewNewAsset() {
 
 function viewLending() {
   const rows = DATA.assignments.slice().reverse();
-  return `<div class="page-head"><h1>${esc(t("Lending"))}</h1></div>
+  const bar = bulkBar(t("Check in selected"), false, ids => {
+    DATA.assignments.forEach(x => {
+      if (ids.has(String(x.id)) && !x.returnedAt) {
+        const a = assetByTag(x.assetTag);
+        if (a) doCheckin(a, a.condition);
+      }
+    });
+  });
+  return `<div class="page-head"><h1>${esc(t("Lending"))}</h1>
+    <div class="actions-row"><button class="btn">+ ${esc(t("Lend an asset"))}</button>${bar}</div></div>
   <div class="card"><p class="eyebrow">${DATA.assignments.filter(x => !x.returnedAt).length} ${esc(t("currently out"))}</p>
   <div class="table-wrap"><table><thead><tr>
-    <th>${esc(t("Asset"))}</th><th>${esc(t("Name"))}</th><th>${esc(t("Employee"))}</th>
+    ${pickTh()}<th>${esc(t("Asset"))}</th><th>${esc(t("Name"))}</th><th>${esc(t("Employee"))}</th>
     <th>${esc(t("Check out"))}</th><th>${esc(t("Due"))}</th><th>${esc(t("Returned"))}</th><th></th>
   </tr></thead><tbody>${rows.length ? rows.map(x => `<tr>
-    <td><button class="linkish" data-go="asset" data-param="${esc(x.assetTag)}">${esc(x.assetTag)}</button></td>
+    ${x.returnedAt ? '<td class="pick"></td>' : pickTd(x.id)}<td><button class="linkish" data-go="asset" data-param="${esc(x.assetTag)}">${esc(x.assetTag)}</button></td>
     <td>${dash(x.assetName)}</td><td>${dash(x.employee)}</td>
     <td>${fmtDate(x.checkoutAt)}</td>
     <td>${fmtDate(x.dueAt)} ${isOverdue(x) ? `<span class="red">${esc(t("Overdue"))}</span>` : ""}</td>
     <td>${x.returnedAt ? fmtDate(x.returnedAt) : "—"}</td>
     <td>${x.returnedAt ? "" : `<button class="btn sm" data-act="quick-checkin" data-param="${esc(x.assetTag)}">${esc(t("Check In"))}</button>`}</td>
-  </tr>`).join("") : `<tr><td colspan="7" class="empty">${esc(t("Nothing lent yet."))}</td></tr>`}
+  </tr>`).join("") : `<tr><td colspan="8" class="empty">${esc(t("Nothing lent yet."))}</td></tr>`}
   </tbody></table></div></div>`;
 }
 
 function viewLicenses() {
-  return `<div class="page-head"><h1>${esc(t("Licenses"))}</h1></div>
+  const bar = bulkBar(t("Delete selected"), true, ids => {
+    DATA.licenses = DATA.licenses.filter(l => !ids.has(String(l.id)));
+  });
+  return `<div class="page-head"><h1>${esc(t("Licenses"))}</h1>
+    <div class="actions-row"><button class="btn">+ ${esc(t("New license"))}</button>${bar}</div></div>
   <div class="card"><div class="table-wrap"><table><thead><tr>
-    <th>${esc(t("Name"))}</th><th>${esc(t("Vendor"))}</th><th>${esc(t("Seats"))}</th>
+    ${pickTh()}<th>${esc(t("Name"))}</th><th>${esc(t("Vendor"))}</th><th>${esc(t("Seats"))}</th>
     <th>${esc(t("Expiry"))}</th><th>${esc(t("Cost"))}</th><th>${esc(t("Compliance"))}</th>
   </tr></thead><tbody>${DATA.licenses.map(l => {
     const pct = Math.min(100, Math.round((l.used / l.seats) * 100));
     const over = l.used > l.seats;
     const exp = parseDate(l.expiry);
     const soon = exp && daysBetween(exp, TODAY) <= 90;
-    return `<tr><td><b>${esc(l.name)}</b></td><td>${dash(l.vendor)}</td>
+    return `<tr>${pickTd(l.id)}<td><b>${esc(l.name)}</b></td><td>${dash(l.vendor)}</td>
       <td>${l.used} / ${l.seats}<div class="seat-bar"><i class="${over ? "over" : ""}" style="width:${pct}%"></i></div></td>
       <td>${fmtDate(l.expiry)} ${soon ? `<span class="red">${esc(t(exp < TODAY ? "expired" : "soon"))}</span>` : ""}</td>
       <td>${money(l.cost)}</td>
@@ -762,12 +799,16 @@ function viewLicenses() {
 }
 
 function viewMaintenance() {
-  return `<div class="page-head"><h1>${esc(t("Maintenance"))}</h1></div>
+  const bar = bulkBar(t("Delete selected"), true, ids => {
+    DATA.maintenance = DATA.maintenance.filter(m => !ids.has(String(m.id)));
+  });
+  return `<div class="page-head"><h1>${esc(t("Maintenance"))}</h1>
+    <div class="actions-row"><button class="btn">+ ${esc(t("New task"))}</button>${bar}</div></div>
   <div class="card"><div class="table-wrap"><table><thead><tr>
-    <th>${esc(t("Asset"))}</th><th>${esc(t("Title"))}</th><th>${esc(t("Kind"))}</th>
+    ${pickTh()}<th>${esc(t("Asset"))}</th><th>${esc(t("Title"))}</th><th>${esc(t("Kind"))}</th>
     <th>${esc(t("Status"))}</th><th>${esc(t("Scheduled"))}</th><th>${esc(t("Cost"))}</th><th></th>
   </tr></thead><tbody>${DATA.maintenance.map(m => `<tr>
-    <td><button class="linkish" data-go="asset" data-param="${esc(m.assetTag)}">${esc(m.assetTag)}</button></td>
+    ${pickTd(m.id)}<td><button class="linkish" data-go="asset" data-param="${esc(m.assetTag)}">${esc(m.assetTag)}</button></td>
     <td>${esc(m.title)}</td><td>${esc(t(m.kind))}</td>
     <td><span class="badge s-${slug(m.status)}">${esc(t(m.status))}</span></td>
     <td>${fmtDate(m.scheduledFor)}</td><td>${money(m.cost)}</td>
@@ -815,20 +856,44 @@ function viewLocations() {
       ${count(l.id) ? `<span class="chip">${count(l.id)} ${esc(t("assets"))}</span>` : ""}
       ${branchHtml(l.id)}</li>`).join("")}</ul>`;
   }
-  return `<div class="page-head"><h1>${esc(t("Locations"))}</h1></div>
+  const bar = bulkBar(t("Delete selected"), true, ids => {
+    // Same guard as the app: a location with assets or children is kept.
+    const kept = [];
+    DATA.locations = DATA.locations.filter(l => {
+      if (!ids.has(String(l.id))) return true;
+      const inUse = count(l.id) > 0 || DATA.locations.some(c => c.parentId === l.id);
+      if (inUse) { kept.push(l.name); return true; }
+      return false;
+    });
+    if (kept.length) toast(kept[0] + " " + t("has assets or sub-locations."));
+  });
+  return `<div class="page-head"><h1>${esc(t("Locations"))}</h1>
+    <div class="actions-row"><button class="btn">+ ${esc(t("New location"))}</button>${bar}</div></div>
   <div class="card"><p class="eyebrow">${esc(t("Branch → Building → Floor → Room"))}</p>
     <ul class="tree">${(byParent.get(0) || []).map(l => `<li><b>${esc(l.name)}</b>
-      <span class="kind">${esc(l.kind)}</span>${branchHtml(l.id)}</li>`).join("")}</ul></div>`;
+      <span class="kind">${esc(l.kind)}</span>${branchHtml(l.id)}</li>`).join("")}</ul></div>
+  <div class="card"><p class="eyebrow">${esc(t("All locations"))}</p>
+    <div class="table-wrap"><table><thead><tr>
+      ${pickTh()}<th>${esc(t("Path"))}</th><th>${esc(t("Kind"))}</th><th>${esc(t("Assets"))}</th><th></th>
+    </tr></thead><tbody>${DATA.locations.slice().sort((a, b) => a.path.localeCompare(b.path))
+      .map(l => `<tr>${pickTd(l.id)}<td>${esc(l.path)}</td>
+        <td><span class="chip">${esc(l.kind)}</span></td><td>${count(l.id)}</td>
+        <td><button class="btn secondary sm">${esc(t("Edit"))}</button></td></tr>`).join("")}
+    </tbody></table></div></div>`;
 }
 
 function viewEmployees() {
-  return `<div class="page-head"><h1>${esc(t("Employees"))}</h1></div>
+  const bar = bulkBar(t("Delete selected"), true, ids => {
+    DATA.employees = DATA.employees.filter(e => !ids.has(String(e.id)));
+  });
+  return `<div class="page-head"><h1>${esc(t("Employees"))}</h1>
+    <div class="actions-row"><button class="btn">+ ${esc(t("New employee"))}</button>${bar}</div></div>
   <div class="card"><div class="table-wrap"><table><thead><tr>
-    <th>${esc(t("Name"))}</th><th>${esc(t("Code"))}</th><th>${esc(t("Type"))}</th>
+    ${pickTh()}<th>${esc(t("Name"))}</th><th>${esc(t("Code"))}</th><th>${esc(t("Type"))}</th>
     <th>${esc(t("Title"))}</th><th>${esc(t("Department"))}</th><th>${esc(t("Holding"))}</th>
   </tr></thead><tbody>${DATA.employees.map(e => {
     const held = DATA.assignments.filter(x => x.employee === e.name && !x.returnedAt);
-    return `<tr><td><b>${esc(e.name)}</b><br><span class="muted" style="font-size:.8rem">${dash(e.email)}</span></td>
+    return `<tr>${pickTd(e.id)}<td><b>${esc(e.name)}</b><br><span class="muted" style="font-size:.8rem">${dash(e.email)}</span></td>
       <td>${dash(e.code)}</td><td>${dash(e.type)}</td><td>${dash(e.title)}</td><td>${dash(e.department)}</td>
       <td>${held.length ? held.map(h =>
         `<button class="linkish" data-go="asset" data-param="${esc(h.assetTag)}">${esc(h.assetTag)}</button>`).join(", ") : "—"}</td></tr>`;
@@ -836,14 +901,27 @@ function viewEmployees() {
 }
 
 function viewDepartments() {
-  return `<div class="page-head"><h1>${esc(t("Departments"))}</h1></div>
+  const bar = bulkBar(t("Delete selected"), true, ids => {
+    // Same guard as the app: a department in use is kept.
+    const kept = [];
+    DATA.departments = DATA.departments.filter(d => {
+      if (!ids.has(String(d.id))) return true;
+      const inUse = DATA.assets.some(a => a.department === d.name)
+        || DATA.employees.some(e => e.department === d.name);
+      if (inUse) { kept.push(d.name); return true; }
+      return false;
+    });
+    if (kept.length) toast(kept[0] + " " + t("has assets or employees."));
+  });
+  return `<div class="page-head"><h1>${esc(t("Departments"))}</h1>
+    <div class="actions-row"><button class="btn">+ ${esc(t("New department"))}</button>${bar}</div></div>
   <div class="card"><div class="table-wrap"><table><thead><tr>
-    <th>${esc(t("Name"))}</th><th>${esc(t("Cost center"))}</th><th>${esc(t("Assets"))}</th>
+    ${pickTh()}<th>${esc(t("Name"))}</th><th>${esc(t("Cost center"))}</th><th>${esc(t("Assets"))}</th>
     <th>${esc(t("Employees"))}</th><th>${esc(t("Value"))}</th></tr></thead><tbody>
     ${DATA.departments.map(d => {
       const as = DATA.assets.filter(a => a.department === d.name);
       const val = as.reduce((s, a) => s + (a.purchaseCost || 0), 0);
-      return `<tr><td><b>${esc(d.name)}</b></td><td>${dash(d.costCenter)}</td><td>${as.length}</td>
+      return `<tr>${pickTd(d.id)}<td><b>${esc(d.name)}</b></td><td>${dash(d.costCenter)}</td><td>${as.length}</td>
         <td>${DATA.employees.filter(e => e.department === d.name).length}</td><td>${money(val)}</td></tr>`;
     }).join("")}</tbody></table></div></div>`;
 }
@@ -1025,7 +1103,7 @@ function viewSettings() {
   <div class="two-col">
     <div class="card"><p class="eyebrow">${esc(t("Application"))}</p>
       <label for="s-name">${esc(t("Application name"))}</label><input id="s-name" value="Mada Asset Management System (AMS)">
-      <label for="s-org">${esc(t("Organisation on labels"))}</label><input id="s-org" value="Mada Academy">
+      <label for="s-org">${esc(t("Organisation on labels"))}</label><input id="s-org" value="Mada International Academy">
       <label for="s-days">${esc(t("Default checkout period (days)"))}</label><input id="s-days" type="number" value="30">
       <button class="btn wide" data-act="save-settings">${esc(t("Save settings"))}</button></div>
     <div class="card"><p class="eyebrow">${esc(t("Backup & recovery"))}</p>
@@ -1265,6 +1343,16 @@ const ACTIONS = {
     updateAuditCount();
     toast(t("Audit session started — tick each asset you find."));
   },
+  "bulk-go": () => {
+    if (!state.bulk || !state.picked.size) return;
+    const n = state.picked.size;
+    if (!window.confirm(`${n} ${t("selected")} — ${state.bulk.label.toLowerCase()}?`)) return;
+    state.bulk.run(new Set(state.picked));
+    log(state.bulk.label, n + " " + t("rows"));
+    toast(state.bulk.label + " — " + n);
+    state.picked = new Set();
+    render();
+  },
   "save-settings": () => toast(t("Settings saved")),
   backup: () => toast(t("Backup created (simulated)")),
 };
@@ -1364,6 +1452,36 @@ function wire() {
 
   document.querySelectorAll(".audit-tick").forEach(c =>
     c.addEventListener("change", updateAuditCount));
+
+  const rowPicks = [...document.querySelectorAll(".pick-row")];
+  const pickAll = document.getElementById("pick-all");
+  const syncPicks = () => {
+    const btn = document.querySelector(".bulk-go");
+    const n = state.picked.size;
+    if (btn && state.bulk) {
+      btn.disabled = n === 0;
+      btn.textContent = state.bulk.label + (n ? ` (${n})` : "");
+    }
+    if (pickAll) {
+      const on = rowPicks.filter(c => c.checked).length;
+      pickAll.checked = on === rowPicks.length && on > 0;
+      pickAll.indeterminate = on > 0 && on < rowPicks.length;
+    }
+  };
+  rowPicks.forEach(c => c.addEventListener("change", () => {
+    if (c.checked) state.picked.add(c.dataset.id);
+    else state.picked.delete(c.dataset.id);
+    syncPicks();
+  }));
+  if (pickAll) pickAll.addEventListener("change", () => {
+    rowPicks.forEach(c => {
+      c.checked = pickAll.checked;
+      if (c.checked) state.picked.add(c.dataset.id);
+      else state.picked.delete(c.dataset.id);
+    });
+    syncPicks();
+  });
+  syncPicks();
 
   const af = document.getElementById("asset-form");
   if (af) {
