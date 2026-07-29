@@ -44,3 +44,21 @@ python demo/build.py        # writes demo/itam-demo.html
 
 Edit `app.template.html` for markup, styles or behaviour — `itam-demo.html` is
 generated output and any edits to it are overwritten on the next build.
+
+## The other demo in this folder
+
+`itam-demo-localstorage.html` came from the `claude/itam-m4nmpb` branch. It is a
+separate, hand-seeded build of the same idea, kept because it does two things
+this one does not: it **saves to `localStorage`**, so edits survive a reload,
+and it covers vendor editing, license seat assign/revoke and inventory
+found/missing marking.
+
+It is **not** a drop-in replacement:
+
+- it still carries the pre-rename **"ITAM Enterprise"** branding
+- its QR and barcode images are **decorative patterns, not scannable codes**
+  (`qrPreview()` draws a deterministic pattern; the page says so itself)
+- it predates the current label design and the select-all bulk actions
+
+Publish `itam-demo.html` for anything customer-facing; reach for the other one
+only when you specifically want changes to persist across a reload.
