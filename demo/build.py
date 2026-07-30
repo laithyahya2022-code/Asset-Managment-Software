@@ -1,4 +1,4 @@
-"""Build demo/itam-demo.html — a self-contained, offline, interactive demo.
+"""Build demo/itam-demo-ams.html — a self-contained, offline, interactive demo.
 
 Reads the seeded database through the app itself, so the demo ships the same
 records, the same QR/Code-128 codes and the same Arabic strings the real app
@@ -197,7 +197,9 @@ def main():
     if left:
         sys.exit("Unsubstituted placeholders: " + ", ".join(left))
 
-    out = os.path.join(HERE, "itam-demo.html")
+    # NB: itam-demo.html is the hand-maintained published demo — never
+    # overwrite it from here.
+    out = os.path.join(HERE, "itam-demo-ams.html")
     with open(out, "w") as f:
         f.write(html)
 

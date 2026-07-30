@@ -1,6 +1,6 @@
 # Interactive demo
 
-`itam-demo.html` is a single self-contained page that reproduces the app's UI
+`itam-demo-ams.html` is a single self-contained page that reproduces the app's UI
 and runs entirely in the browser — no server, no network, no database. It is
 meant for showing the system to people who can't reach the school server.
 
@@ -39,11 +39,12 @@ and the language toggle.
 
 ```bash
 flask --app app seed        # creates instance/itam.sqlite
-python demo/build.py        # writes demo/itam-demo.html
+python demo/build.py        # writes demo/itam-demo-ams.html
 ```
 
-Edit `app.template.html` for markup, styles or behaviour — `itam-demo.html` is
-generated output and any edits to it are overwritten on the next build.
+Edit `app.template.html` for markup, styles or behaviour — `itam-demo-ams.html`
+is generated output and any edits to it are overwritten on the next build.
+`itam-demo.html` is hand-maintained and is never written by `build.py`.
 
 ## The two demo files
 

@@ -737,7 +737,8 @@ function viewNewAsset() {
         <div><label for="n-department">${esc(t("Department"))}</label>${sel("n-department", DATA.departments.map(d => d.name))}</div>
         <div><label for="n-vendor">${esc(t("Vendor"))}</label>${sel("n-vendor", DATA.vendors.map(v => v.name))}</div>
         <div><label for="n-cost">${esc(t("Purchase cost"))}</label><input id="n-cost" type="number" step="0.01" min="0"></div>
-        <div><label for="n-pdate">${esc(t("Purchase date"))}</label><input id="n-pdate" type="date"></div>
+        <div><label for="n-pdate">${esc(t("Purchase date"))}</label>
+          <input id="n-pdate" type="date" value="${new Date(TODAY.getTime()).toISOString().slice(0,10)}"></div>
         <div><label for="n-warranty">${esc(t("Warranty expiry"))}</label><input id="n-warranty" type="date"></div>
         <div class="full"><label for="n-notes">${esc(t("Notes"))}</label><textarea id="n-notes" rows="2"></textarea></div>
       </div>

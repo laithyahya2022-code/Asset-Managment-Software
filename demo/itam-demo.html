@@ -444,6 +444,11 @@ function barcodePreview(tag){
     ${s}<text x="${(x+6)/2}" y="48" text-anchor="middle" font-size="9" font-family="monospace">${esc(tag)}</text></svg>`;
 }
 const ORG_NAME = "Mada International Academy";
+// Mirrors OPERATING_SYSTEMS in itam/models.py
+const OPERATING_SYSTEMS = ["Windows 11 Pro","Windows 11 Home","Windows 10 Pro","Windows 10 Home",
+  "Windows Server 2022","Windows Server 2019","macOS","iOS","iPadOS","Android","ChromeOS",
+  "Ubuntu Linux","Debian Linux","Fedora Linux","Red Hat Enterprise Linux","Linux (other)",
+  "Printer firmware","Switch firmware","Embedded / none"];
 window.printLabel=function(id){
   const a=asset(id); if(!a) return;
   let ov=document.getElementById("pl-overlay");
@@ -899,13 +904,12 @@ function assetFields(a){ a=a||{}; const isNew=!a.id;
     <div><label>Assign to</label><select name="assign"><option value="">— (unassigned)</option>${db.employees.map(e=>{const cu=curAsg(a);const sel=cu&&cu.emp===e.id?"selected":"";return `<option value="${e.id}" ${sel}>${esc(e.name)}${e.code?" ("+esc(e.code)+")":""}</option>`;}).join("")}</select></div>
     <div><label>Updated by (data entry)</label><input name="updby" value="${esc(a.updby||"Administrator")}"></div>
     <div><label>Vendor</label><select name="vendor"><option value="">—</option>${opt(db.vendors,a.vendor,x=>x.name)}</select></div>
-    <div><label>Part of (parent asset)</label><select name="parent"><option value="">—</option>${db.assets.filter(x=>x.id!==a.id).map(x=>`<option value="${x.id}" ${a.parent===x.id?"selected":""}>${esc(x.tag)} — ${esc(x.name)}</option>`).join("")}</select></div>
-    <div><label>Purchase date</label><input name="pdate" type="date" value="${a.pdate||""}"></div>
+    <div><label>Purchase date</label><input name="pdate" type="date" value="${a.pdate||(isNew?today():"")}"></div>
     <div><label>Purchase cost</label><input name="cost" type="number" step="0.01" min="0" value="${a.cost??""}"></div>
     <div><label>Depreciation (years)</label><input name="dep" type="number" min="0" value="${a.dep||5}"></div>
     <div><label>Warranty expiry</label><input name="warr" type="date" value="${a.warr||""}"></div>
     <div class="full"><p class="eyebrow" style="margin:.6rem 0 0">Technical specifications</p></div>
-    <div><label>Operating system</label><input name="os" ${tv("os","Windows 11 Pro")}></div>
+    <div><label>Operating system</label><input name="os" list="os-list" autocomplete="off" value="${esc(a.os||"")}" placeholder="Choose or type an OS"><datalist id="os-list">${OPERATING_SYSTEMS.map(o=>`<option value="${esc(o)}">`).join("")}</datalist></div>
     <div><label>OS version</label><input name="osv" ${tv("osv","23H2")}></div>
     <div><label>CPU</label><input name="cpu" ${tv("cpu","Intel Core i5")}></div>
     <div><label>RAM</label><input name="ram" ${tv("ram","16 GB")}></div>
@@ -951,7 +955,7 @@ window.saveAsset=function(f,id){
   a.tag=tag;a.name=f.name.value.trim();a.cat=catId;a.status=f.status.value;
   a.cond=f.cond.value;a.serial=f.serial.value.trim();a.mfr=f.mfr.value.trim();a.model=f.model.value.trim();
   a.vendor=f.vendor.value?+f.vendor.value:null;
-  a.parent=f.parent.value?+f.parent.value:null;
+  // "Part of" was removed from the form; keep any existing link untouched.
   a.branch=BRANCHES.includes(f.branch.value)?f.branch.value:null;
   a.building=BUILDINGS.includes(f.building.value)?f.building.value:null;
   a.floor=FLOORS.includes(f.floor.value)?f.floor.value:null;
