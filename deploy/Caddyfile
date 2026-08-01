@@ -5,8 +5,8 @@
 #
 # 1) Edit the domain below to yours.
 # 2) Run AMS headless on the same machine, listening on 127.0.0.1:8080:
-#       Windows : set ITAM_NO_BROWSER=1 && set PORT=8080 && ITAM.exe
-#       Linux   : ITAM_NO_BROWSER=1 PORT=8080 python run_server.py
+#       Windows : set AMS_NO_BROWSER=1 && set PORT=8080 && AMS.exe
+#       Linux   : AMS_NO_BROWSER=1 PORT=8080 python run_server.py
 # 3) Start Caddy in this folder:  caddy run
 #
 # --- PUBLIC: reachable from anywhere, incl. off-campus --------------
