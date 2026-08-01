@@ -1,9 +1,11 @@
 from datetime import date, datetime
 
-from flask import (Blueprint, flash, g, redirect, render_template, request,
-                   url_for)
+from flask import (Blueprint, flash, g, jsonify, redirect, render_template,
+                   request, url_for)
+from sqlalchemy.orm import joinedload, selectinload
 
-from ..models import (MAINTENANCE_KINDS, MAINTENANCE_STATUSES, Asset,
+from ..models import (BLOCKED_CHECKOUT_STATUSES, MAINTENANCE_KINDS,
+                      MAINTENANCE_STATUSES, Asset,
                       Assignment, Employee, InventoryAudit, InventoryCheck,
                       License, LicenseAssignment, Maintenance, Reservation,
                       User, Vendor, db)
@@ -111,7 +113,9 @@ def inventory_export_xlsx():
 @perm_required("assets.view")
 def checkouts():
     show = request.args.get("show", "active")
-    stmt = db.select(Assignment).order_by(Assignment.assigned_at.desc())
+    stmt = (db.select(Assignment)
+            .options(joinedload(Assignment.asset), joinedload(Assignment.employee))
+            .order_by(Assignment.assigned_at.desc()))
     if show == "active":
         stmt = stmt.where(Assignment.returned_at.is_(None))
     elif show == "overdue":
@@ -120,32 +124,108 @@ def checkouts():
                           Assignment.due_at < date.today())
     rows = db.session.scalars(stmt.limit(300)).all()
     reservations = db.session.scalars(
-        db.select(Reservation).where(Reservation.status == "Active")
+        db.select(Reservation)
+        .options(joinedload(Reservation.asset), joinedload(Reservation.employee))
+        .where(Reservation.status == "Active")
         .order_by(Reservation.start_date)).all()
-    available = db.session.scalars(
-        db.select(Asset).where(Asset.status == "Available").order_by(Asset.tag)).all()
-    out_assets = db.session.scalars(
-        db.select(Asset).where(Asset.status == "Checked Out").order_by(Asset.tag)).all()
-    employees = db.session.scalars(
-        db.select(Employee).where(Employee.active).order_by(Employee.name)).all()
     return render_template("checkouts.html", rows=rows, show=show,
                            reservations=reservations, today=date.today(),
-                           available=available, out_assets=out_assets,
-                           employees=employees)
+                           available=_lendable_assets(),
+                           available_total=_lendable_count(),
+                           picker_limit=PICKER_LIMIT,
+                           out_assets=_assets_on_loan(),
+                           employees=db.session.scalars(
+                               db.select(Employee).where(Employee.active)
+                               .order_by(Employee.name)).all())
+
+
+#: How many assets either picker renders at once. A register of a few thousand
+#: assets turned this page into a megabyte of <option> tags; the search box
+#: reaches the rest.
+PICKER_LIMIT = 200
+
+
+def _lendable_query(q=None):
+    """Assets that can actually be lent right now.
+
+    "Available" is the status the rest of the app sets on check-in, but an
+    asset can also be free simply because nobody ever took it out, so this
+    asks "has no open assignment and isn't blocked" rather than trusting the
+    status on its own.
+    """
+    open_asset_ids = db.select(Assignment.asset_id).where(
+        Assignment.returned_at.is_(None))
+    stmt = (db.select(Asset)
+            .where(Asset.status.notin_(BLOCKED_CHECKOUT_STATUSES),
+                   Asset.status != "Checked Out",
+                   Asset.id.notin_(open_asset_ids))
+            .order_by(Asset.tag))
+    if q:
+        like = f"%{q}%"
+        stmt = stmt.where(db.or_(Asset.tag.ilike(like), Asset.name.ilike(like),
+                                 Asset.serial.ilike(like)))
+    return stmt
+
+
+def _lendable_assets(q=None):
+    return db.session.scalars(_lendable_query(q).limit(PICKER_LIMIT)).all()
+
+
+def _lendable_count():
+    return db.session.scalar(
+        db.select(db.func.count()).select_from(_lendable_query().subquery()))
+
+
+def _assets_on_loan():
+    """Assets with an open assignment, for the check-in list."""
+    stmt = (db.select(Asset)
+            .options(selectinload(Asset.assignments).joinedload(Assignment.employee))
+            .join(Assignment, Assignment.asset_id == Asset.id)
+            .where(Assignment.returned_at.is_(None))
+            .order_by(Asset.tag)
+            .limit(PICKER_LIMIT))
+    return db.session.scalars(stmt).unique().all()
+
+
+@bp.get("/lend/assets.json")
+@perm_required("checkout.manage")
+def lendable_search():
+    """Feeds the lending picker's search box."""
+    rows = _lendable_assets(request.args.get("q", "").strip())
+    return jsonify([{"id": a.id, "label": f"{a.tag} — {a.name}"} for a in rows])
+
+
+@bp.get("/lend/assets/<int:asset_id>.json")
+@perm_required("checkout.manage")
+def lendable_detail(asset_id):
+    """The read-only detail card under the lending picker."""
+    a = db.get_or_404(Asset, asset_id)
+    where = " · ".join(p for p in (a.branch, a.building, a.floor, a.location_name) if p)
+    return jsonify({
+        "tag": a.tag, "name": a.name,
+        "category": a.category.name if a.category else "",
+        "model": " ".join(p for p in (a.manufacturer, a.model) if p),
+        "serial": a.serial or "", "location": where,
+        "department": a.department.name if a.department else "",
+        "condition": a.condition or "", "status": a.status or "",
+    })
 
 
 @bp.post("/lend")
 @perm_required("checkout.manage")
 def lend():
-    from ..models import BLOCKED_CHECKOUT_STATUSES
     asset = db.get_or_404(Asset, int(request.form["asset_id"]))
     if asset.current_assignment or asset.status in BLOCKED_CHECKOUT_STATUSES:
         flash(f"{asset.tag} cannot be lent out right now.", "error")
         return redirect(url_for("ops.checkouts"))
     emp = db.get_or_404(Employee, int(request.form["employee_id"]))
+    handled_by = request.form.get("handled_by", "").strip() or g.user.name
     db.session.add(Assignment(asset=asset, employee=emp, assigned_by=g.user.id,
                               due_at=parse_date(request.form.get("due_at")),
+                              handled_by=handled_by,
                               notes=request.form.get("notes", "").strip() or None))
+    # The asset card shows who last touched the record; lending is a change.
+    asset.updated_by = handled_by
     asset.status = "Checked Out"
     log_activity("checked_out", "asset", asset.id, f"{asset.tag} → {emp.name}")
     db.session.commit()

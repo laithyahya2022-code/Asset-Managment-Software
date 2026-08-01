@@ -306,6 +306,7 @@ class Assignment(db.Model):
     due_at = db.Column(db.Date)
     returned_at = db.Column(db.DateTime)
     notes = db.Column(db.Text)
+    handled_by = db.Column(db.String(120))        # "Edited by" on the lending form
     return_condition = db.Column(db.String(15))   # condition observed at check-in
     return_notes = db.Column(db.Text)             # damage / inspection notes
     asset = db.relationship("Asset", back_populates="assignments")

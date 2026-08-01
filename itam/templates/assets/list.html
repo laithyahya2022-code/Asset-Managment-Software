@@ -111,6 +111,21 @@
 </div>
 {% endif %}
 </form>
+
+{% if paging and paging.pages > 1 %}
+{# Keep whatever filters are active when stepping between pages. #}
+{% set keep = request.args.to_dict() %}{% set _ = keep.pop("page", None) %}
+<div class="pager no-print">
+  <span class="muted">{{ paging.first }}–{{ paging.last }} {{ t("of") }} {{ paging.total }}</span>
+  {% if paging.page > 1 %}
+  <a class="btn secondary sm" href="{{ url_for('assets.list_', page=paging.page - 1, **keep) }}">← {{ t("Previous") }}</a>
+  {% endif %}
+  <span class="muted">{{ t("Page") }} {{ paging.page }} / {{ paging.pages }}</span>
+  {% if paging.page < paging.pages %}
+  <a class="btn secondary sm" href="{{ url_for('assets.list_', page=paging.page + 1, **keep) }}">{{ t("Next") }} →</a>
+  {% endif %}
+</div>
+{% endif %}
 {% else %}
 <p class="empty">No assets found.</p>
 {% endif %}

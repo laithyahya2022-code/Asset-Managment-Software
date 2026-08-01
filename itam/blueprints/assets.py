@@ -8,6 +8,7 @@ from datetime import date, datetime, timedelta
 from flask import (Blueprint, Response, current_app, flash, g, redirect,
                    render_template, request, send_from_directory, url_for)
 from sqlalchemy import or_
+from sqlalchemy.orm import joinedload, selectinload
 from werkzeug.utils import secure_filename
 
 from ..models import (ASSET_CONDITIONS, ASSET_STATUSES, BRANCHES, BUILDINGS,
@@ -73,14 +74,23 @@ def _from_form(a, form):
         a.status = form["status"]
     if form.get("condition") in ASSET_CONDITIONS:
         a.condition = form["condition"]
+    # Only write fields the form actually submitted. "OS version" was removed
+    # from the form, and blanking it here would erase imported values.
     for field in ("os_name", "os_version", "cpu", "ram", "storage", "gpu",
                   "hostname", "mac_address", "ip_address", "invoice_number"):
-        setattr(a, field, form.get(field, "").strip() or None)
+        if field in form:
+            setattr(a, field, form.get(field, "").strip() or None)
     a.branch = form.get("branch") if form.get("branch") in BRANCHES else None
     a.building = form.get("building") if form.get("building") in BUILDINGS else None
     a.floor = form.get("floor") if form.get("floor") in FLOORS else None
     a.location_name = form.get("location_name", "").strip() or None
-    a.updated_by = form.get("updated_by", "").strip() or None
+    # "Updated by" is shown on the asset form but no longer editable there, so
+    # the field isn't submitted. Stamp whoever saved the record instead; the
+    # importer and the API still pass their own value and keep it.
+    if "updated_by" in form:
+        a.updated_by = form.get("updated_by", "").strip() or None
+    elif getattr(g, "user", None) is not None:
+        a.updated_by = g.user.name
     a.vendor_id = int(form["vendor_id"]) if form.get("vendor_id") else None
     a.purchase_date = parse_date(form.get("purchase_date"))
     a.purchase_cost = form.get("purchase_cost") or None
@@ -119,8 +129,21 @@ def _apply_assignment(a, form):
     log_activity("checked_out", "asset", a.id, f"{a.tag} → {emp.name}")
 
 
-def _filtered_assets(args):
-    stmt = db.select(Asset).order_by(Asset.tag)
+#: Rows per page on the asset list. Rendering every row of a 3,000-asset
+#: register produced a 1 MB page and one SQL query per asset.
+PAGE_SIZE = 50
+
+
+def _assets_query(args):
+    # The list shows category, department, location and the current holder for
+    # every row. Without this each row fetched its own, which is where the
+    # 3,000-query page load came from.
+    stmt = db.select(Asset).options(
+        joinedload(Asset.category),
+        joinedload(Asset.department),
+        joinedload(Asset.location),
+        selectinload(Asset.assignments).joinedload(Assignment.employee),
+    ).order_by(Asset.tag)
     q = args.get("q", "").strip()
     if q:
         like = f"%{q}%"
@@ -145,7 +168,31 @@ def _filtered_assets(args):
         stmt = stmt.where(Asset.building == args["building"])
     if args.get("floor"):
         stmt = stmt.where(Asset.floor == args["floor"])
-    return db.session.scalars(stmt).all()
+    return stmt
+
+
+def _filtered_assets(args):
+    """Every matching asset — used by exports and the label sheet."""
+    return db.session.scalars(_assets_query(args)).unique().all()
+
+
+def _assets_page(args):
+    """One page of matching assets, plus the paging figures for the template."""
+    try:
+        page = max(1, int(args.get("page", 1)))
+    except (TypeError, ValueError):
+        page = 1
+    stmt = _assets_query(args)
+    total = db.session.scalar(
+        db.select(db.func.count()).select_from(stmt.order_by(None).subquery()))
+    pages = max(1, (total + PAGE_SIZE - 1) // PAGE_SIZE)
+    page = min(page, pages)
+    rows = db.session.scalars(
+        stmt.limit(PAGE_SIZE).offset((page - 1) * PAGE_SIZE)).unique().all()
+    return rows, {"page": page, "pages": pages, "total": total,
+                  "size": PAGE_SIZE,
+                  "first": 0 if not total else (page - 1) * PAGE_SIZE + 1,
+                  "last": min(page * PAGE_SIZE, total)}
 
 
 def _distinct(col):
@@ -162,7 +209,8 @@ def list_():
     searches = db.session.scalars(db.select(SavedSearch)
                                   .where(SavedSearch.user_id == g.user.id)
                                   .order_by(SavedSearch.name)).all()
-    return render_template("assets/list.html", assets=_filtered_assets(request.args),
+    rows, paging = _assets_page(request.args)
+    return render_template("assets/list.html", assets=rows, paging=paging,
                            args=request.args, searches=searches,
                            branch_opts=_distinct(Asset.branch),
                            building_opts=_distinct(Asset.building),

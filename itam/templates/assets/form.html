@@ -67,13 +67,17 @@
         <datalist id="place-list">
           {% for pl in places %}<option value="{{ pl }}">{% endfor %}
         </datalist></div>
+      {# Assignment is owned by Lending now — shown here for reference, changed
+         there. Both controls are disabled, so neither is submitted and neither
+         can overwrite what Lending recorded. #}
       <div><label for="f-assign">Assign to</label>
-        <select id="f-assign" name="assign_employee_id"><option value="">— (unassigned)</option>
-          {% for e in employees %}<option value="{{ e.id }}"
-            {{ 'selected' if asset and asset.current_assignment and asset.current_assignment.employee_id == e.id }}>{{ e.name }}{{ " (" ~ e.emp_code ~ ")" if e.emp_code }}</option>{% endfor %}
-        </select></div>
+        <input id="f-assign" disabled
+               value="{{ asset.current_assignment.employee.name if asset and asset.current_assignment else '— (unassigned)' }}">
+        <p class="field-note">Change this on <a href="{{ url_for('ops.checkouts') }}">{{ t("Lending") }}</a>.</p></div>
       <div><label for="f-updby">Updated by (data entry)</label>
-        <input id="f-updby" name="updated_by" value="{{ a.updated_by or '' if a else (g.user.name if g.user else '') }}"></div>
+        <input id="f-updby" disabled
+               value="{{ a.updated_by or '' if a else (g.user.name if g.user else '') }}">
+        <p class="field-note">Set automatically when the asset is saved.</p></div>
       <div><label for="f-vendor">Vendor</label>
         <select id="f-vendor" name="vendor_id"><option value="">—</option>
           {% for v in vendors %}<option value="{{ v.id }}" {{ 'selected' if a and a.vendor_id == v.id }}>{{ v.name }}</option>{% endfor %}
@@ -100,8 +104,6 @@
         <datalist id="os-list">
           {% for os in operating_systems %}<option value="{{ os }}">{% endfor %}
         </datalist></div>
-      <div><label for="f-osv">OS version</label>
-        <input id="f-osv" name="os_version" value="{{ a.os_version or '' if a else '' }}" placeholder="23H2"></div>
       <div><label for="f-cpu">CPU</label>
         <input id="f-cpu" name="cpu" value="{{ a.cpu or '' if a else '' }}" placeholder="Intel Core i5-1335U"></div>
       <div><label for="f-ram">RAM</label>

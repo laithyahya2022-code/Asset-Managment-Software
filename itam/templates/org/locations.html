@@ -7,6 +7,11 @@
   {% if has_perm("org.manage") %}
   <div class="actions-row no-print">
     <button class="btn" type="button" id="loc-new">+ {{ t("New location") }}</button>
+    <form class="inline" method="post" action="{{ url_for('org.locations_standard') }}">
+      <button class="btn secondary" type="submit"
+              data-confirm="Add the standard branches, buildings, floors and rooms?">
+        {{ t("Add standard locations") }}</button>
+    </form>
     {% if rows %}{{ bulk_button(t("Delete selected"), danger=True) }}{% endif %}
   </div>
   {% endif %}
@@ -20,7 +25,7 @@
     <input name="name" id="loc-name" placeholder="{{ t('Location name') }}" required>
     <select name="kind" id="loc-kind">{% for k in kinds %}<option>{{ k }}</option>{% endfor %}</select>
     <select name="parent_id" id="loc-parent"><option value="">No parent (top level)</option>
-      {% for l in rows %}<option value="{{ l.id }}">{{ l.path }}</option>{% endfor %}
+      {% for l in rows %}<option value="{{ l.id }}">{{ paths[l.id] }}</option>{% endfor %}
     </select>
     <button class="btn" type="submit" id="loc-save">{{ t("Add location") }}</button>
     <button class="btn secondary" type="button" id="loc-cancel"
@@ -37,12 +42,12 @@
     {% if has_perm("org.manage") %}{{ select_all_th() }}{% endif %}
     <th>Path</th><th>Kind</th><th>{{ t("Assets") }}</th><th></th>
   </tr>
-  {% for l in rows | sort(attribute="path") %}
+  {% for l in rows | sort(attribute="id") %}
   <tr>
     {% if has_perm("org.manage") %}{{ row_check(l.id) }}{% endif %}
-    <td>{{ l.path }}</td>
+    <td>{{ paths[l.id] }}</td>
     <td><span class="chip">{{ l.kind }}</span></td>
-    <td><a href="{{ url_for('assets.list_', location=l.id) }}">{{ l.assets | length }}</a></td>
+    <td><a href="{{ url_for('assets.list_', location=l.id) }}">{{ counts.get(l.id, 0) }}</a></td>
     <td class="no-print">
       {% if has_perm("org.manage") %}
       <button class="btn secondary sm loc-edit" type="button" data-id="{{ l.id }}"

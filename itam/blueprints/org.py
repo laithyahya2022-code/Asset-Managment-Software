@@ -3,7 +3,8 @@ from datetime import datetime
 from flask import (Blueprint, flash, g, redirect, render_template, request,
                    url_for)
 
-from ..models import (EMPLOYEE_TYPES, LOCATION_KINDS, Asset, Category,
+from ..models import (BRANCHES, BUILDINGS, EMPLOYEE_TYPES, FLOORS,
+                      LOCATION_KINDS, PLACES, Asset, Category,
                       Department, Employee, Location, Vendor, db)
 from ..security import perm_required
 from ..utils import (csv_response, log_activity, parse_date, read_table,
@@ -221,7 +222,27 @@ def locations():
         flash(f'Location "{loc.name}" saved.', "success")
         return redirect(url_for("org.locations"))
     rows = db.session.scalars(db.select(Location).order_by(Location.name)).all()
-    return render_template("org/locations.html", rows=rows, kinds=LOCATION_KINDS)
+    # Location.path walks up the parent chain and l.assets loads every asset,
+    # so a template touching both once per row cost a query per ancestor and
+    # per location. Resolve both up front in two queries instead.
+    by_id = {l.id: l for l in rows}
+    paths = {}
+
+    def path_of(loc):
+        if loc.id in paths:
+            return paths[loc.id]
+        parent = by_id.get(loc.parent_id)
+        paths[loc.id] = (f"{path_of(parent)} / {loc.name}"
+                         if parent and parent.id != loc.id else loc.name)
+        return paths[loc.id]
+
+    for loc in rows:
+        path_of(loc)
+    counts = dict(db.session.execute(
+        db.select(Asset.location_id, db.func.count(Asset.id))
+        .where(Asset.location_id.isnot(None)).group_by(Asset.location_id)).all())
+    return render_template("org/locations.html", rows=rows, kinds=LOCATION_KINDS,
+                           paths=paths, counts=counts)
 
 
 @bp.post("/locations/<int:loc_id>/delete")
@@ -348,3 +369,45 @@ def locations_bulk_delete():
         Location, request.form.getlist("ids", type=int),
         lambda l: (f"{l.name} has assets or sub-locations." if l.assets or l.children else None),
         "org.locations", "location")
+
+
+@bp.post("/locations/standard")
+@perm_required("org.manage")
+def locations_standard():
+    """Create the school's standard Branch → Building → Floor → Room tree.
+
+    Built from the same BRANCHES / BUILDINGS / FLOORS / PLACES the asset form
+    offers, so the Locations list starts out matching the options staff already
+    pick from. Idempotent: anything already present is reused, never duplicated.
+    """
+    def ensure(name, kind, parent):
+        parent_id = parent.id if parent else None
+        row = db.session.scalar(db.select(Location).where(
+            Location.name == name, Location.kind == kind,
+            Location.parent_id == parent_id))
+        if row:
+            return row, False
+        row = Location(name=name, kind=kind, parent_id=parent_id)
+        db.session.add(row)
+        db.session.flush()
+        return row, True
+
+    made = 0
+    for branch_name in BRANCHES:
+        branch, new = ensure(branch_name, "Branch", None)
+        made += new
+        for building_name in BUILDINGS:
+            building, new = ensure(building_name, "Building", branch)
+            made += new
+            for floor_name in FLOORS:
+                floor, new = ensure(floor_name, "Floor", building)
+                made += new
+                for room_name in PLACES:
+                    _, new = ensure(room_name, "Room", floor)
+                    made += new
+    db.session.commit()
+    log_activity("locations_seeded", "location", None, f"{made} added")
+    db.session.commit()
+    flash(f"Standard locations ready — {made} added, existing ones kept."
+          if made else "Standard locations were already in place.", "success")
+    return redirect(url_for("org.locations"))

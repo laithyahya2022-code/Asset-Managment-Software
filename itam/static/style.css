@@ -197,6 +197,17 @@ input[type="checkbox"] { width: auto; }
 .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(215px, 1fr)); gap: 0 1rem; }
 .form-grid .full { grid-column: 1 / -1; }
 .form-actions { margin-top: 1.2rem; display: flex; gap: 0.5rem; }
+/* Fields shown for reference only — changed elsewhere, not here. */
+input[readonly], select:disabled, input:disabled {
+  background: var(--bg); color: var(--muted); cursor: not-allowed;
+}
+.field-note { font-size: 0.74rem; color: var(--muted); margin: 0.25rem 0 0; }
+.readonly-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.5rem 1rem; margin: 0; padding: 0.7rem 0.85rem; border: 1px solid var(--border);
+  border-radius: 8px; background: var(--bg); }
+.readonly-facts dt { font-size: 0.7rem; font-weight: 700; letter-spacing: 0.05em;
+  text-transform: uppercase; color: var(--muted); }
+.readonly-facts dd { margin: 0.1rem 0 0; font-size: 0.88rem; word-break: break-word; }
 .filters { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem; align-items: center; }
 .filters input, .filters select { width: auto; }
 .inline { display: inline; }
@@ -316,3 +327,7 @@ tr.picked td { background: #f2f9f4 !important; }
 .bulk-go[disabled] { opacity: 0.45; cursor: not-allowed; }
 .bulk-go[disabled]:hover { background: var(--danger); }
 .bulk-go.secondary[disabled]:hover { background: var(--surface); }
+
+/* asset list pager */
+.pager { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap;
+  margin: .2rem 0 1rem; }

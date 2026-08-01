@@ -66,7 +66,9 @@ def _open_app_window(url, title):
             webview.settings["ALLOW_DOWNLOADS"] = True
         except (AttributeError, KeyError, TypeError):
             pass
-        webview.create_window(title, url, width=1280, height=840)
+        # maximized so it fills the screen instead of a fixed 1280x840 box
+        webview.create_window(title, url, width=1280, height=840,
+                              maximized=True)
         webview.start()      # blocks until the window is closed
         return WINDOW_CLOSED
     except Exception:
@@ -75,7 +77,7 @@ def _open_app_window(url, title):
     for exe in _browser_app_candidates():
         try:
             import subprocess
-            subprocess.Popen([exe, f"--app={url}"])
+            subprocess.Popen([exe, f"--app={url}", "--start-maximized"])
             return WINDOW_DETACHED
         except Exception:
             continue
@@ -162,7 +164,9 @@ def main():
         server.join()        # headless (e.g. CI smoke test / server install)
         return
 
-    title = f"Mada AMS  —  network: http://{ip}:{port}"
+    # The window title is visible to everyone; the network address stays in
+    # the console banner and the access-info text file instead.
+    title = "Mada Asset Management System"
     outcome = _open_app_window(url, title)
     if outcome == WINDOW_CLOSED:
         return               # the app window was closed -> quit

@@ -963,3 +963,223 @@ def test_pending_update_shows_a_restart_note(client, app):
         db.session.commit()
     page = client.get("/").data.decode()
     assert "Update ready" in page and "2026.08.01" in page
+
+
+def test_asset_list_pages_instead_of_rendering_everything(client, app):
+    """A 3,000-asset register produced a 1 MB page and a query per row."""
+    from itam.blueprints.assets import PAGE_SIZE
+    from itam.models import Category
+
+    with app.app_context():
+        cat = db.session.scalar(db.select(Category))
+        db.session.add_all([
+            Asset(tag=f"PG-{i:04d}", name=f"Device {i}", category=cat,
+                  status="Available", condition="Good")
+            for i in range(PAGE_SIZE + 25)])
+        db.session.commit()
+
+    login(client)
+    body = client.get("/assets/").data.decode()
+    assert body.count('data-id=') <= PAGE_SIZE + 1, "more than one page of rows"
+    assert "Page 1 /" in body and "Next" in body
+
+    page2 = client.get("/assets/?page=2").data.decode()
+    assert "PG-0050" in page2 and "PG-0000" not in page2
+    # An out-of-range page clamps rather than 500s or shows nothing.
+    assert client.get("/assets/?page=999").status_code == 200
+    assert client.get("/assets/?page=abc").status_code == 200
+
+
+def test_export_still_covers_every_page(client, app):
+    from itam.blueprints.assets import PAGE_SIZE
+    from itam.models import Category
+
+    with app.app_context():
+        cat = db.session.scalar(db.select(Category))
+        db.session.add_all([
+            Asset(tag=f"EX-{i:04d}", name=f"Device {i}", category=cat,
+                  status="Available", condition="Good")
+            for i in range(PAGE_SIZE + 10)])
+        db.session.commit()
+
+    login(client)
+    rows = client.get("/assets/export.csv").data.decode().strip().splitlines()
+    assert len(rows) - 1 >= PAGE_SIZE + 10, "export was truncated to one page"
+
+
+def test_asset_list_does_not_query_per_row(client, app):
+    """Guards the eager loading: rows must not each fetch their own lookups."""
+    from sqlalchemy import event
+
+    from itam.models import Category
+
+    with app.app_context():
+        cat = db.session.scalar(db.select(Category))
+        db.session.add_all([
+            Asset(tag=f"NP-{i:03d}", name=f"Device {i}", category=cat,
+                  status="Available", condition="Good") for i in range(40)])
+        db.session.commit()
+        engine = db.engine
+
+    counter = {"n": 0}
+
+    def count(*args, **kwargs):
+        counter["n"] += 1
+
+    login(client)
+    event.listen(engine, "before_cursor_execute", count)
+    try:
+        client.get("/assets/")
+    finally:
+        event.remove(engine, "before_cursor_execute", count)
+    assert counter["n"] < 40, f"one query per row is back ({counter['n']} queries)"
+
+
+def test_standard_locations_are_idempotent(client, app):
+    from itam.models import Location
+
+    login(client)
+    assert client.post("/locations/standard", follow_redirects=True).status_code == 200
+    with app.app_context():
+        first = db.session.scalar(db.select(db.func.count(Location.id)))
+        kinds = {l.kind for l in db.session.scalars(db.select(Location))}
+    assert first > 100, "the standard tree was not created"
+    assert {"Branch", "Building", "Floor", "Room"} <= kinds
+
+    client.post("/locations/standard", follow_redirects=True)
+    with app.app_context():
+        assert db.session.scalar(db.select(db.func.count(Location.id))) == first, \
+            "running it twice duplicated locations"
+
+
+def test_os_version_is_gone_from_the_form_but_kept_in_the_data(client, app):
+    from itam.models import Category
+
+    with app.app_context():
+        a = Asset(tag="OSV-1", name="Imported", status="Available",
+                  condition="Good", os_name="Windows 11 Pro", os_version="23H2",
+                  category=db.session.scalar(db.select(Category)))
+        db.session.add(a)
+        db.session.commit()
+        aid = a.id
+
+    login(client)
+    body = client.get(f"/assets/{aid}/edit").data.decode()
+    assert 'name="os_version"' not in body, "OS version is still on the form"
+
+    client.post(f"/assets/{aid}/edit", data={
+        "name": "Imported", "tag": "OSV-1", "status": "Available",
+        "condition": "Good", "depreciation_years": "5",
+        "os_name": "Windows 11 Pro"}, follow_redirects=True)
+    with app.app_context():
+        assert db.session.get(Asset, aid).os_version == "23H2", \
+            "saving the form wiped the imported OS version"
+
+
+def test_lending_lists_only_assets_that_are_free(client, app):
+    """The picker must offer free assets and hide the ones already out."""
+    from itam.models import Assignment, Category, Employee
+
+    with app.app_context():
+        cat = db.session.scalar(db.select(Category))
+        emp = db.session.scalar(db.select(Employee))
+        free = Asset(tag="LEND-FREE", name="Spare laptop", status="Available",
+                     condition="Good", category=cat, serial="SN-FREE")
+        out = Asset(tag="LEND-OUT", name="Loaned laptop", status="Checked Out",
+                    condition="Good", category=cat)
+        retired = Asset(tag="LEND-GONE", name="Retired laptop", status="Retired",
+                        condition="Poor", category=cat)
+        db.session.add_all([free, out, retired])
+        db.session.flush()
+        db.session.add(Assignment(asset=out, employee=emp))
+        db.session.commit()
+
+    login(client)
+    body = client.get("/checkouts").data.decode()
+    picker = body.split('id="co-asset"', 1)[1].split("</select>", 1)[0]
+    assert "LEND-FREE" in picker
+    assert "LEND-OUT" not in picker, "an asset already on loan was offered"
+    assert "LEND-GONE" not in picker, "a retired asset was offered"
+
+    # The search box and the read-only detail card share the same filter.
+    with app.app_context():
+        free_id = db.session.scalar(db.select(Asset.id).where(Asset.tag == "LEND-FREE"))
+    hits = client.get("/lend/assets.json?q=SN-FREE").get_json()
+    assert [h["id"] for h in hits] == [free_id]
+    assert client.get("/lend/assets.json?q=LEND-OUT").get_json() == []
+    facts = client.get(f"/lend/assets/{free_id}.json").get_json()
+    assert facts["serial"] == "SN-FREE" and facts["tag"] == "LEND-FREE"
+
+
+def test_lending_picker_does_not_render_the_whole_register(client, app):
+    """A few thousand <option> tags made this page a megabyte of HTML."""
+    from itam.blueprints.operations import PICKER_LIMIT
+    from itam.models import Category
+
+    with app.app_context():
+        cat = db.session.scalar(db.select(Category))
+        db.session.add_all([
+            Asset(tag=f"BULK-{i:04d}", name=f"Bulk {i}", status="Available",
+                  condition="Good", category=cat)
+            for i in range(PICKER_LIMIT + 50)])
+        db.session.commit()
+
+    login(client)
+    body = client.get("/checkouts").data.decode()
+    picker = body.split('id="co-asset"', 1)[1].split("</select>", 1)[0]
+    assert picker.count("<option") == PICKER_LIMIT
+    assert f"of {PICKER_LIMIT + 50}" in body, "the full count is not reported"
+
+
+def test_lending_records_assign_to_and_edited_by(client, app):
+    from itam.models import Assignment, Category, Employee
+
+    with app.app_context():
+        a = Asset(tag="LEND-1", name="Trolley", status="Available",
+                  condition="Good", category=db.session.scalar(db.select(Category)))
+        db.session.add(a)
+        db.session.commit()
+        aid, eid = a.id, db.session.scalar(db.select(Employee)).id
+
+    login(client)
+    resp = client.post("/lend", data={"asset_id": aid, "employee_id": eid,
+                                      "handled_by": "Sara N."},
+                       follow_redirects=True)
+    assert resp.status_code == 200
+    with app.app_context():
+        asg = db.session.scalar(db.select(Assignment).where(Assignment.asset_id == aid))
+        assert asg.employee_id == eid, "assign-to was not recorded"
+        assert asg.handled_by == "Sara N.", "edited-by was not recorded"
+        assert db.session.get(Asset, aid).status == "Checked Out"
+    assert b"Sara N." in client.get("/checkouts").data
+
+
+def test_asset_form_shows_assignment_but_cannot_change_it(client, app):
+    """Assignment lives in Lending; the asset form only mirrors it."""
+    from itam.models import Assignment, Category, Employee
+
+    with app.app_context():
+        emp = db.session.scalar(db.select(Employee))
+        a = Asset(tag="RO-1", name="Beamer", status="Checked Out", condition="Good",
+                  category=db.session.scalar(db.select(Category)))
+        db.session.add(a)
+        db.session.flush()
+        db.session.add(Assignment(asset=a, employee=emp))
+        db.session.commit()
+        aid, emp_name = a.id, emp.name
+
+    login(client)
+    body = client.get(f"/assets/{aid}/edit").data.decode()
+    assert 'name="assign_employee_id"' not in body, "Assign to is still editable"
+    assert 'name="updated_by"' not in body, "Updated by is still editable"
+    assert emp_name in body, "the current holder is no longer shown"
+
+    # Saving the form must not disturb the loan Lending created.
+    client.post(f"/assets/{aid}/edit", data={
+        "name": "Beamer", "tag": "RO-1", "status": "Checked Out",
+        "condition": "Good", "depreciation_years": "5"}, follow_redirects=True)
+    with app.app_context():
+        asg = db.session.scalar(db.select(Assignment).where(Assignment.asset_id == aid))
+        assert asg.returned_at is None, "saving the asset ended the loan"
+        assert db.session.get(Asset, aid).updated_by == "Administrator", \
+            "the saving user was not stamped"

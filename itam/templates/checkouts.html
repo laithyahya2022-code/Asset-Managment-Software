@@ -21,7 +21,7 @@
 {% if rows %}
 <form id="bulk" method="post" action="{{ url_for('ops.checkouts_bulk_checkin') }}" class="bulk-form">
 <div class="card table-wrap"><table>
-  <tr>{% if has_perm("checkout.manage") %}{{ select_all_th() }}{% endif %}<th>Asset</th><th>{{ t("Employee") }}</th><th>Checked out</th><th>Due</th><th>Returned</th><th></th></tr>
+  <tr>{% if has_perm("checkout.manage") %}{{ select_all_th() }}{% endif %}<th>Asset</th><th>Assigned to</th><th>Edited by</th><th>Checked out</th><th>Due</th><th>Returned</th><th></th></tr>
   {% for x in rows %}
   <tr>
     {% if has_perm("checkout.manage") %}
@@ -29,6 +29,7 @@
     {% endif %}
     <td><a href="{{ url_for('assets.detail', asset_id=x.asset_id) }}">{{ x.asset.tag }}</a> — {{ x.asset.name }}</td>
     <td><a href="{{ url_for('org.employee_detail', emp_id=x.employee_id) }}">{{ x.employee.name }}</a></td>
+    <td>{{ x.handled_by or "—" }}</td>
     <td>{{ x.assigned_at.strftime("%Y-%m-%d") }}</td>
     <td>{{ x.due_at or "—" }}{% if x.overdue %} <span class="red">{{ t("Overdue") }}</span>{% endif %}</td>
     <td>{{ x.returned_at.strftime("%Y-%m-%d") if x.returned_at else "—" }}</td>
@@ -72,14 +73,36 @@
     <p class="eyebrow">{{ t("Check Out") }} — lend an asset</p>
     {% if available %}
     <form method="post" action="{{ url_for('ops.lend') }}">
-      <label for="co-asset">Asset</label>
-      <select id="co-asset" name="asset_id" required>
-        {% for a in available %}<option value="{{ a.id }}">{{ a.tag }} — {{ a.name }}</option>{% endfor %}
+      <label for="co-search">Available assets ({{ available_total }})</label>
+      {# Only the first {{ picker_limit }} are rendered — a few thousand
+         <option> tags is a megabyte of HTML. The search box reaches the rest. #}
+      <input id="co-search" type="search" autocomplete="off"
+             placeholder="Search by Asset ID, name or serial…">
+      <select id="co-asset" name="asset_id" required size="6" style="margin-top:.4rem">
+        {% for a in available %}
+        <option value="{{ a.id }}">{{ a.tag }} — {{ a.name }}</option>
+        {% endfor %}
       </select>
-      <label for="co-emp">{{ t("Employee") }}</label>
+      <p class="field-note" id="co-count">
+        {% if available_total > picker_limit %}
+        Showing the first {{ picker_limit }} of {{ available_total }} — search to narrow the list.
+        {% endif %}
+      </p>
+      <p class="eyebrow" style="margin:.9rem 0 .3rem">Asset details (read-only — edit on the asset page)</p>
+      <dl class="readonly-facts" id="co-facts">
+        {% for key, label in [("tag", "Asset ID"), ("name", "Name"), ("category", "Category"),
+                              ("model", "Make / model"), ("serial", "Serial"),
+                              ("department", "Department"), ("location", "Location"),
+                              ("condition", "Condition"), ("status", "Status")] %}
+        <div><dt>{{ label }}</dt><dd data-fact="{{ key }}">—</dd></div>
+        {% endfor %}
+      </dl>
+      <label for="co-emp">Assign to</label>
       <select id="co-emp" name="employee_id" required>
         {% for e in employees %}<option value="{{ e.id }}">{{ e.name }}{{ " (" ~ e.emp_code ~ ")" if e.emp_code }}</option>{% endfor %}
       </select>
+      <label for="co-by">Edited by</label>
+      <input id="co-by" name="handled_by" value="{{ g.user.name if g.user else '' }}">
       <label for="co-due">Due date</label>
       <input id="co-due" name="due_at" type="date">
       <div class="form-actions"><button class="btn" type="submit">{{ t("Check Out") }}</button></div>
@@ -100,4 +123,61 @@
   </div>
 </div>
 {% endif %}
+
+<script>
+(function () {
+  var sel = document.getElementById("co-asset");
+  var facts = document.getElementById("co-facts");
+  var search = document.getElementById("co-search");
+  var count = document.getElementById("co-count");
+  if (!sel || !facts) return;
+  var detailUrl = {{ url_for('ops.lendable_detail', asset_id=0) | tojson }};
+  var searchUrl = {{ url_for('ops.lendable_search') | tojson }};
+  var shownFor = null;
+
+  function fill(data) {
+    facts.querySelectorAll("[data-fact]").forEach(function (dd) {
+      dd.textContent = (data && data[dd.dataset.fact]) || "—";
+    });
+  }
+  function showDetails() {
+    var id = sel.value;
+    if (!id) { fill(null); return; }
+    if (id === shownFor) return;
+    shownFor = id;
+    fetch(detailUrl.replace(/0(\.json)$/, id + "$1"), {credentials: "same-origin"})
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) { if (sel.value === id) fill(d); })
+      .catch(function () { fill(null); });
+  }
+  sel.addEventListener("change", showDetails);
+
+  if (search) {
+    var timer = null;
+    search.addEventListener("input", function () {
+      clearTimeout(timer);
+      timer = setTimeout(function () {
+        fetch(searchUrl + "?q=" + encodeURIComponent(search.value),
+              {credentials: "same-origin"})
+          .then(function (r) { return r.ok ? r.json() : []; })
+          .then(function (rows) {
+            sel.innerHTML = "";
+            rows.forEach(function (row) {
+              sel.add(new Option(row.label, row.id));
+            });
+            if (count) {
+              count.textContent = rows.length
+                ? rows.length + " match" + (rows.length === 1 ? "" : "es")
+                : "No available asset matches that search.";
+            }
+            shownFor = null;
+            showDetails();
+          })
+          .catch(function () {});
+      }, 200);
+    });
+  }
+  showDetails();
+})();
+</script>
 {% endblock %}
