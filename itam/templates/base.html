@@ -78,6 +78,12 @@
     </header>
 
     <main>
+      {% if update_pending %}
+      <div class="flash flash-update no-print">
+        <strong>{{ t("Update ready") }}</strong> —
+        {{ t("version") }} {{ update_pending }} {{ t("has been downloaded. Close and reopen the app to finish updating; your data is not affected.") }}
+      </div>
+      {% endif %}
       {% with messages = get_flashed_messages(with_categories=true) %}
         {% for category, message in messages %}
           <div class="flash flash-{{ category }}">{{ message }}</div>

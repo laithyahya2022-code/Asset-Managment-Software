@@ -27,6 +27,13 @@ DEFAULT_SETTINGS = {
     # Printed on every label. This is the organisation that owns the asset,
     # which is not the same thing as the name of this software.
     "label_org": "Mada International Academy",
+    # Self-update. Only ever contacts the GitHub Releases API; a failed check
+    # is silent. update_token is only needed while the repository is private.
+    "update_auto": "1",
+    "update_repo": "laithyahya2022-code/IT-Asset-Management-System-",
+    "update_token": "",
+    # Set by the updater, not by hand: the version waiting to be applied.
+    "update_pending": "",
 }
 
 # Ready-made sizes offered on the Settings screen. Roll printers such as the

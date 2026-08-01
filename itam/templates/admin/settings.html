@@ -14,6 +14,9 @@
     "email_enabled": "Send email notifications", "smtp_host": "SMTP host", "smtp_port": "SMTP port",
     "smtp_user": "SMTP username", "smtp_password": "SMTP password", "smtp_from": "From address",
     "backup_auto": "Automatic daily database backup", "audit_retention_days": "Activity log retention (days)",
+    "update_auto": "Check for updates automatically",
+    "update_repo": "Update source (GitHub owner/repo)",
+    "update_token": "Access token (only needed while the repo is private)",
     "label_org": "Organisation printed on labels",
     "label_width_mm": "Label width (mm)", "label_height_mm": "Label height (mm)"
   } %}
@@ -35,14 +38,14 @@
     <div class="form-grid">
       {% for key in keys %}
       <div>
-        {% if key in ("email_enabled", "backup_auto") %}
+        {% if key in ("email_enabled", "backup_auto", "update_auto") %}
         <label style="display:flex;gap:0.4rem;align-items:center;margin-top:1.4rem">
           <input type="checkbox" name="{{ key }}" value="1" {{ 'checked' if values[key] == '1' }}>
           {{ labels[key] }}</label>
         {% else %}
         <label for="s-{{ key }}">{{ labels[key] }}</label>
         <input id="s-{{ key }}" name="{{ key }}" value="{{ values[key] }}"
-               {{ 'type=password' if 'password' in key }}>
+               {{ 'type=password' if 'password' in key or 'token' in key }}>
         {% endif %}
       </div>
       {% endfor %}

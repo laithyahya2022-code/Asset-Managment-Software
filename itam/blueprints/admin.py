@@ -121,6 +121,7 @@ SETTING_GROUPS = {
     "Email": ["email_enabled", "smtp_host", "smtp_port", "smtp_user",
               "smtp_password", "smtp_from"],
     "Backup & Audit": ["backup_auto", "audit_retention_days"],
+    "Updates": ["update_auto", "update_repo", "update_token"],
 }
 
 
@@ -130,7 +131,7 @@ def settings():
     keys = [k for group in SETTING_GROUPS.values() for k in group]
     if request.method == "POST":
         for key in keys:
-            if key in ("email_enabled", "backup_auto"):
+            if key in ("email_enabled", "backup_auto", "update_auto"):
                 set_setting(key, "1" if request.form.get(key) else "0")
             else:
                 set_setting(key, request.form.get(key, "").strip())

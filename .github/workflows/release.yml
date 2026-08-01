@@ -64,6 +64,16 @@ jobs:
           if ($resp.StatusCode -ne 200) { throw "Executable did not serve the login page" }
           Stop-Process -Id $proc.Id -Force
 
+      - name: Read APP_VERSION
+        shell: pwsh
+        id: ver
+        run: |
+          $v = (Select-String -Path itam/__init__.py -Pattern 'APP_VERSION\s*=\s*"([^"]+)"').Matches[0].Groups[1].Value
+          "version=$v" >> $env:GITHUB_OUTPUT
+          # The updater reads this asset to learn what the release offers.
+          Set-Content -Path dist/version.txt -Value $v -NoNewline
+          Write-Host "APP_VERSION = $v"
+
       - name: Publish GitHub Release
         shell: pwsh
         env:
@@ -91,16 +101,16 @@ jobs:
           # Create the release if it doesn't exist yet, otherwise refresh the exe.
           gh release view $tag 2>$null
           if ($LASTEXITCODE -eq 0) {
-            gh release upload $tag dist/AMS.exe --clobber
+            gh release upload $tag dist/AMS.exe dist/version.txt --clobber
             # Refresh the title and notes too, otherwise the page keeps
             # advertising whatever the release was first created with.
-            gh release edit $tag --title "Mada AMS $tag" --notes $notes
+            gh release edit $tag --title "Mada AMS ${{ steps.ver.outputs.version }}" --notes $notes
             # Drop the pre-rename executable so nobody downloads it by mistake.
             gh release delete-asset $tag ITAM.exe --yes 2>$null
             $global:LASTEXITCODE = 0
           } else {
-            gh release create $tag dist/AMS.exe `
+            gh release create $tag dist/AMS.exe dist/version.txt `
               --target "$env:GITHUB_SHA" `
-              --title "Mada AMS $tag" `
+              --title "Mada AMS ${{ steps.ver.outputs.version }}" `
               --notes $notes
           }

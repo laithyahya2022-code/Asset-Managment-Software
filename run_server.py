@@ -95,8 +95,30 @@ def _browser_app_candidates():
     ]
 
 
+def _apply_update_if_ready(base):
+    """Swap in a downloaded update before anything else starts.
+
+    Windows will not overwrite a running executable, so the swap happens here,
+    at the very start of the next run, and the app relaunches itself. The
+    instance folder is never involved: only the executable is replaced.
+    """
+    if not getattr(sys, "frozen", False):
+        return False
+    from itam import updater
+    exe = updater.exe_path(base)
+    updater.cleanup_retired(base, exe)          # tidy the previous update
+    if not updater.pending_update(base, exe):
+        return False
+    if not updater.apply_pending_update(base, exe):
+        return False
+    print("Update applied — restarting…")
+    return updater.relaunch(exe)
+
+
 def main():
     base = _base_dir()
+    if _apply_update_if_ready(base):
+        return                                   # the new build takes over
     instance_path = os.path.join(base, "instance")
     os.makedirs(instance_path, exist_ok=True)
 

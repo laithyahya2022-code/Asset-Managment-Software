@@ -780,3 +780,186 @@ def test_asset_detail_still_renders(client, app):
         aid = a.id
     login(client)
     assert client.get(f"/assets/{aid}").status_code == 200
+
+
+# ----------------------------------------------------------------- updater
+
+def test_version_parsing_and_comparison():
+    from itam.updater import is_newer, parse_version
+
+    assert parse_version("2026.07.19") == (2026, 7, 19)
+    assert parse_version("v1.2.3") == (1, 2, 3)
+    assert parse_version("") is None and parse_version(None) is None
+    assert parse_version("nightly") is None
+
+    assert is_newer("2026.07.20", "2026.07.19")
+    assert is_newer("2026.08.01", "2026.07.31")
+    assert not is_newer("2026.07.19", "2026.07.19")     # same build
+    assert not is_newer("2026.07.18", "2026.07.19")     # older
+    # Anything unparseable, or a different scheme, must never trigger an update.
+    assert not is_newer("nightly", "2026.07.19")
+    assert not is_newer(None, "2026.07.19")
+    assert not is_newer("v1.0.0", "2026.07.19")
+
+
+def test_update_check_is_silent_when_github_is_unreachable(tmp_path, monkeypatch):
+    """No internet must be a no-op, not an error."""
+    from itam import updater
+
+    monkeypatch.setattr(updater, "latest_release", lambda repo, token=None: None)
+    assert updater.check_for_update("o/r", "2026.07.19", str(tmp_path)) == "unavailable"
+    assert list(tmp_path.iterdir()) == []                # nothing written
+
+
+def test_update_check_does_nothing_when_already_current(tmp_path, monkeypatch):
+    from itam import updater
+
+    release = {"name": "Mada AMS 2026.07.19", "assets": []}
+    monkeypatch.setattr(updater, "latest_release", lambda repo, token=None: release)
+    monkeypatch.setattr(updater, "remote_version", lambda r, token=None: "2026.07.19")
+    called = []
+    monkeypatch.setattr(updater, "download_update",
+                        lambda *a, **k: called.append(1) or True)
+
+    assert updater.check_for_update("o/r", "2026.07.19", str(tmp_path)) == "up-to-date"
+    assert not called, "downloaded an update that was not newer"
+
+
+def test_update_downloads_beside_the_exe_and_never_touches_instance(tmp_path, monkeypatch):
+    """The whole point: data must come through an update untouched."""
+    import hashlib
+
+    from itam import updater
+
+    exe = tmp_path / "AMS.exe"
+    exe.write_bytes(b"old build")
+    instance = tmp_path / "instance"
+    (instance / "uploads").mkdir(parents=True)
+    (instance / "backups").mkdir()
+    db_file = instance / "itam.sqlite"
+    db_file.write_bytes(b"SQLite format 3\x00" + b"important data" * 100)
+    upload = instance / "uploads" / "invoice.pdf"
+    upload.write_bytes(b"a scanned invoice")
+
+    def fingerprint():
+        out = {}
+        for path in sorted(instance.rglob("*")):
+            if path.is_file():
+                out[str(path.relative_to(instance))] = hashlib.sha256(
+                    path.read_bytes()).hexdigest()
+        return out
+
+    before = fingerprint()
+
+    release = {"name": "Mada AMS 2026.07.20",
+               "assets": [{"name": "AMS.exe",
+                           "browser_download_url": "https://example/AMS.exe"}]}
+    monkeypatch.setattr(updater, "latest_release", lambda repo, token=None: release)
+    monkeypatch.setattr(updater, "remote_version", lambda r, token=None: "2026.07.20")
+    monkeypatch.setattr(updater, "download_update",
+                        lambda rel, base, ex=None, token=None:
+                        (updater.pending_path(base, ex),
+                         open(updater.pending_path(base, ex), "wb").write(b"new build"),
+                         True)[-1])
+
+    status = updater.check_for_update("o/r", "2026.07.19", str(tmp_path), exe=str(exe))
+    assert status == "downloaded"
+    assert (tmp_path / "AMS.exe.new").read_bytes() == b"new build"
+    assert exe.read_bytes() == b"old build", "the running exe was replaced too early"
+    assert fingerprint() == before, "an update modified the instance folder"
+
+
+def test_applying_an_update_swaps_the_exe_and_leaves_data_alone(tmp_path):
+    import hashlib
+
+    from itam import updater
+
+    exe = tmp_path / "AMS.exe"
+    exe.write_bytes(b"old build")
+    (tmp_path / "AMS.exe.new").write_bytes(b"new build")
+    instance = tmp_path / "instance"
+    instance.mkdir()
+    db_file = instance / "itam.sqlite"
+    db_file.write_bytes(b"rows and rows")
+    before = hashlib.sha256(db_file.read_bytes()).hexdigest()
+
+    assert updater.pending_update(str(tmp_path), str(exe)) is True
+    assert updater.apply_pending_update(str(tmp_path), str(exe)) is True
+
+    assert exe.read_bytes() == b"new build"
+    assert (tmp_path / "AMS.exe.old").read_bytes() == b"old build"
+    assert not (tmp_path / "AMS.exe.new").exists()
+    assert hashlib.sha256(db_file.read_bytes()).hexdigest() == before
+
+    # The retired build is cleared away on the following start.
+    updater.cleanup_retired(str(tmp_path), str(exe))
+    assert not (tmp_path / "AMS.exe.old").exists()
+
+
+def test_apply_is_a_no_op_without_a_pending_download(tmp_path):
+    from itam import updater
+
+    exe = tmp_path / "AMS.exe"
+    exe.write_bytes(b"only build")
+    assert updater.pending_update(str(tmp_path), str(exe)) is False
+    assert updater.apply_pending_update(str(tmp_path), str(exe)) is False
+    assert exe.read_bytes() == b"only build"
+
+
+def test_a_truncated_download_is_discarded(tmp_path, monkeypatch):
+    """A dropped connection must not leave a stub that gets 'installed'."""
+    import io
+
+    from itam import updater
+
+    exe = tmp_path / "AMS.exe"
+    exe.write_bytes(b"old build")
+
+    class Resp(io.BytesIO):
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+
+    monkeypatch.setattr(updater, "_request",
+                        lambda url, token=None, accept=None: Resp(b"truncated"))
+    release = {"assets": [{"name": "AMS.exe",
+                           "browser_download_url": "https://example/AMS.exe"}]}
+    assert updater.download_update(release, str(tmp_path), str(exe)) is False
+    assert not (tmp_path / "AMS.exe.new").exists()
+    assert not (tmp_path / "AMS.exe.new.part").exists()
+
+
+def test_update_settings_expose_an_on_off_toggle(client, app):
+    from itam.utils import get_setting
+
+    login(client)
+    page = client.get("/admin/settings").data.decode()
+    assert "Check for updates automatically" in page
+    assert 'name="update_auto"' in page
+
+    form = {"app_name": "Mada Asset Management System (AMS)", "qr_prefix": "",
+            "custom_asset_fields": "", "checkout_days": "30",
+            "label_org": "Mada International Academy", "label_width_mm": "152.4",
+            "label_height_mm": "76.2", "warranty_alert_days": "90",
+            "license_alert_days": "90", "smtp_host": "", "smtp_port": "587",
+            "smtp_user": "", "smtp_password": "", "smtp_from": "",
+            "audit_retention_days": "365", "update_repo": "o/r", "update_token": ""}
+    client.post("/admin/settings", data=form, follow_redirects=True)   # toggle off
+    with app.app_context():
+        assert get_setting("update_auto") == "0"
+
+    client.post("/admin/settings", data={**form, "update_auto": "1"},
+                follow_redirects=True)
+    with app.app_context():
+        assert get_setting("update_auto") == "1"
+
+
+def test_pending_update_shows_a_restart_note(client, app):
+    from itam.utils import set_setting
+
+    login(client)
+    assert b"Update ready" not in client.get("/").data
+    with app.app_context():
+        set_setting("update_pending", "2026.08.01")
+        db.session.commit()
+    page = client.get("/").data.decode()
+    assert "Update ready" in page and "2026.08.01" in page

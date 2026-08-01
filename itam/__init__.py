@@ -84,6 +84,7 @@ def create_app(test_config=None, instance_path=None):
         return dict(t=t, has_perm=has_perm, app_name=get_setting("app_name"),
                     app_short=short, app_full=full,
                     label_org=get_setting("label_org"),
+                    update_pending=get_setting("update_pending"),
                     unread_count=unread, LANGS=LANGS, now=datetime.utcnow(),
                     app_version=APP_VERSION)
 
@@ -91,6 +92,7 @@ def create_app(test_config=None, instance_path=None):
         db.create_all()
         _sync_schema()
         _ensure_defaults()
+        _start_update_check(app)
 
     @app.cli.command("seed")
     def seed_command():
@@ -99,6 +101,49 @@ def create_app(test_config=None, instance_path=None):
         print("Database seeded. Login: admin / admin123")
 
     return app
+
+
+_update_checked = [False]
+
+
+def _start_update_check(app):
+    """Look for a newer build in the background, once per run.
+
+    Only the packaged executable can update itself, so this is a no-op when
+    running from source. It never blocks startup and never raises: a school PC
+    with no internet, or a check that fails for any other reason, just carries
+    on with the build it has.
+    """
+    import sys
+    import threading
+
+    if _update_checked[0] or not getattr(sys, "frozen", False):
+        return
+    if get_setting("update_auto") != "1":
+        return
+    _update_checked[0] = True
+
+    def run():
+        from . import updater
+        base = os.path.dirname(sys.executable)
+        try:
+            status = updater.check_for_update(
+                get_setting("update_repo"), APP_VERSION, base,
+                token=get_setting("update_token") or None)
+            if status != "downloaded":
+                return
+            release = updater.latest_release(get_setting("update_repo"),
+                                             get_setting("update_token") or None)
+            version = updater.remote_version(
+                release, get_setting("update_token") or None) or "newer"
+            with app.app_context():
+                from .utils import set_setting
+                set_setting("update_pending", version)
+                db.session.commit()
+        except Exception:
+            pass          # an update check must never disturb the app
+
+    threading.Thread(target=run, daemon=True).start()
 
 
 _last_backup_check = [0.0]
