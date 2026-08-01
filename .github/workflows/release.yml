@@ -73,6 +73,25 @@ jobs:
           # The updater reads this asset to learn what the release offers.
           Set-Content -Path dist/version.txt -Value $v -NoNewline
           Write-Host "APP_VERSION = $v"
+          # Shipping a build whose version matches the one already published is
+          # invisible to the updater: existing installs compare the two, see no
+          # change and stay on the old exe. Say so loudly in the run summary.
+          $published = (gh release view v1.0.0 --json assets -q '.assets[].name' 2>$null)
+          if ($LASTEXITCODE -eq 0 -and $published -contains "version.txt") {
+            gh release download v1.0.0 -p version.txt -D old -O old/version.txt 2>$null
+            if (Test-Path old/version.txt) {
+              $prev = (Get-Content old/version.txt -Raw).Trim()
+              if ($prev -eq $v) {
+                "> [!WARNING]" >> $env:GITHUB_STEP_SUMMARY
+                "> APP_VERSION is still ``$v``, same as the published release." >> $env:GITHUB_STEP_SUMMARY
+                "> Installed copies will not see this build as an update." >> $env:GITHUB_STEP_SUMMARY
+                Write-Warning "APP_VERSION unchanged ($v) - the updater will skip this build"
+              }
+            }
+          }
+          $global:LASTEXITCODE = 0
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Publish GitHub Release
         shell: pwsh
