@@ -37,7 +37,8 @@
     {% for f in floor_opts %}<option value="{{ f }}" {{ 'selected' if args.get('floor') == f }}>{{ f }}</option>{% endfor %}
   </select>
   <select name="location"><option value="">All locations</option>
-    {% for l in locations %}<option value="{{ l.id }}" {{ 'selected' if args.get('location') == l.id|string }}>{{ l.path }}</option>{% endfor %}
+    {# Only locations that hold something — the full tree is ~600 rows. #}
+    {% for l in filter_locations %}<option value="{{ l.id }}" {{ 'selected' if args.get('location') == l.id|string }}>{{ l.path }}</option>{% endfor %}
   </select>
   <select name="condition"><option value="">All conditions</option>
     {% for c in conditions %}<option value="{{ c }}" {{ 'selected' if args.get('condition') == c }}>{{ c }}</option>{% endfor %}
@@ -103,9 +104,13 @@
     <option value="">(employee…)</option>
     {% for e in employees %}<option value="{{ e.id }}">{{ e.name }}</option>{% endfor %}
   </select>
-  <select name="location_id" style="width:auto">
+  {# Transfer can target any location, empty ones included, so the list is
+     fetched on demand rather than printing the whole tree on every page. #}
+  <input id="bulk-loc-q" type="search" placeholder="(find location…)"
+         style="width:auto" autocomplete="off"
+         data-url="{{ url_for('assets.locations_json') }}">
+  <select name="location_id" id="bulk-loc" style="width:auto">
     <option value="">(location…)</option>
-    {% for l in locations %}<option value="{{ l.id }}">{{ l.path }}</option>{% endfor %}
   </select>
   <button class="btn secondary" type="submit" data-confirm="Apply this bulk action to the selected assets?">Apply</button>
 </div>
@@ -129,4 +134,38 @@
 {% else %}
 <p class="empty">No assets found.</p>
 {% endif %}
+
+<script>
+// Populate the bulk transfer picker from the server the first time it is
+// needed, and again whenever the search box changes.
+(function () {
+  var box = document.getElementById("bulk-loc-q");
+  var sel = document.getElementById("bulk-loc");
+  if (!box || !sel) return;
+  var timer = null, loaded = false;
+
+  function load() {
+    fetch(box.dataset.url + "?q=" + encodeURIComponent(box.value),
+          {credentials: "same-origin"})
+      .then(function (r) { return r.ok ? r.json() : []; })
+      .then(function (rows) {
+        var chosen = sel.value;
+        sel.innerHTML = "";
+        sel.add(new Option(rows.length ? "(location…)" : "(no match)", ""));
+        rows.forEach(function (l) { sel.add(new Option(l.path, l.id)); });
+        if (chosen) sel.value = chosen;
+        loaded = true;
+      })
+      .catch(function () {});
+  }
+  box.addEventListener("input", function () {
+    clearTimeout(timer);
+    timer = setTimeout(load, 200);
+  });
+  // First focus on either control fills the list.
+  [box, sel].forEach(function (el) {
+    el.addEventListener("focus", function () { if (!loaded) load(); });
+  });
+})();
+</script>
 {% endblock %}

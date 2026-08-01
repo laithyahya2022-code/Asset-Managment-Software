@@ -1183,3 +1183,155 @@ def test_asset_form_shows_assignment_but_cannot_change_it(client, app):
         assert asg.returned_at is None, "saving the asset ended the loan"
         assert db.session.get(Asset, aid).updated_by == "Administrator", \
             "the saving user was not stamped"
+
+
+def test_locations_are_paged_and_searchable(client, app):
+    """"Add standard locations" makes ~600 rows; printing them all was 354 KB."""
+    from itam.blueprints.org import LOCATION_PAGE_SIZE
+    from itam.models import Location
+
+    login(client)
+    client.post("/locations/standard", follow_redirects=True)
+    with app.app_context():
+        total = db.session.scalar(db.select(db.func.count(Location.id)))
+    assert total > LOCATION_PAGE_SIZE
+
+    body = client.get("/locations").data.decode()
+    table = body.split('class="bulk-form"', 1)[1].split("</table>", 1)[0]
+    assert table.count("<tr>") == LOCATION_PAGE_SIZE + 1, "the whole tree is still printed"
+    assert f"of {total}" in body, "the full count is not reported"
+    assert len(body) < 120_000, "the page is still oversized"
+
+    # Page 2 shows different rows, and searching narrows the table.
+    assert client.get("/locations?page=2").data != client.get("/locations").data
+    hit = client.get("/locations?q=Mada").data.decode()
+    hit_table = hit.split('class="bulk-form"', 1)[1].split("</table>", 1)[0]
+    assert "Mada" in hit_table
+    assert "No location matches" in client.get("/locations?q=zzzznope").data.decode()
+    # Out-of-range and junk page numbers must not blow up.
+    assert client.get("/locations?page=9999").status_code == 200
+    assert client.get("/locations?page=abc").status_code == 200
+
+
+def test_service_worker_cache_is_versioned(client):
+    """A fixed cache name meant an installed PWA served last release's CSS."""
+    from itam import APP_VERSION
+
+    resp = client.get("/static/sw.js")
+    assert resp.status_code == 200
+    body = resp.get_data(as_text=True)
+    assert f'"{APP_VERSION}"' in body, "the worker does not carry the build number"
+    assert "no-store" in resp.headers.get("Cache-Control", ""), \
+        "the worker itself may be cached, pinning the old one in place"
+
+    login(client)
+    page = client.get("/assets/").data.decode()
+    assert f"style.css?v={APP_VERSION}" in page
+    assert f"app.js?v={APP_VERSION}" in page
+
+
+def test_every_way_of_lending_records_who_did_it(client, app):
+    """"Edited by" must not depend on which screen the loan came from."""
+    from itam.models import Assignment, Category, Employee
+
+    with app.app_context():
+        cat = db.session.scalar(db.select(Category))
+        db.session.add_all([
+            Asset(tag=f"WAY-{i}", name=f"Way {i}", status="Available",
+                  condition="Good", category=cat) for i in (1, 2, 3)])
+        db.session.commit()
+        ids = {a.tag: a.id for a in db.session.scalars(
+            db.select(Asset).where(Asset.tag.like("WAY-%")))}
+        eid = db.session.scalar(db.select(Employee)).id
+
+    login(client)
+    client.post("/lend", data={"asset_id": ids["WAY-1"], "employee_id": eid},
+                follow_redirects=True)
+    client.post(f"/assets/{ids['WAY-2']}/checkout", data={"employee_id": eid},
+                follow_redirects=True)
+    client.post("/assets/bulk", data={"action": "assign", "employee_id": eid,
+                                      "id": [ids["WAY-3"]]}, follow_redirects=True)
+    with app.app_context():
+        for tag, aid in ids.items():
+            asg = db.session.scalar(
+                db.select(Assignment).where(Assignment.asset_id == aid))
+            assert asg is not None, f"{tag} was never lent"
+            assert asg.handled_by == "Administrator", f"{tag} recorded no Edited by"
+
+
+def test_asset_filters_offer_only_locations_in_use(client, app):
+    """The standard tree is ~600 rows; a filter <select> of all of them was 39 KB."""
+    from itam.models import Category, Location
+
+    login(client)
+    client.post("/locations/standard", follow_redirects=True)
+    with app.app_context():
+        used, empty = db.session.scalars(
+            db.select(Location).where(Location.kind == "Room").limit(2)).all()
+        db.session.add(Asset(tag="LOC-1", name="Desk PC", status="Available",
+                             condition="Good", location_id=used.id,
+                             category=db.session.scalar(db.select(Category))))
+        db.session.commit()
+        used_id, empty_id, total = used.id, empty.id, db.session.scalar(
+            db.select(db.func.count(Location.id)))
+
+    body = client.get("/assets/").data.decode()
+    picker = body.split('name="location"', 1)[1].split("</select>", 1)[0]
+    assert f'value="{used_id}"' in picker
+    assert f'value="{empty_id}"' not in picker, "an empty location was offered"
+    assert picker.count("<option") < total
+
+    # An active filter must never disappear from its own box.
+    still = client.get(f"/assets/?location={empty_id}").data.decode()
+    still_picker = still.split('name="location"', 1)[1].split("</select>", 1)[0]
+    assert f'value="{empty_id}"' in still_picker
+    assert client.get("/assets/?location=notanumber").status_code == 200
+
+    # Transfers may target an empty location, so that list is fetched on demand.
+    assert 'id="bulk-loc-q"' in body
+    hits = client.get("/assets/locations.json").get_json()
+    assert {h["id"] for h in hits} >= {used_id, empty_id}
+    named = client.get(f"/assets/locations.json?q={empty.name}").get_json()
+    assert any(h["id"] == empty_id for h in named)
+
+
+def test_location_report_totals_survive_the_rewrite(client, app):
+    """The per-location loop became one grouped query; the numbers must match."""
+    from itam.models import Category, Location
+
+    login(client)
+    with app.app_context():
+        cat = db.session.scalar(db.select(Category))
+        room = Location(name="Lab 7", kind="Room")
+        wing = Location(name="North Wing", kind="Building")
+        db.session.add_all([wing, room])
+        db.session.flush()
+        room.parent_id = wing.id
+        empty = Location(name="Nobody's Room", kind="Room")
+        db.session.add(empty)
+        db.session.add_all([
+            Asset(tag="RP-1", name="A", status="Available", condition="Good",
+                  category=cat, location_id=room.id, purchase_cost=100),
+            Asset(tag="RP-2", name="B", status="Available", condition="Good",
+                  category=cat, location_id=room.id, purchase_cost=250.50),
+        ])
+        db.session.commit()
+
+    body = client.get("/reports/locations").data.decode()
+    assert "North Wing / Lab 7" in body, "the full path is no longer shown"
+    assert "350.50" in body, "purchase cost was not totalled"
+    assert "Nobody" not in body, "a location holding nothing was listed"
+
+    csv = client.get("/reports/locations?format=csv").data.decode()
+    row = [l for l in csv.splitlines() if "Lab 7" in l][0]
+    assert ",2," in row or '"2"' in row or ",2," in row.replace('"', "")
+
+
+def test_junk_query_arguments_do_not_crash_pages(client, app):
+    """A hand-edited URL or stale bookmark used to return a 500."""
+    login(client)
+    for url in ("/assets/?location=notanumber", "/assets/?category=x&department=y",
+                "/assets/?page=abc", "/assets/new?clone=abc",
+                "/reports/custom?category=zzz", "/reports/custom?department=zzz",
+                "/locations?page=abc"):
+        assert client.get(url).status_code == 200, f"{url} did not survive"

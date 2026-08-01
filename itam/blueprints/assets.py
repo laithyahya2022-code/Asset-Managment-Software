@@ -5,8 +5,9 @@ import os
 import uuid
 from datetime import date, datetime, timedelta
 
-from flask import (Blueprint, Response, current_app, flash, g, redirect,
-                   render_template, request, send_from_directory, url_for)
+from flask import (Blueprint, Response, current_app, flash, g, jsonify,
+                   redirect, render_template, request, send_from_directory,
+                   url_for)
 from sqlalchemy import or_
 from sqlalchemy.orm import joinedload, selectinload
 from werkzeug.utils import secure_filename
@@ -124,7 +125,8 @@ def _apply_assignment(a, form):
     emp = db.session.get(Employee, emp_id)
     if not emp:
         return
-    db.session.add(Assignment(asset=a, employee=emp, assigned_by=g.user.id))
+    db.session.add(Assignment(asset=a, employee=emp, assigned_by=g.user.id,
+                              handled_by=g.user.name))
     a.status = "Checked Out"
     log_activity("checked_out", "asset", a.id, f"{a.tag} → {emp.name}")
 
@@ -154,12 +156,17 @@ def _assets_query(args):
                               Asset.ip_address.ilike(like), Asset.os_name.ilike(like)))
     if args.get("status"):
         stmt = stmt.where(Asset.status == args["status"])
-    if args.get("category"):
-        stmt = stmt.where(Asset.category_id == int(args["category"]))
-    if args.get("department"):
-        stmt = stmt.where(Asset.department_id == int(args["department"]))
-    if args.get("location"):
-        stmt = stmt.where(Asset.location_id == int(args["location"]))
+    # A hand-edited URL or a stale bookmark used to reach int() directly and
+    # crash the page with a 500. A filter that isn't a number is no filter.
+    for param, column in (("category", Asset.category_id),
+                          ("department", Asset.department_id),
+                          ("location", Asset.location_id)):
+        raw = args.get(param)
+        if raw:
+            try:
+                stmt = stmt.where(column == int(raw))
+            except (TypeError, ValueError):
+                pass
     if args.get("condition"):
         stmt = stmt.where(Asset.condition == args["condition"])
     if args.get("branch"):
@@ -202,6 +209,21 @@ def _distinct(col):
     return sorted(vals)
 
 
+def _locations_in_use(all_locations, keep_id=None):
+    """Locations worth offering as a filter.
+
+    The standard tree is ~600 rows, which made a 39 KB <select> on the busiest
+    page in the app. Filtering by a location that holds nothing returns
+    nothing, so only list the ones actually in use — plus whichever is
+    currently selected, so an active filter never vanishes from its own box.
+    """
+    used = set(db.session.scalars(
+        db.select(Asset.location_id).where(Asset.location_id.isnot(None)).distinct()))
+    if keep_id:
+        used.add(keep_id)
+    return [l for l in all_locations if l.id in used]
+
+
 @bp.route("/")
 @perm_required("assets.view")
 def list_():
@@ -210,12 +232,34 @@ def list_():
                                   .where(SavedSearch.user_id == g.user.id)
                                   .order_by(SavedSearch.name)).all()
     rows, paging = _assets_page(request.args)
+    looks = _lookups()
+    try:
+        active_loc = int(request.args.get("location") or 0)
+    except (TypeError, ValueError):
+        active_loc = 0
     return render_template("assets/list.html", assets=rows, paging=paging,
                            args=request.args, searches=searches,
                            branch_opts=_distinct(Asset.branch),
                            building_opts=_distinct(Asset.building),
                            floor_opts=_distinct(Asset.floor),
-                           **_lookups())
+                           filter_locations=_locations_in_use(
+                               looks["locations"], active_loc),
+                           **looks)
+
+
+@bp.get("/locations.json")
+@perm_required("assets.view")
+def locations_json():
+    """Feeds the bulk "transfer to location" picker.
+
+    Unlike the filter, a transfer target may well be an empty location, so
+    this searches the whole tree rather than only what's in use.
+    """
+    q = request.args.get("q", "").strip().lower()
+    rows = db.session.scalars(db.select(Location).order_by(Location.name)).all()
+    hits = [l for l in rows if not q or q in l.path.lower()]
+    hits.sort(key=lambda l: l.path)
+    return jsonify([{"id": l.id, "path": l.path} for l in hits[:200]])
 
 
 @bp.post("/searches")
@@ -269,7 +313,10 @@ def export_csv():
 def new():
     source = None
     if request.args.get("clone"):
-        source = db.session.get(Asset, int(request.args["clone"]))
+        try:
+            source = db.session.get(Asset, int(request.args["clone"]))
+        except (TypeError, ValueError):
+            source = None       # a junk ?clone= is not worth a 500
     if request.method == "POST":
         tag = request.form.get("tag", "").strip()
         if tag and db.session.scalar(db.select(Asset).where(Asset.tag == tag)):
@@ -388,8 +435,10 @@ def checkout(asset_id):
     emp = db.get_or_404(Employee, int(request.form["employee_id"]))
     db.session.add(Assignment(asset=a, employee=emp, assigned_by=g.user.id,
                               due_at=parse_date(request.form.get("due_at")),
+                              handled_by=g.user.name,
                               notes=request.form.get("notes", "").strip() or None))
     a.status = "Checked Out"
+    a.updated_by = g.user.name
     log_activity("checked_out", "asset", a.id, f"{a.tag} → {emp.name}")
     db.session.commit()
     flash(f"Checked out to {emp.name}.", "success")
@@ -584,8 +633,10 @@ def bulk():
             if a.current_assignment or a.status in BLOCKED_CHECKOUT_STATUSES:
                 skipped += 1
                 continue
-            db.session.add(Assignment(asset=a, employee=emp, assigned_by=g.user.id))
+            db.session.add(Assignment(asset=a, employee=emp, assigned_by=g.user.id,
+                                      handled_by=g.user.name))
             a.status = "Checked Out"
+            a.updated_by = g.user.name
             log_activity("checked_out", "asset", a.id, f"{a.tag} → {emp.name} (bulk)")
             done += 1
         flash(f"Assigned {done} assets to {emp.name}"

@@ -1,6 +1,7 @@
 from datetime import date
 
 from flask import Blueprint, render_template, request
+from sqlalchemy.orm import joinedload, selectinload
 
 from ..models import (ASSET_CONDITIONS, ASSET_STATUSES, Asset, Assignment,
                       Category, Department, Employee, InventoryAudit, License,
@@ -34,11 +35,19 @@ def _report_data(name, args):
         rows = [[a.tag, a.name, a.category.name if a.category else "", a.status,
                  a.condition, a.location.path if a.location else "",
                  a.department.name if a.department else "", a.serial or ""]
-                for a in db.session.scalars(db.select(Asset).order_by(Asset.tag))]
+                for a in db.session.scalars(
+                    db.select(Asset)
+                    .options(joinedload(Asset.category), joinedload(Asset.location),
+                             joinedload(Asset.department))
+                    .order_by(Asset.tag))]
     elif name == "departments":
         headers = ["Department", "Cost Center", "Assets", "Purchase Cost", "Current Value"]
+        # d.assets pulled every asset of every department into memory, one
+        # query per department, just to add up three numbers.
         rows = []
-        for d in db.session.scalars(db.select(Department).order_by(Department.name)):
+        for d in db.session.scalars(
+                db.select(Department).options(selectinload(Department.assets))
+                .order_by(Department.name)):
             cost = sum(float(a.purchase_cost or 0) for a in d.assets)
             value = sum(a.current_value or 0 for a in d.assets)
             rows.append([d.name, d.cost_center or "", len(d.assets),
@@ -46,7 +55,11 @@ def _report_data(name, args):
     elif name == "employees":
         headers = ["Employee", "Department", "Email", "Assets Held", "Overdue"]
         rows = []
-        for e in db.session.scalars(db.select(Employee).order_by(Employee.name)):
+        for e in db.session.scalars(
+                db.select(Employee)
+                .options(joinedload(Employee.department),
+                         selectinload(Employee.assignments))
+                .order_by(Employee.name)):
             active = [x for x in e.assignments if x.returned_at is None]
             overdue = len([x for x in active if x.overdue])
             rows.append([e.name, e.department.name if e.department else "",
@@ -80,12 +93,25 @@ def _report_data(name, args):
                 for a in db.session.scalars(db.select(Asset).order_by(Asset.tag))]
     elif name == "locations":
         headers = ["Location", "Kind", "Assets", "Purchase Cost"]
+        # "Add standard locations" made this ~600 locations, and touching
+        # loc.assets asked the database once per location. Add it all up in a
+        # single grouped query, then only look at the locations that scored.
+        totals = {
+            loc_id: (count, cost or 0) for loc_id, count, cost in db.session.execute(
+                db.select(Asset.location_id, db.func.count(Asset.id),
+                          db.func.sum(Asset.purchase_cost))
+                .where(Asset.location_id.isnot(None))
+                .group_by(Asset.location_id)).all()}
         rows = []
-        for loc in db.session.scalars(db.select(Location)):
-            if not loc.assets:
-                continue
-            cost = sum(float(a.purchase_cost or 0) for a in loc.assets)
-            rows.append([loc.path, loc.kind, len(loc.assets), f"{cost:,.2f}"])
+        if totals:
+            # One query for the whole tree so loc.path walks parents that are
+            # already in the session rather than fetching each ancestor.
+            everything = db.session.scalars(db.select(Location)).all()
+            for loc in everything:
+                if loc.id not in totals:
+                    continue
+                count, cost = totals[loc.id]
+                rows.append([loc.path, loc.kind, count, f"{float(cost):,.2f}"])
         rows.sort(key=lambda r: r[0])
     elif name == "movement":
         from ..models import Transfer
@@ -173,16 +199,27 @@ DEFAULT_COLS = ["tag", "name", "category", "status", "assigned_to"]
 @perm_required("reports.view")
 def custom():
     cols = [c for c in request.args.getlist("col") if c in CUSTOM_COLS] or DEFAULT_COLS
-    stmt = db.select(Asset).order_by(Asset.tag)
+    # Several columns reach for the category, location, department, vendor or
+    # current holder, which cost a query each per asset without this.
+    stmt = db.select(Asset).options(
+        joinedload(Asset.category), joinedload(Asset.location),
+        joinedload(Asset.department), joinedload(Asset.vendor),
+        selectinload(Asset.assignments).joinedload(Assignment.employee),
+    ).order_by(Asset.tag)
     if request.args.get("status"):
         stmt = stmt.where(Asset.status == request.args["status"])
-    if request.args.get("category"):
-        stmt = stmt.where(Asset.category_id == int(request.args["category"]))
-    if request.args.get("department"):
-        stmt = stmt.where(Asset.department_id == int(request.args["department"]))
+    # Junk in a hand-edited URL should narrow nothing, not raise a 500.
+    for param, column in (("category", Asset.category_id),
+                          ("department", Asset.department_id)):
+        raw = request.args.get(param)
+        if raw:
+            try:
+                stmt = stmt.where(column == int(raw))
+            except (TypeError, ValueError):
+                pass
     if request.args.get("condition"):
         stmt = stmt.where(Asset.condition == request.args["condition"])
-    assets = db.session.scalars(stmt).all()
+    assets = db.session.scalars(stmt).unique().all()
     headers = [CUSTOM_COLS[c][0] for c in cols]
     rows = [[CUSTOM_COLS[c][1](a) for c in cols] for a in assets]
     if request.args.get("format") == "csv":

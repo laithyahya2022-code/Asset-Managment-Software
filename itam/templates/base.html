@@ -5,7 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#0F1826">
   <title>{% block title %}{{ t("Dashboard") }}{% endblock %} · {{ app_name }}</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  {# ?v= so a new build is a new URL: browser and service-worker caches both
+     miss it and fetch the current file instead of last release's copy. #}
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v=app_version) }}">
   <link rel="manifest" href="{{ url_for('static', filename='manifest.webmanifest') }}">
   <link rel="icon" href="{{ url_for('static', filename='icon.svg') }}" type="image/svg+xml">
   <link rel="icon" type="image/png" sizes="192x192" href="{{ url_for('static', filename='icon-192.png') }}">
@@ -103,6 +105,6 @@
   {% block auth_content %}{% endblock %}
 </main>
 {% endif %}
-<script src="{{ url_for('static', filename='app.js') }}" defer></script>
+<script src="{{ url_for('static', filename='app.js', v=app_version) }}" defer></script>
 </body>
 </html>

@@ -241,8 +241,38 @@ def locations():
     counts = dict(db.session.execute(
         db.select(Asset.location_id, db.func.count(Asset.id))
         .where(Asset.location_id.isnot(None)).group_by(Asset.location_id)).all())
-    return render_template("org/locations.html", rows=rows, kinds=LOCATION_KINDS,
-                           paths=paths, counts=counts)
+
+    # "Add standard locations" turns this into ~600 rows, and printing them all
+    # made this the heaviest page in the app. Filter and page the table; the
+    # parent dropdown still lists everything, since you must be able to pick
+    # any location as a parent.
+    q = request.args.get("q", "").strip().lower()
+    listed = [l for l in rows if not q or q in paths[l.id].lower()
+              or q in (l.kind or "").lower()]
+    listed.sort(key=lambda l: paths[l.id])
+    page_rows, paging = _paginate(listed, request.args.get("page"))
+    return render_template("org/locations.html", rows=rows, page_rows=page_rows,
+                           kinds=LOCATION_KINDS, paths=paths, counts=counts,
+                           paging=paging, q=request.args.get("q", ""))
+
+
+#: Rows per page on the Locations table.
+LOCATION_PAGE_SIZE = 50
+
+
+def _paginate(items, page_arg):
+    total = len(items)
+    pages = max(1, -(-total // LOCATION_PAGE_SIZE))
+    try:
+        page = int(page_arg or 1)
+    except (TypeError, ValueError):
+        page = 1
+    page = min(max(page, 1), pages)
+    start = (page - 1) * LOCATION_PAGE_SIZE
+    window = items[start:start + LOCATION_PAGE_SIZE]
+    return window, {"page": page, "pages": pages, "total": total,
+                    "first": start + 1 if window else 0,
+                    "last": start + len(window)}
 
 
 @bp.post("/locations/<int:loc_id>/delete")

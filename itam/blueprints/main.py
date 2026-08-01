@@ -1,7 +1,7 @@
 from datetime import date, datetime, timedelta
 
-from flask import (Blueprint, flash, redirect, render_template, request,
-                   url_for)
+from flask import (Blueprint, flash, make_response, redirect, render_template,
+                   request, url_for)
 from sqlalchemy import func, or_
 
 from ..models import (ASSET_STATUSES, ActivityLog, Asset, Assignment, Category,
@@ -61,6 +61,22 @@ def _generate_alerts():
                link=url_for("assets.detail", asset_id=asg.asset_id),
                dedupe_key=f"due-{asg.id}-{asg.due_at}")
     db.session.commit()
+
+
+@bp.route("/static/sw.js")
+def service_worker():
+    """Rendered, not static, so its cache name carries the build number.
+
+    Registered under /static/ deliberately: a worker's scope is its own
+    directory, and this one only ever answers /static/ requests. It must not
+    be cached itself, or a browser could keep an old worker alive.
+    """
+    from .. import APP_VERSION
+
+    resp = make_response(render_template("sw.js", app_version=APP_VERSION))
+    resp.headers["Content-Type"] = "application/javascript"
+    resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    return resp
 
 
 @bp.route("/")
