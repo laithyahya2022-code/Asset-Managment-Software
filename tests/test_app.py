@@ -1342,3 +1342,109 @@ def test_junk_query_arguments_do_not_crash_pages(client, app):
                 "/reports/custom?category=zzz", "/reports/custom?department=zzz",
                 "/locations?page=abc"):
         assert client.get(url).status_code == 200, f"{url} did not survive"
+
+
+# ------------------------------------------------------- desktop app window
+
+class _FakeScreen:
+    def __init__(self, width, height):
+        self.width, self.height = width, height
+
+
+class _FakeWindow:
+    def __init__(self):
+        self.maximized_calls = 0
+
+    def maximize(self):
+        self.maximized_calls += 1
+
+
+class _FakeWebview:
+    """Just enough of pywebview to exercise the launcher off Windows."""
+
+    def __init__(self, screens=None, start_error=None):
+        self.settings = {}
+        self.screens = screens if screens is not None else [_FakeScreen(1920, 1080)]
+        self.created = None
+        self.started = []
+        self._start_error = start_error
+
+    def create_window(self, title, url, width=None, height=None, **kw):
+        self.created = {"title": title, "url": url, "width": width,
+                        "height": height, **kw}
+        return _FakeWindow()
+
+    def start(self, func=None, args=None):
+        self.started.append((func, args))
+        if self._start_error and len(self.started) == 1:
+            raise self._start_error
+        if func:
+            func(args)
+
+
+def test_window_is_created_at_screen_size_and_maximized():
+    """maximized=True alone left the browser control at 1280x840."""
+    import run_server
+
+    fake = _FakeWebview(screens=[_FakeScreen(1600, 900)])
+    assert run_server._primary_screen_size(fake, 1280, 840) == (1600, 900)
+    window = fake.create_window("t", "u", width=1600, height=900, maximized=True)
+    assert (fake.created["width"], fake.created["height"]) == (1600, 900)
+    assert fake.created["maximized"] is True
+
+    # The post-start maximize is what actually resizes the embedded control.
+    fake.start(lambda w: w.maximize(), window)
+    assert window.maximized_calls == 1
+
+
+def test_screen_size_falls_back_when_pywebview_cannot_say():
+    import run_server
+
+    for broken in (_FakeWebview(screens=[]),
+                   _FakeWebview(screens=[_FakeScreen(0, 0)])):
+        assert run_server._primary_screen_size(broken, 1280, 840) == (1280, 840)
+
+    class NoScreens:
+        pass
+    assert run_server._primary_screen_size(NoScreens(), 1280, 840) == (1280, 840)
+
+
+def test_a_failed_start_never_opens_a_second_window(monkeypatch):
+    """Falling through after create_window succeeded gave the user two windows."""
+    import sys
+
+    import run_server
+
+    fake = _FakeWebview(start_error=RuntimeError("callback unsupported"))
+    monkeypatch.setitem(sys.modules, "webview", fake)
+    launched = []
+    monkeypatch.setattr(run_server, "_browser_app_candidates",
+                        lambda: ["/nonexistent/browser"])
+    monkeypatch.setattr("subprocess.Popen", lambda *a, **k: launched.append(a))
+
+    assert run_server._open_app_window("http://x/", "T") == run_server.WINDOW_CLOSED
+    assert not launched, "the browser fallback opened a second window"
+    # It retried start() without the callback rather than giving up.
+    assert len(fake.started) == 2
+
+
+def test_browser_fallback_runs_only_when_no_window_was_created(monkeypatch):
+    import sys
+
+    import run_server
+
+    class Unusable:
+        settings = {}
+        screens = []
+
+        def create_window(self, *a, **k):
+            raise RuntimeError("no GUI backend")
+
+    monkeypatch.setitem(sys.modules, "webview", Unusable())
+    launched = []
+    monkeypatch.setattr(run_server, "_browser_app_candidates", lambda: ["/edge"])
+    monkeypatch.setattr("subprocess.Popen",
+                        lambda *a, **k: launched.append(a[0]) or object())
+
+    assert run_server._open_app_window("http://x/", "T") == run_server.WINDOW_DETACHED
+    assert launched and "--start-maximized" in launched[0]

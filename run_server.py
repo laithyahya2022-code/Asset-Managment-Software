@@ -66,13 +66,34 @@ def _open_app_window(url, title):
             webview.settings["ALLOW_DOWNLOADS"] = True
         except (AttributeError, KeyError, TypeError):
             pass
-        # maximized so it fills the screen instead of a fixed 1280x840 box
-        webview.create_window(title, url, width=1280, height=840,
-                              maximized=True)
-        webview.start()      # blocks until the window is closed
-        return WINDOW_CLOSED
+        # Fill the screen. maximized=True on its own is not enough: it resizes
+        # the frame but leaves the embedded browser control at whatever
+        # width/height the window was created with, so the page ends up drawn
+        # in a 1280x840 box with dead space to its right. Create the window at
+        # the real screen size, then maximize again once it is up so the
+        # control gets a resize it actually acts on.
+        width, height = _primary_screen_size(webview, 1280, 840)
+        window = webview.create_window(title, url, width=width, height=height,
+                                       maximized=True)
     except Exception:
-        pass
+        window = None
+    if window is not None:
+        # Past this point a window exists. Never fall through to the browser
+        # fallback from here, or a failure would leave the user with two.
+        def _fill_screen(win):
+            try:
+                win.maximize()
+            except Exception:
+                pass         # older pywebview, or a platform without maximize
+
+        try:
+            webview.start(_fill_screen, window)   # blocks until it is closed
+        except Exception:
+            try:
+                webview.start()                   # no callback: still our window
+            except Exception:
+                pass
+        return WINDOW_CLOSED
     # 2) A clean "app mode" window in Edge or Chrome (no tabs, no address bar)
     for exe in _browser_app_candidates():
         try:
@@ -82,6 +103,22 @@ def _open_app_window(url, title):
         except Exception:
             continue
     return WINDOW_NONE
+
+
+def _primary_screen_size(webview, fallback_w, fallback_h):
+    """Usable size of the main monitor, or the fallback if it can't be read.
+
+    pywebview only exposes webview.screens once its GUI backend has loaded,
+    and older builds don't expose it at all, so every step here is optional.
+    """
+    try:
+        screen = webview.screens[0]
+        width, height = int(screen.width), int(screen.height)
+        if width > 0 and height > 0:
+            return width, height
+    except Exception:
+        pass
+    return fallback_w, fallback_h
 
 
 def _browser_app_candidates():
