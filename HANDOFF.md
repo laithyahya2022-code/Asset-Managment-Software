@@ -118,3 +118,27 @@ Rules of thumb that came out of it:
   Wrap it; a filter that isn't a number is no filter.
 - `itam/routes.py` is dead code — not registered, references models that no
   longer exist (`asset.asset_tag`). Don't take it as a guide.
+
+## Deployment: it is a server app, not a file you double-click
+The single-exe model caused two data scares in one afternoon, because the
+database lives in `instance/` **next to the executable**:
+- Windows saves a re-download as `AMS (1).exe`, which runs beside a *new*
+  empty `instance/` — the old data is untouched but invisible.
+- Copying `AMS.exe` to a second PC creates a second empty system with only
+  the default `admin/admin123`. The two never merge.
+
+`deploy/Install-AMS.ps1` (+ `.bat` wrapper, shipped as `AMS-Server-Setup.zip`)
+is the answer: fixed `C:\AMS`, scheduled task at boot as SYSTEM, firewall rule,
+headless, re-runnable as an upgrade. It must never write to `instance/` — a
+test asserts that, and CI parses both scripts on a Windows runner before
+release.
+
+Everyone else uses a browser against the one address. That is the only
+supported way to share data.
+
+## Session key
+`SECRET_KEY` used to fall back to the literal `"dev-change-me"`, so any
+network-reachable install signed cookies with a key published in the source
+and an attacker could forge an admin session. It is now generated per
+installation and stored in `instance/secret_key` (so upgrades don't log
+everyone out); the environment variable still wins for central management.

@@ -1477,3 +1477,74 @@ def test_login_screen_is_not_capped_to_the_content_width(client):
     # And the markup this depends on must still be the shape we assumed.
     body = client.get("/login").data.decode()
     assert '<main class="auth-wrap">' in body
+
+
+def test_each_installation_gets_its_own_session_key(tmp_path):
+    """A shared install used to sign cookies with a key published in the source.
+
+    SECRET_KEY fell back to "dev-change-me" unless an administrator set it by
+    hand, so anyone who could reach a network install could forge a session
+    cookie for any account.
+    """
+    import os
+
+    from itam import create_app
+
+    inst = tmp_path / "instance"
+    os.environ.pop("SECRET_KEY", None)
+    app = create_app({"SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
+                      "UPLOAD_FOLDER": str(tmp_path / "u"),
+                      "BACKUP_FOLDER": str(tmp_path / "b")},
+                     instance_path=str(inst))
+    key = app.config["SECRET_KEY"]
+    assert key and key != "dev-change-me"
+    assert len(key) >= 32
+
+    # Kept in instance/, so it survives an upgrade and nobody is logged out.
+    stored = (inst / "secret_key").read_text().strip()
+    assert stored == key
+
+    # A restart reuses it rather than minting a new one.
+    again = create_app({"SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
+                        "UPLOAD_FOLDER": str(tmp_path / "u"),
+                        "BACKUP_FOLDER": str(tmp_path / "b")},
+                       instance_path=str(inst))
+    assert again.config["SECRET_KEY"] == key
+
+    # A different installation gets a different key.
+    other = tmp_path / "other"
+    third = create_app({"SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
+                        "UPLOAD_FOLDER": str(tmp_path / "u2"),
+                        "BACKUP_FOLDER": str(tmp_path / "b2")},
+                       instance_path=str(other))
+    assert third.config["SECRET_KEY"] != key
+
+
+def test_secret_key_env_var_still_wins(tmp_path, monkeypatch):
+    """Central management (a service definition, Docker) must override."""
+    from itam import create_app
+
+    monkeypatch.setenv("SECRET_KEY", "x" * 50)
+    app = create_app({"SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
+                      "UPLOAD_FOLDER": str(tmp_path / "u"),
+                      "BACKUP_FOLDER": str(tmp_path / "b")},
+                     instance_path=str(tmp_path / "i"))
+    assert app.config["SECRET_KEY"] == "x" * 50
+
+
+def test_the_installer_ships_and_protects_the_data_folder():
+    """The installer runs as administrator on a school server; check its shape."""
+    import pathlib
+
+    ps1 = pathlib.Path("deploy/Install-AMS.ps1").read_text()
+    assert "instance" in ps1
+    # It must never delete or overwrite the data folder.
+    for danger in ("Remove-Item $instance", "Remove-Item -Recurse",
+                   "rd /s", "Remove-Item $InstallDir"):
+        assert danger not in ps1, f"installer contains {danger!r}"
+    assert "Register-ScheduledTask" in ps1, "it does not start at boot"
+    assert "New-NetFirewallRule" in ps1, "it does not open the firewall"
+
+    un = pathlib.Path("deploy/Uninstall-AMS.ps1").read_text()
+    assert "LEFT IN PLACE" in un, "uninstall must not silently bin the database"
+    assert "Remove-Item $instance" not in un

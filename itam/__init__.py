@@ -4,7 +4,7 @@ from datetime import datetime
 
 from flask import Flask, g, redirect, request, session, url_for
 
-APP_VERSION = "2026.08.01.2"  # bumped on each release so users can confirm their build
+APP_VERSION = "2026.08.01.3"  # bumped on each release so users can confirm their build
 
 from .i18n import LANGS, t
 from .models import (DEFAULT_ROLE_PERMS, PERMISSIONS, ROLES, Notification,
@@ -13,13 +13,48 @@ from .security import has_perm, load_user
 from .utils import DEFAULT_SETTINGS, app_name_parts, get_setting
 
 
+def _secret_key(instance_path):
+    """A per-installation session key, generated once and kept in instance/.
+
+    This used to fall back to a fixed "dev-change-me" unless an administrator
+    remembered to set SECRET_KEY by hand, which meant a shared install signed
+    its session cookies with a value published in the source. Anyone who could
+    reach the app could forge one. Generate a real key on first run instead;
+    SECRET_KEY in the environment still wins for anyone managing it centrally.
+
+    Keeping it in instance/ means it survives updates along with the data, so
+    an upgrade never logs everybody out.
+    """
+    import secrets
+
+    path = os.path.join(instance_path, "secret_key")
+    try:
+        os.makedirs(instance_path, exist_ok=True)
+        if os.path.exists(path):
+            key = open(path, encoding="ascii").read().strip()
+            if len(key) >= 32:
+                return key
+        key = secrets.token_urlsafe(48)
+        with open(path, "w", encoding="ascii") as fh:
+            fh.write(key)
+        try:                      # best effort: keep it out of other accounts
+            os.chmod(path, 0o600)
+        except OSError:
+            pass
+        return key
+    except OSError:
+        # A read-only or unwritable instance folder must not stop the app; a
+        # per-process key just means sessions end when the app restarts.
+        return secrets.token_urlsafe(48)
+
+
 def create_app(test_config=None, instance_path=None):
     app = Flask(__name__, instance_relative_config=True, instance_path=instance_path)
     database_url = os.environ.get("DATABASE_URL", "")
     if "://" not in database_url:
         database_url = "sqlite:///" + os.path.join(app.instance_path, "itam.sqlite")
     app.config.from_mapping(
-        SECRET_KEY=os.environ.get("SECRET_KEY", "dev-change-me"),
+        SECRET_KEY=os.environ.get("SECRET_KEY") or _secret_key(app.instance_path),
         SQLALCHEMY_DATABASE_URI=database_url,
         UPLOAD_FOLDER=os.environ.get("UPLOAD_FOLDER",
                                      os.path.join(app.instance_path, "uploads")),

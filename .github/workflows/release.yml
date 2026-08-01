@@ -13,6 +13,7 @@ on:
       - "run_server.py"
       - "requirements.txt"
       - ".github/workflows/release.yml"
+      - "deploy/**"
     tags: ["v*"]
   workflow_dispatch:
     inputs:
@@ -53,6 +54,25 @@ jobs:
           --hidden-import barcode.writer
           run_server.py
 
+      - name: Check the installer scripts parse
+        shell: pwsh
+        run: |
+          # These ship to schools and run as administrator, so a syntax error
+          # must fail the build here rather than on someone's server.
+          $bad = $false
+          foreach ($f in Get-ChildItem deploy/*.ps1) {
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile(
+              $f.FullName, [ref]$null, [ref]$errors) | Out-Null
+            if ($errors) {
+              $bad = $true
+              Write-Host "::error file=$($f.Name)::$($errors -join '; ')"
+            } else {
+              Write-Host "OK  $($f.Name)"
+            }
+          }
+          if ($bad) { throw "An installer script does not parse" }
+
       - name: Smoke-test the executable
         shell: pwsh
         run: |
@@ -73,6 +93,12 @@ jobs:
           # The updater reads this asset to learn what the release offers.
           Set-Content -Path dist/version.txt -Value $v -NoNewline
           Write-Host "APP_VERSION = $v"
+          # One zip a school can download, unblock and run: exe + installer.
+          Copy-Item deploy/Install-AMS.ps1, deploy/Install-AMS.bat,
+                    deploy/Uninstall-AMS.ps1 -Destination dist/
+          Compress-Archive -Path dist/AMS.exe, dist/Install-AMS.ps1,
+                                 dist/Install-AMS.bat, dist/Uninstall-AMS.ps1 `
+                           -DestinationPath dist/AMS-Server-Setup.zip -Force
           # Shipping a build whose version matches the one already published is
           # invisible to the updater: existing installs compare the two, see no
           # change and stay on the old exe. Say so loudly in the run summary.
@@ -101,13 +127,24 @@ jobs:
           $notes = @"
           **Mada Asset Management System (AMS)**
 
-          Download **AMS.exe** below (Windows). Free, no time limit, no license key.
+          ### Which file do I want?
 
-          Getting started:
-          1. Put AMS.exe in a folder and double-click it — it opens in its own app window.
-          2. First login: admin / admin123 (change it right away).
-          3. Import your assets and employees from Excel/CSV (Assets and Employees screens).
-          4. To host it as a website on your own server, see deploy/HOST-AS-A-WEBSITE.md.
+          **Running it for a whole school — start here.**
+          Download **AMS-Server-Setup.zip**, unzip it on the server, right-click
+          **Install-AMS.bat** and choose *Run as administrator*.
+
+          It installs to `C:\AMS`, starts automatically at boot, opens the firewall,
+          and prints one address everyone else opens in a browser. Nobody else
+          installs anything. Re-run it any time to upgrade — it never touches your
+          data. First login: admin / admin123 (change it immediately).
+
+          **Just trying it on one PC:** download **AMS.exe**, put it in its own
+          folder — not Downloads — and double-click it.
+
+          ⚠️ The database lives in an `instance` folder **next to the exe**. Copying
+          AMS.exe to another PC does not copy your data; it creates a second, empty
+          system. To share data, install once on a server and have everyone else use
+          the address in a browser.
 
           This download link is permanent and does not expire.
           "@
@@ -120,7 +157,7 @@ jobs:
           # Create the release if it doesn't exist yet, otherwise refresh the exe.
           gh release view $tag 2>$null
           if ($LASTEXITCODE -eq 0) {
-            gh release upload $tag dist/AMS.exe dist/version.txt --clobber
+            gh release upload $tag dist/AMS.exe dist/version.txt dist/AMS-Server-Setup.zip --clobber
             # Refresh the title and notes too, otherwise the page keeps
             # advertising whatever the release was first created with.
             gh release edit $tag --title "Mada AMS ${{ steps.ver.outputs.version }}" --notes $notes
@@ -128,7 +165,7 @@ jobs:
             gh release delete-asset $tag ITAM.exe --yes 2>$null
             $global:LASTEXITCODE = 0
           } else {
-            gh release create $tag dist/AMS.exe dist/version.txt `
+            gh release create $tag dist/AMS.exe dist/version.txt dist/AMS-Server-Setup.zip `
               --target "$env:GITHUB_SHA" `
               --title "Mada AMS ${{ steps.ver.outputs.version }}" `
               --notes $notes

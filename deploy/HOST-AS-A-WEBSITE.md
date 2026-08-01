@@ -19,26 +19,62 @@ There are three layers. Pick the depth you need.
 
 ---
 
-## 1. Run AMS as a background service (no window)
+## 1. Install it on the server (one command, five minutes)
 
-On the server, run AMS headless so it just serves and never opens a window:
+Download **AMS-Server-Setup.zip** from the releases page onto the server,
+unzip it, then right-click **Install-AMS.bat** and choose *Run as
+administrator*.
 
-- **Windows:** create a file `start-ams.bat` next to `AMS.exe`:
-  ```bat
-  set AMS_NO_BROWSER=1
-  set PORT=8080
-  set SECRET_KEY=change-this-to-a-long-random-string
-  AMS.exe
-  ```
-  Run it, or install it as a service with NSSM so it starts on boot
-  (`nssm install AMS "C:\ams\start-ams.bat"`).
+That is the whole installation. It:
 
-- **Linux:** run `AMS_NO_BROWSER=1 PORT=8080 python run_server.py` under
-  systemd or `pm2` so it restarts automatically.
+- installs to `C:\AMS` — a fixed location, never a Downloads folder;
+- registers a scheduled task so AMS **starts automatically at boot**, with no
+  window and nobody logged in;
+- opens the Windows firewall for port 8080 on domain and private networks;
+- restarts AMS by itself if it ever stops;
+- prints the one address everyone else uses, and saves it to
+  `C:\AMS\AMS - open on other devices.txt`.
 
-AMS now answers on `http://SERVER-IP:8080`. That already works for every
-device on the network — this is the whole point: **only the server runs the
-program, everyone else just opens the address.**
+```
+  Done.
+
+  Everyone opens:  http://192.168.100.204:8080
+  First login:     admin / admin123  (change it immediately)
+  Data folder:     C:\AMS\instance
+```
+
+**Upgrading:** download the new zip and run `Install-AMS.bat` again. It stops
+the service, swaps the executable and starts it back up. Your `instance`
+folder — database, uploads, backups, session key — is never written to.
+
+**Removing it:** `Uninstall-AMS.ps1` removes the service, firewall rule and
+program, and deliberately **leaves your data** in `C:\AMS\instance` so an
+uninstall can never lose it.
+
+> **Back up `C:\AMS\instance`.** That folder is the entire system. Everything
+> else is replaceable in one download.
+
+### The one rule
+
+**One installation = one database.** Copying `AMS.exe` to a second computer
+does not copy your data — it creates a second, empty system, and the two never
+merge. Only the server runs the program; everyone else opens the address in a
+browser. That includes phones for QR scanning.
+
+### Doing it by hand instead
+
+If you'd rather not use the installer, run AMS headless yourself:
+
+```bat
+set AMS_NO_BROWSER=1
+set PORT=8080
+AMS.exe
+```
+
+and start that at boot however you prefer (Task Scheduler, NSSM). On Linux:
+`AMS_NO_BROWSER=1 PORT=8080 python run_server.py` under systemd.
+
+AMS answers on `http://SERVER-IP:8080` either way.
 
 ## 2. Give it a name people type
 
@@ -95,6 +131,8 @@ page — a real app, backed by your on-prem server.
 - [ ] AMS runs as a service on the server (`AMS_NO_BROWSER=1`)
 - [ ] A DNS name points at the server (internal or public)
 - [ ] Ports forwarded (only if public) and Caddy running for HTTPS
-- [ ] `SECRET_KEY` set to a long random value
+- [x] Session key — generated automatically per installation and kept in
+      `instance/secret_key`. Nothing to set. (Override with a `SECRET_KEY`
+      environment variable only if you manage secrets centrally.)
 - [ ] Admin password changed from the default
 - [ ] Backups: the `instance/backups` folder is copied off-site regularly
