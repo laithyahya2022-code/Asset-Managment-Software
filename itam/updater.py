@@ -52,14 +52,18 @@ def parse_version(text):
 def is_newer(remote, local):
     """True when `remote` is a strictly higher version than `local`.
 
-    Unparseable input, or a remote using a different numbering scheme (a
-    two-part version against a three-part one, say), is treated as "not newer"
-    so a malformed release can never trigger a download.
+    Unparseable input is treated as "not newer", so a malformed release can
+    never trigger a download. Versions of different lengths are compared by
+    padding the shorter one with zeros: 2026.08.01.1 really is newer than
+    2026.08.01. Refusing to compare them instead — as this used to — meant
+    that adding a hotfix component to the scheme would silently freeze every
+    installed copy on its current build, with nothing logged anywhere.
     """
     r, l = parse_version(remote), parse_version(local)
-    if not r or not l or len(r) != len(l):
+    if not r or not l:
         return False
-    return r > l
+    width = max(len(r), len(l))
+    return r + (0,) * (width - len(r)) > l + (0,) * (width - len(l))
 
 
 def _request(url, token=None, accept="application/vnd.github+json"):

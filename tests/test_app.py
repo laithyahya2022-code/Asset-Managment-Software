@@ -796,10 +796,17 @@ def test_version_parsing_and_comparison():
     assert is_newer("2026.08.01", "2026.07.31")
     assert not is_newer("2026.07.19", "2026.07.19")     # same build
     assert not is_newer("2026.07.18", "2026.07.19")     # older
-    # Anything unparseable, or a different scheme, must never trigger an update.
+    # Anything unparseable must never trigger an update.
     assert not is_newer("nightly", "2026.07.19")
     assert not is_newer(None, "2026.07.19")
-    assert not is_newer("v1.0.0", "2026.07.19")
+    assert not is_newer("v1.0.0", "2026.07.19")         # 1.x is not above 2026.x
+
+    # Versions of different lengths still compare, so introducing a hotfix
+    # component cannot silently freeze every installed copy.
+    assert is_newer("2026.08.01.1", "2026.08.01")
+    assert not is_newer("2026.08.01", "2026.08.01.1")
+    assert not is_newer("2026.08.01.0", "2026.08.01")   # same build, padded
+    assert is_newer("2026.09", "2026.08.30")
 
 
 def test_update_check_is_silent_when_github_is_unreachable(tmp_path, monkeypatch):
