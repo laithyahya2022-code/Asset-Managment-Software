@@ -1548,3 +1548,80 @@ def test_the_installer_ships_and_protects_the_data_folder():
     un = pathlib.Path("deploy/Uninstall-AMS.ps1").read_text()
     assert "LEFT IN PLACE" in un, "uninstall must not silently bin the database"
     assert "Remove-Item $instance" not in un
+
+
+def test_password_reset_never_shows_the_link_on_screen(client, app):
+    """With no SMTP configured this printed a working reset link to anyone.
+
+    Type a staff email, read the link off the page, own the account. No
+    password needed.
+    """
+    from itam.models import User
+
+    with app.app_context():
+        admin = db.session.scalar(db.select(User).where(User.username == "admin"))
+        email = admin.email
+
+    resp = client.post("/forgot", data={"email": email}, follow_redirects=True)
+    body = resp.data.decode()
+    assert "/reset/" not in body, "the reset link is still rendered to the visitor"
+
+    with app.app_context():
+        token = db.session.scalar(db.select(User.reset_token).where(User.email == email))
+    assert token, "a token should still be issued for the email to carry"
+    assert token not in body, "the token leaked into the page"
+
+
+def test_password_reset_does_not_reveal_which_accounts_exist(client, app):
+    real = client.post("/forgot", data={"email": "admin@example.com"},
+                       follow_redirects=True).data
+    fake = client.post("/forgot", data={"email": "nobody@nowhere.invalid"},
+                       follow_redirects=True).data
+    assert b"No account found" not in fake
+    # The visible answer must be identical either way.
+    import re
+    strip = lambda b: re.sub(rb"\s+", b" ", b)
+    assert strip(real) == strip(fake), "the reply differs, so accounts can be enumerated"
+
+
+def test_login_locks_out_after_repeated_failures(client, app):
+    """The form accepted unlimited password guesses."""
+    from itam.blueprints import auth
+
+    auth._FAILURES.clear()
+    for _ in range(auth.MAX_ATTEMPTS):
+        client.post("/login", data={"username": "admin", "password": "wrong"},
+                    follow_redirects=True)
+
+    blocked = client.post("/login", data={"username": "admin", "password": "wrong"},
+                          follow_redirects=True)
+    assert b"Too many failed sign-ins" in blocked.data
+
+    # Even the correct password is refused while the lockout stands, so
+    # guessing cannot be confirmed by a lucky hit.
+    right = client.post("/login", data={"username": "admin", "password": "admin123"},
+                        follow_redirects=True)
+    assert b"Too many failed sign-ins" in right.data
+    assert b"Dashboard" not in right.data
+
+    auth._FAILURES.clear()
+    ok = client.post("/login", data={"username": "admin", "password": "admin123"},
+                     follow_redirects=True)
+    assert b"Dashboard" in ok.data
+
+
+def test_a_successful_login_clears_the_failure_count(client, app):
+    from itam.blueprints import auth
+
+    auth._FAILURES.clear()
+    for _ in range(auth.MAX_ATTEMPTS - 1):
+        client.post("/login", data={"username": "admin", "password": "wrong"},
+                    follow_redirects=True)
+    assert b"Dashboard" in client.post(
+        "/login", data={"username": "admin", "password": "admin123"},
+        follow_redirects=True).data
+    client.get("/logout", follow_redirects=True)
+    # A fresh run of failures must start from zero, not trip immediately.
+    assert b"Too many failed sign-ins" not in client.post(
+        "/login", data={"username": "admin", "password": "wrong"},
+        follow_redirects=True).data
