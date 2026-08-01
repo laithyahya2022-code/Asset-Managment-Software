@@ -1448,3 +1448,32 @@ def test_browser_fallback_runs_only_when_no_window_was_created(monkeypatch):
 
     assert run_server._open_app_window("http://x/", "T") == run_server.WINDOW_DETACHED
     assert launched and "--start-maximized" in launched[0]
+
+
+def test_login_screen_is_not_capped_to_the_content_width(client):
+    """The login page is a full-bleed background, not a content column.
+
+    It uses <main class="auth-wrap">, so the 1280px cap that `main` puts on
+    readable page content applied to it too: the dark panel stopped at 1280px
+    and the pale page background showed through as a strip down the side of
+    any wider screen. It looked exactly like a window that had failed to
+    maximize, which is what made it so easy to misdiagnose.
+    """
+    import pathlib
+    import re
+
+    css = pathlib.Path("itam/static/style.css").read_text()
+
+    auth = re.search(r"^\.auth-wrap\s*\{[^}]*\}", css, re.M | re.S)
+    assert auth, ".auth-wrap rule is gone"
+    assert "max-width: none" in auth.group(0), \
+        ".auth-wrap must opt out of the main content width cap"
+
+    main_rule = re.search(r"^main\s*\{[^}]*\}", css, re.M | re.S)
+    assert main_rule, "main rule is gone"
+    assert "max-width" not in main_rule.group(0), \
+        "main is capped again, which wastes the right of a wide screen"
+
+    # And the markup this depends on must still be the shape we assumed.
+    body = client.get("/login").data.decode()
+    assert '<main class="auth-wrap">' in body
