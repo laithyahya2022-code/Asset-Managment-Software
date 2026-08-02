@@ -31,7 +31,7 @@
       {% set ep = request.endpoint or "" %}
       <a href="{{ url_for('main.dashboard') }}" class="{{ 'active' if ep == 'main.dashboard' }}">{{ icon("dashboard") }}<span>{{ t("Dashboard") }}</span></a>
       <a href="{{ url_for('assets.list_') }}" class="{{ 'active' if ep.startswith('assets.') }}">{{ icon("asset") }}<span>{{ t("Assets") }}</span></a>
-      <a href="{{ url_for('ops.checkouts') }}" class="{{ 'active' if ep == 'ops.checkouts' }}">{{ icon("checkout") }}<span>{{ t("Lending") }}</span></a>
+      <a href="{{ url_for('ops.checkouts') }}" class="{{ 'active' if ep == 'ops.checkouts' }}">{{ icon("license") }}<span>{{ t("Lending") }}</span></a>
       <a href="{{ url_for('ops.licenses') }}" class="{{ 'active' if ep.startswith('ops.license') }}">{{ icon("license") }}<span>{{ t("Licenses") }}</span></a>
       <a href="{{ url_for('ops.maintenance_list') }}" class="{{ 'active' if ep.startswith('ops.maintenance') }}">{{ icon("wrench") }}<span>{{ t("Maintenance") }}</span></a>
       <a href="{{ url_for('ops.inventory') }}" class="{{ 'active' if ep.startswith('ops.inventory') }}">{{ icon("clipboard") }}<span>{{ t("Inventory") }}</span></a>
