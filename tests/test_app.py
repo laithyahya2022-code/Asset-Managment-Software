@@ -1042,21 +1042,86 @@ def test_asset_list_does_not_query_per_row(client, app):
     assert counter["n"] < 40, f"one query per row is back ({counter['n']} queries)"
 
 
-def test_standard_locations_are_idempotent(client, app):
-    from itam.models import Location
+def test_locations_build_themselves_from_the_assets(client, app):
+    """The tree is derived from where the assets say they are.
+
+    It used to come from a button that created every combination of the
+    Branch/Building/Floor/Room constants -- ~600 rows, mostly empty, and
+    still missing anything a particular campus actually called a room.
+    """
+    from itam.models import Category, Location
+
+    with app.app_context():
+        cat = db.session.scalar(db.select(Category))
+        db.session.add_all([
+            Asset(tag="LOC-A", name="Reception PC", status="In Use",
+                  condition="Good", category=cat, branch="Mada 3",
+                  building="Building 1", floor="GF", location_name="office"),
+            Asset(tag="LOC-B", name="Lab PC", status="In Use", condition="Good",
+                  category=cat, branch="Mada 3", building="Building 1",
+                  floor="F1", location_name="Computer Lab"),
+            # Same room as LOC-A: must not create a second copy of it.
+            Asset(tag="LOC-C", name="Desk PC", status="In Use", condition="Good",
+                  category=cat, branch="Mada 3", building="Building 1",
+                  floor="GF", location_name="office"),
+        ])
+        db.session.commit()
 
     login(client)
-    assert client.post("/locations/standard", follow_redirects=True).status_code == 200
-    with app.app_context():
-        first = db.session.scalar(db.select(db.func.count(Location.id)))
-        kinds = {l.kind for l in db.session.scalars(db.select(Location))}
-    assert first > 100, "the standard tree was not created"
-    assert {"Branch", "Building", "Floor", "Room"} <= kinds
+    body = client.get("/locations").data.decode()
+    assert "Mada 3 / Building 1 / GF / office" in body
+    assert "Mada 3 / Building 1 / F1 / Computer Lab" in body
 
-    client.post("/locations/standard", follow_redirects=True)
     with app.app_context():
-        assert db.session.scalar(db.select(db.func.count(Location.id))) == first, \
-            "running it twice duplicated locations"
+        rows = db.session.scalars(db.select(Location)).all()
+        by_path = {l.name: l.kind for l in rows}
+        assert by_path.get("Mada 3") == "Branch"
+        assert by_path.get("Building 1") == "Building"
+        assert by_path.get("office") == "Room"
+        # One shared room, not one per asset.
+        assert len([l for l in rows if l.name == "office"]) == 1
+        # Assets are linked to their room, so the counts mean something.
+        office = next(l for l in rows if l.name == "office")
+        assert db.session.scalar(db.select(db.func.count(Asset.id))
+                                 .where(Asset.location_id == office.id)) == 2
+        before = len(rows)
+
+    # Loading the page again must not add anything.
+    client.get("/locations")
+    with app.app_context():
+        assert db.session.scalar(db.select(db.func.count(Location.id))) == before, \
+            "reloading the page duplicated locations"
+
+
+def test_a_hand_picked_location_is_not_overwritten(client, app):
+    """An explicit choice on the asset beats anything inferred from its text."""
+    from itam.models import Category, Location
+
+    with app.app_context():
+        chosen = Location(name="Secure Store", kind="Room")
+        db.session.add(chosen)
+        db.session.flush()
+        db.session.add(Asset(tag="LOC-D", name="Spare", status="In Storage",
+                             condition="Good", location_id=chosen.id,
+                             category=db.session.scalar(db.select(Category)),
+                             branch="Mada 1", building="Building 2",
+                             floor="B1", location_name="Basement"))
+        db.session.commit()
+        chosen_id = chosen.id
+
+    login(client)
+    client.get("/locations")
+    with app.app_context():
+        a = db.session.scalar(db.select(Asset).where(Asset.tag == "LOC-D"))
+        assert a.location_id == chosen_id, "the manual location was overwritten"
+
+
+def test_the_standard_locations_button_is_gone(client):
+    login(client)
+    body = client.get("/locations").data.decode()
+    assert "Add standard locations" not in body
+    assert "/locations/standard" not in body
+    assert client.post("/locations/standard").status_code == 404
 
 
 def test_os_version_is_gone_from_the_form_but_kept_in_the_data(client, app):
@@ -1198,7 +1263,16 @@ def test_locations_are_paged_and_searchable(client, app):
     from itam.models import Location
 
     login(client)
-    client.post("/locations/standard", follow_redirects=True)
+    with app.app_context():
+        cat = db.session.scalar(db.select(Category))
+        db.session.add_all([
+            Asset(tag=f"PG-{i:04d}", name=f"PC {i}", status="In Use",
+                  condition="Good", category=cat, branch="Mada 3",
+                  building=f"Building {i % 4 + 1}", floor=f"F{i % 6}",
+                  location_name=f"Room {i}")
+            for i in range(LOCATION_PAGE_SIZE + 40)])
+        db.session.commit()
+    client.get("/locations")
     with app.app_context():
         total = db.session.scalar(db.select(db.func.count(Location.id)))
     assert total > LOCATION_PAGE_SIZE
@@ -1267,18 +1341,24 @@ def test_every_way_of_lending_records_who_did_it(client, app):
 
 
 def test_asset_filters_offer_only_locations_in_use(client, app):
-    """The standard tree is ~600 rows; a filter <select> of all of them was 39 KB."""
+    """A filter <select> of every location was 39 KB on the busiest page."""
     from itam.models import Category, Location
 
     login(client)
-    client.post("/locations/standard", follow_redirects=True)
     with app.app_context():
-        used, empty = db.session.scalars(
-            db.select(Location).where(Location.kind == "Room").limit(2)).all()
+        cat = db.session.scalar(db.select(Category))
+        # A room the assets name, so it is derived and populated...
         db.session.add(Asset(tag="LOC-1", name="Desk PC", status="Available",
-                             condition="Good", location_id=used.id,
-                             category=db.session.scalar(db.select(Category))))
+                             condition="Good", category=cat, branch="Mada 1",
+                             building="Building 1", floor="GF",
+                             location_name="Reception"))
+        # ...and one added by hand that nothing lives in.
+        db.session.add(Location(name="Empty Store", kind="Room"))
         db.session.commit()
+    client.get("/locations")          # derives the tree from the assets
+    with app.app_context():
+        used = db.session.scalar(db.select(Location).where(Location.name == "Reception"))
+        empty = db.session.scalar(db.select(Location).where(Location.name == "Empty Store"))
         used_id, empty_id, total = used.id, empty.id, db.session.scalar(
             db.select(db.func.count(Location.id)))
 
@@ -1298,7 +1378,7 @@ def test_asset_filters_offer_only_locations_in_use(client, app):
     assert 'id="bulk-loc-q"' in body
     hits = client.get("/assets/locations.json").get_json()
     assert {h["id"] for h in hits} >= {used_id, empty_id}
-    named = client.get(f"/assets/locations.json?q={empty.name}").get_json()
+    named = client.get("/assets/locations.json?q=Empty Store").get_json()
     assert any(h["id"] == empty_id for h in named)
 
 

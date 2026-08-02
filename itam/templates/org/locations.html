@@ -7,11 +7,6 @@
   {% if has_perm("org.manage") %}
   <div class="actions-row no-print">
     <button class="btn" type="button" id="loc-new">+ {{ t("New location") }}</button>
-    <form class="inline" method="post" action="{{ url_for('org.locations_standard') }}">
-      <button class="btn secondary" type="submit"
-              data-confirm="Add the standard branches, buildings, floors and rooms?">
-        {{ t("Add standard locations") }}</button>
-    </form>
     {% if rows %}{{ bulk_button(t("Delete selected"), danger=True) }}{% endif %}
   </div>
   {% endif %}

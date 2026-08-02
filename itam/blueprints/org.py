@@ -3,8 +3,7 @@ from datetime import datetime
 from flask import (Blueprint, flash, g, redirect, render_template, request,
                    url_for)
 
-from ..models import (BRANCHES, BUILDINGS, EMPLOYEE_TYPES, FLOORS,
-                      LOCATION_KINDS, PLACES, Asset, Category,
+from ..models import (EMPLOYEE_TYPES, LOCATION_KINDS, Asset, Category,
                       Department, Employee, Location, Vendor, db)
 from ..security import perm_required
 from ..utils import (csv_response, log_activity, parse_date, read_table,
@@ -221,6 +220,9 @@ def locations():
         db.session.commit()
         flash(f'Location "{loc.name}" saved.', "success")
         return redirect(url_for("org.locations"))
+    # Keep the list in step with the register without anyone pressing a
+    # button: whatever places the assets name, this page shows.
+    sync_locations_from_assets()
     rows = db.session.scalars(db.select(Location).order_by(Location.name)).all()
     # Location.path walks up the parent chain and l.assets loads every asset,
     # so a template touching both once per row cost a query per ancestor and
@@ -401,43 +403,79 @@ def locations_bulk_delete():
         "org.locations", "location")
 
 
-@bp.post("/locations/standard")
-@perm_required("org.manage")
-def locations_standard():
-    """Create the school's standard Branch → Building → Floor → Room tree.
+def sync_locations_from_assets():
+    """Build the Locations tree out of the places the assets actually name.
 
-    Built from the same BRANCHES / BUILDINGS / FLOORS / PLACES the asset form
-    offers, so the Locations list starts out matching the options staff already
-    pick from. Idempotent: anything already present is reused, never duplicated.
+    Every asset already carries branch / building / floor / location_name, so
+    the real map of the school is sitting in the register. This turns those
+    values into Location rows and links each asset to its room.
+
+    It replaces a button that created a fixed Branch x Building x Floor x Room
+    tree from constants: ~600 rows, mostly rooms nothing was ever in, and it
+    still didn't contain a place unique to one campus. Deriving from the data
+    means the list is exactly what exists, and grows by itself as assets are
+    added or imported.
+
+    Idempotent and cheap: on a register where nothing has moved it creates
+    nothing and links nothing.
     """
-    def ensure(name, kind, parent):
-        parent_id = parent.id if parent else None
-        row = db.session.scalar(db.select(Location).where(
-            Location.name == name, Location.kind == kind,
-            Location.parent_id == parent_id))
-        if row:
-            return row, False
-        row = Location(name=name, kind=kind, parent_id=parent_id)
-        db.session.add(row)
-        db.session.flush()
-        return row, True
+    combos = db.session.execute(
+        db.select(Asset.branch, Asset.building, Asset.floor, Asset.location_name)
+        .distinct()).all()
 
-    made = 0
-    for branch_name in BRANCHES:
-        branch, new = ensure(branch_name, "Branch", None)
-        made += new
-        for building_name in BUILDINGS:
-            building, new = ensure(building_name, "Building", branch)
-            made += new
-            for floor_name in FLOORS:
-                floor, new = ensure(floor_name, "Floor", building)
-                made += new
-                for room_name in PLACES:
-                    _, new = ensure(room_name, "Room", floor)
-                    made += new
-    db.session.commit()
-    log_activity("locations_seeded", "location", None, f"{made} added")
-    db.session.commit()
-    flash(f"Standard locations ready — {made} added, existing ones kept."
-          if made else "Standard locations were already in place.", "success")
-    return redirect(url_for("org.locations"))
+    existing = {}
+    for loc in db.session.scalars(db.select(Location)):
+        existing[(loc.name, loc.kind, loc.parent_id)] = loc
+
+    created = 0
+
+    def ensure(name, kind, parent):
+        nonlocal created
+        parent_id = parent.id if parent else None
+        key = (name, kind, parent_id)
+        if key in existing:
+            return existing[key]
+        loc = Location(name=name, kind=kind, parent_id=parent_id)
+        db.session.add(loc)
+        db.session.flush()
+        existing[key] = loc
+        created += 1
+        return loc
+
+    # leaf per (branch, building, floor, room) so assets can be linked to it
+    leaf_of = {}
+    for branch, building, floor, room in combos:
+        node = None
+        for name, kind in ((branch, "Branch"), (building, "Building"),
+                           (floor, "Floor"), (room, "Room")):
+            if name and name.strip():
+                node = ensure(name.strip(), kind, node)
+        if node is not None:
+            leaf_of[(branch, building, floor, room)] = node.id
+
+    # Fill in the link only where it is missing: a location picked by hand on
+    # the asset itself must win over anything inferred from the text fields.
+    #
+    # The loop below costs one statement per distinct place, so check first
+    # whether there is anything at all to link. Once a register has settled
+    # that is a single query, instead of a few hundred on every page load.
+    linked = 0
+    unlinked = db.session.scalar(
+        db.select(db.func.count(Asset.id)).where(Asset.location_id.is_(None)))
+    if not unlinked:
+        if created:
+            db.session.commit()
+        return created, 0
+
+    for (branch, building, floor, room), loc_id in leaf_of.items():
+        result = db.session.execute(
+            db.update(Asset)
+            .where(Asset.location_id.is_(None), Asset.branch.is_(branch),
+                   Asset.building.is_(building), Asset.floor.is_(floor),
+                   Asset.location_name.is_(room))
+            .values(location_id=loc_id))
+        linked += result.rowcount or 0
+
+    if created or linked:
+        db.session.commit()
+    return created, linked
