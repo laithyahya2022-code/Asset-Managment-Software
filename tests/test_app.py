@@ -1705,3 +1705,87 @@ def test_a_successful_login_clears_the_failure_count(client, app):
     assert b"Too many failed sign-ins" not in client.post(
         "/login", data={"username": "admin", "password": "wrong"},
         follow_redirects=True).data
+
+
+def test_asset_form_fields_added_and_removed(client, app):
+    """Type, Location and Device name are gone; Room and Department are there."""
+    login(client)
+    body = client.get("/assets/new").data.decode()
+
+    assert 'name="asset_type"' not in body, "Type is still on the form"
+    assert 'name="hostname"' not in body, "Device name is still on the form"
+    assert ">Room<" in body, "Room field is missing"
+    assert 'name="department_id"' in body, "Department field is missing"
+    # Room writes the same column the Locations tree is derived from.
+    assert 'name="location_name"' in body
+
+
+def test_removing_type_and_hostname_does_not_wipe_imported_values(client, app):
+    """Both came in from imports; the form no longer submits them."""
+    from itam.models import Category
+
+    with app.app_context():
+        a = Asset(tag="KEEP-1", name="Imported PC", status="In Use",
+                  condition="Good", asset_type="Desktop", hostname="LAB-PC-07",
+                  category=db.session.scalar(db.select(Category)))
+        db.session.add(a)
+        db.session.commit()
+        aid = a.id
+
+    client.post(f"/assets/{aid}/edit", data={
+        "name": "Imported PC", "tag": "KEEP-1", "status": "In Use",
+        "condition": "Good", "depreciation_years": "5"}, follow_redirects=True)
+    with app.app_context():
+        a = db.session.get(Asset, aid)
+        assert a.asset_type == "Desktop", "saving the form wiped the imported Type"
+        assert a.hostname == "LAB-PC-07", "saving the form wiped the device name"
+
+
+def test_department_and_room_save_from_the_form(client, app):
+    from itam.models import Category, Department
+
+    with app.app_context():
+        dep = Department(name="Science")
+        db.session.add(dep)
+        db.session.commit()
+        dep_id, cat_id = dep.id, db.session.scalar(db.select(Category.id))
+
+    login(client)
+    client.post("/assets/new", data={
+        "name": "Lab PC", "tag": "ROOM-1", "category_id": cat_id,
+        "status": "In Use", "condition": "Good", "depreciation_years": "5",
+        "branch": "Mada 1", "building": "Building 1", "floor": "GF",
+        "location_name": "Computer Lab", "department_id": dep_id},
+        follow_redirects=True)
+
+    with app.app_context():
+        a = db.session.scalar(db.select(Asset).where(Asset.tag == "ROOM-1"))
+        assert a.location_name == "Computer Lab"
+        assert a.department_id == dep_id
+
+    # Clearing the department must actually clear it, not be ignored.
+    with app.app_context():
+        aid = db.session.scalar(db.select(Asset.id).where(Asset.tag == "ROOM-1"))
+    client.post(f"/assets/{aid}/edit", data={
+        "name": "Lab PC", "tag": "ROOM-1", "status": "In Use",
+        "condition": "Good", "depreciation_years": "5",
+        "department_id": ""}, follow_redirects=True)
+    with app.app_context():
+        assert db.session.get(Asset, aid).department_id is None
+
+
+def test_room_list_offers_rooms_already_in_the_data(client, app):
+    """An imported room should be one keystroke away, not retyped exactly."""
+    from itam.models import Category
+
+    with app.app_context():
+        db.session.add(Asset(tag="RM-1", name="PC", status="In Use",
+                             condition="Good", location_name="Grade 4 Annexe",
+                             category=db.session.scalar(db.select(Category))))
+        db.session.commit()
+
+    login(client)
+    body = client.get("/assets/new").data.decode()
+    datalist = body.split('id="place-list"', 1)[1].split("</datalist>", 1)[0]
+    assert "Grade 4 Annexe" in datalist, "a room already in use is not offered"
+    assert "Reception" in datalist, "the standard rooms are no longer offered"

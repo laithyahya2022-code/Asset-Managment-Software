@@ -41,8 +41,6 @@
         <select id="f-status" name="status">
           {% for s in statuses %}<option {{ 'selected' if a and a.status == s }}>{{ s }}</option>{% endfor %}
         </select></div>
-      <div><label for="f-type">Type</label>
-        <input id="f-type" name="asset_type" value="{{ a.asset_type or '' if a else '' }}" placeholder="Laptop, Printer…"></div>
       <div><label for="f-serial">Serial number</label>
         <input id="f-serial" name="serial" value="{{ '' if source else (a.serial or '' if a else '') }}"></div>
       <div><label for="f-mfr">Manufacturer</label>
@@ -61,12 +59,19 @@
         <select id="f-floor" name="floor"><option value="">—</option>
           {% for fl in floors %}<option {{ 'selected' if a and a.floor == fl }}>{{ fl }}</option>{% endfor %}
         </select></div>
-      <div><label for="f-place">{{ t("Location") }}</label>
-        <input id="f-place" name="location_name" list="place-list"
-               value="{{ a.location_name or '' if a else '' }}" placeholder="Choose or type a location">
+      {# Room replaces the old "Location" field. It writes the same column, so
+         existing records keep their value and the Locations tree -- which is
+         derived from branch/building/floor/room -- still builds correctly. #}
+      <div><label for="f-place">Room</label>
+        <input id="f-place" name="location_name" list="place-list" autocomplete="off"
+               value="{{ a.location_name or '' if a else '' }}" placeholder="Choose or type a room">
         <datalist id="place-list">
-          {% for pl in places %}<option value="{{ pl }}">{% endfor %}
+          {% for pl in rooms %}<option value="{{ pl }}">{% endfor %}
         </datalist></div>
+      <div><label for="f-dept">{{ t("Department") }}</label>
+        <select id="f-dept" name="department_id"><option value="">—</option>
+          {% for d in departments %}<option value="{{ d.id }}" {{ 'selected' if a and a.department_id == d.id }}>{{ d.name }}</option>{% endfor %}
+        </select></div>
       {# Assignment is owned by Lending now — shown here for reference, changed
          there. Both controls are disabled, so neither is submitted and neither
          can overwrite what Lending recorded. #}
@@ -112,8 +117,6 @@
         <input id="f-storage" name="storage" value="{{ a.storage or '' if a else '' }}" placeholder="512 GB SSD"></div>
       <div><label for="f-gpu">Graphics card</label>
         <input id="f-gpu" name="gpu" value="{{ a.gpu or '' if a else '' }}"></div>
-      <div><label for="f-host">Device name / hostname</label>
-        <input id="f-host" name="hostname" value="{{ a.hostname or '' if a else '' }}"></div>
       <div><label for="f-mac">MAC address</label>
         <input id="f-mac" name="mac_address" value="{{ a.mac_address or '' if a else '' }}"></div>
       <div><label for="f-ip">IP address</label>
@@ -150,6 +153,8 @@ function printLabelPreview() {
   var lblSerial = document.getElementById("lbl-serial");
   var branch = document.getElementById("f-branch");
   var serial = document.getElementById("f-serial");
+  var lblDept = document.getElementById("lbl-dept");
+  var dept = document.getElementById("f-dept");
   var userEdited = false;
 
   function showQR(value) {
@@ -166,10 +171,16 @@ function printLabelPreview() {
     showQR(shown);
     if (branch) lblBranch.textContent = branch.value || "—";
     if (serial) lblSerial.textContent = serial.value || "—";
+    // Department is editable here now, so the printed preview has to follow it
+    // rather than showing whatever was saved earlier.
+    if (dept && lblDept) {
+      lblDept.textContent = dept.selectedIndex > 0
+        ? dept.options[dept.selectedIndex].text : "—";
+    }
   }
   if (cat) cat.addEventListener("change", update);
   tag.addEventListener("input", function () { userEdited = true; update(); });
-  [branch, serial].forEach(function (el) {
+  [branch, serial, dept].forEach(function (el) {
     if (el) el.addEventListener("input", update);
     if (el && el.tagName === "SELECT") el.addEventListener("change", update);
   });

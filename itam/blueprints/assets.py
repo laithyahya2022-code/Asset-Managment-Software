@@ -38,6 +38,14 @@ def _lookups():
                                      .order_by(Employee.name)).all(),
         statuses=ASSET_STATUSES, conditions=ASSET_CONDITIONS,
         branches=BRANCHES, buildings=BUILDINGS, floors=FLOORS, places=PLACES,
+        # The room list offers the standard names plus whatever rooms the
+        # register already uses, so an imported room is one keystroke away
+        # instead of having to be retyped exactly.
+        rooms=sorted(set(PLACES) | {
+            r for (r,) in db.session.execute(
+                db.select(Asset.location_name).where(
+                    Asset.location_name.isnot(None),
+                    Asset.location_name != "").distinct()).all() if r}),
         operating_systems=OPERATING_SYSTEMS, today_iso=date.today().isoformat(),
         custom_names=custom_field_names(),
     )
@@ -67,7 +75,6 @@ def _from_form(a, form):
     tag = form.get("tag", "").strip()
     a.tag = tag or next_tag(db.session.get(Category, a.category_id)
                             if a.category_id else None)
-    a.asset_type = form.get("asset_type", "").strip() or None
     a.serial = form.get("serial", "").strip() or None
     a.manufacturer = form.get("manufacturer", "").strip() or None
     a.model = form.get("model", "").strip() or None
@@ -75,16 +82,21 @@ def _from_form(a, form):
         a.status = form["status"]
     if form.get("condition") in ASSET_CONDITIONS:
         a.condition = form["condition"]
-    # Only write fields the form actually submitted. "OS version" was removed
-    # from the form, and blanking it here would erase imported values.
-    for field in ("os_name", "os_version", "cpu", "ram", "storage", "gpu",
-                  "hostname", "mac_address", "ip_address", "invoice_number"):
+    # Only write fields the form actually submitted. "OS version", "Type" and
+    # "Device name" have all been taken off the form at various points, and
+    # blanking them here would erase values that came in from an import.
+    for field in ("asset_type", "os_name", "os_version", "cpu", "ram",
+                  "storage", "gpu", "hostname", "mac_address", "ip_address",
+                  "invoice_number"):
         if field in form:
             setattr(a, field, form.get(field, "").strip() or None)
     a.branch = form.get("branch") if form.get("branch") in BRANCHES else None
     a.building = form.get("building") if form.get("building") in BUILDINGS else None
     a.floor = form.get("floor") if form.get("floor") in FLOORS else None
     a.location_name = form.get("location_name", "").strip() or None
+    if "department_id" in form:
+        dep = form.get("department_id")
+        a.department_id = int(dep) if dep else None
     # "Updated by" is shown on the asset form but no longer editable there, so
     # the field isn't submitted. Stamp whoever saved the record instead; the
     # importer and the API still pass their own value and keep it.
