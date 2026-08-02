@@ -121,6 +121,22 @@ def _from_form(a, form):
         a.parent_id = int(parent) if parent and (not a.id or int(parent) != a.id) else None
 
 
+def _refresh_locations():
+    """Keep Location rows in step with what the assets say.
+
+    The Locations screen used to do this on page load, but that screen is
+    gone: a place is a property of an asset now, not something maintained
+    separately. The rows still back the location filter, bulk transfers,
+    transfer history and the locations report, so they are refreshed at the
+    only moments the data can change -- an asset being saved or imported.
+    """
+    from .org import sync_locations_from_assets
+    try:
+        sync_locations_from_assets()
+    except Exception:
+        db.session.rollback()   # never fail a save over a derived side table
+
+
 def _apply_assignment(a, form):
     """Handle the 'Assign to' field on the asset form (spec section 15)."""
     emp_id = form.get("assign_employee_id")
@@ -341,6 +357,7 @@ def new():
             log_activity("created", "asset", a.id, f"{a.tag} — {a.name}")
             _apply_assignment(a, request.form)
             db.session.commit()
+            _refresh_locations()
             flash(f"Asset {a.tag} created.", "success")
             return redirect(url_for("assets.detail", asset_id=a.id))
     return render_template("assets/form.html", asset=None, source=source,
@@ -381,6 +398,7 @@ def edit(asset_id):
             log_activity("updated", "asset", a.id, a.tag)
             _apply_assignment(a, request.form)
             db.session.commit()
+            _refresh_locations()
             flash(f"Asset {a.tag} updated.", "success")
             return redirect(url_for("assets.detail", asset_id=a.id))
     return render_template("assets/form.html", asset=a, source=None,
@@ -814,6 +832,7 @@ def import_():
         except OSError:
             pass
         skipped = len([r for r in rows if r["_error"]])
+        _refresh_locations()
         flash(f"Imported {created} assets ({skipped} rows skipped).", "success")
         return redirect(url_for("assets.list_"))
     return render_template("assets/import.html", preview=preview, errors=errors,

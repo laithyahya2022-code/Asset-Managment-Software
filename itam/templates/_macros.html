@@ -27,3 +27,23 @@
 <button class="btn {{ 'danger' if danger else 'secondary' }} bulk-go" type="submit"
         form="{{ form_id }}" disabled data-label="{{ label }}">{{ label }}</button>
 {%- endmacro %}
+
+{# ------------------------------------------------------------------ export
+
+   One control instead of two buttons. <details> so it needs no JavaScript and
+   closes on Escape; pages that only have a spreadsheet export pass csv_url as
+   nothing and get a plain button. #}
+
+{% macro export_menu(xlsx_url, csv_url=None) -%}
+{% if csv_url %}
+<details class="menu no-print">
+  <summary class="btn secondary">{{ t("Export") }} Excel/CSV</summary>
+  <div class="menu-items">
+    <a href="{{ xlsx_url }}">Excel <span class="muted">(.xlsx)</span></a>
+    <a href="{{ csv_url }}">CSV <span class="muted">(.csv)</span></a>
+  </div>
+</details>
+{% else %}
+<a class="btn secondary no-print" href="{{ xlsx_url }}">{{ t("Export") }} Excel</a>
+{% endif %}
+{%- endmacro %}

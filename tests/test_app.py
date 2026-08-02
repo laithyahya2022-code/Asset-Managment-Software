@@ -579,7 +579,6 @@ def test_label_org_is_editable_from_settings(client, app):
 BULK_PAGES = [
     ("/employees", "org.employees_bulk_delete"),
     ("/departments", "org.departments_bulk_delete"),
-    ("/locations", "org.locations_bulk_delete"),
     ("/licenses", "ops.licenses_bulk_delete"),
     ("/maintenance", "ops.maintenance_bulk_delete"),
     ("/checkouts", "ops.checkouts_bulk_checkin"),
@@ -649,7 +648,7 @@ def test_bulk_delete_with_nothing_selected_is_harmless(client, app):
         assert db.session.scalar(db.select(Department).where(Department.name == "Untouched"))
 
 
-def test_departments_and_locations_can_be_edited(client, app):
+def test_departments_can_be_edited(client, app):
     """Both screens had no edit path at all before."""
     from itam.models import Department, Location
 
@@ -665,16 +664,6 @@ def test_departments_and_locations_can_be_edited(client, app):
         dep = db.session.get(Department, dep_id)
         assert (dep.name, dep.cost_center) == ("Science Lab", "CC-2")
 
-    client.post("/locations", data={"name": "Wing A", "kind": "Building"},
-                follow_redirects=True)
-    with app.app_context():
-        loc = db.session.scalar(db.select(Location).where(Location.name == "Wing A"))
-        loc_id = loc.id
-    client.post("/locations", data={"id": loc_id, "name": "Wing B", "kind": "Floor"},
-                follow_redirects=True)
-    with app.app_context():
-        loc = db.session.get(Location, loc_id)
-        assert (loc.name, loc.kind) == ("Wing B", "Floor")
 
 
 def test_bulk_checkin_returns_several_loans(client, app):
@@ -1042,55 +1031,52 @@ def test_asset_list_does_not_query_per_row(client, app):
     assert counter["n"] < 40, f"one query per row is back ({counter['n']} queries)"
 
 
-def test_locations_build_themselves_from_the_assets(client, app):
-    """The tree is derived from where the assets say they are.
+def test_locations_are_derived_when_an_asset_is_saved(client, app):
+    """A place is a property of an asset, not a list someone maintains.
 
-    It used to come from a button that created every combination of the
-    Branch/Building/Floor/Room constants -- ~600 rows, mostly empty, and
-    still missing anything a particular campus actually called a room.
+    The Locations screen is gone. Location rows still back the asset filter,
+    bulk transfers, transfer history and the locations report, so they are
+    rebuilt whenever an asset is saved or imported.
     """
     from itam.models import Category, Location
 
-    with app.app_context():
-        cat = db.session.scalar(db.select(Category))
-        db.session.add_all([
-            Asset(tag="LOC-A", name="Reception PC", status="In Use",
-                  condition="Good", category=cat, branch="Mada 3",
-                  building="Building 1", floor="GF", location_name="office"),
-            Asset(tag="LOC-B", name="Lab PC", status="In Use", condition="Good",
-                  category=cat, branch="Mada 3", building="Building 1",
-                  floor="F1", location_name="Computer Lab"),
-            # Same room as LOC-A: must not create a second copy of it.
-            Asset(tag="LOC-C", name="Desk PC", status="In Use", condition="Good",
-                  category=cat, branch="Mada 3", building="Building 1",
-                  floor="GF", location_name="office"),
-        ])
-        db.session.commit()
-
     login(client)
-    body = client.get("/locations").data.decode()
-    assert "Mada 3 / Building 1 / GF / office" in body
-    assert "Mada 3 / Building 1 / F1 / Computer Lab" in body
+    with app.app_context():
+        cat_id = db.session.scalar(db.select(Category.id))
+
+    for tag, floor, room in (("LOC-A", "GF", "office"),
+                             ("LOC-B", "F1", "Computer Lab"),
+                             ("LOC-C", "GF", "office")):   # same room as LOC-A
+        client.post("/assets/new", data={
+            "name": tag, "tag": tag, "category_id": cat_id, "status": "In Use",
+            "condition": "Good", "depreciation_years": "5", "branch": "Mada 3",
+            "building": "Building 1", "floor": floor,
+            "location_name": room}, follow_redirects=True)
 
     with app.app_context():
         rows = db.session.scalars(db.select(Location)).all()
-        by_path = {l.name: l.kind for l in rows}
-        assert by_path.get("Mada 3") == "Branch"
-        assert by_path.get("Building 1") == "Building"
-        assert by_path.get("office") == "Room"
+        kinds = {l.name: l.kind for l in rows}
+        assert kinds.get("Mada 3") == "Branch"
+        assert kinds.get("Building 1") == "Building"
+        assert kinds.get("office") == "Room"
         # One shared room, not one per asset.
         assert len([l for l in rows if l.name == "office"]) == 1
-        # Assets are linked to their room, so the counts mean something.
+        # Assets are linked to their room, so counts and filters mean something.
         office = next(l for l in rows if l.name == "office")
         assert db.session.scalar(db.select(db.func.count(Asset.id))
                                  .where(Asset.location_id == office.id)) == 2
         before = len(rows)
 
-    # Loading the page again must not add anything.
-    client.get("/locations")
+    # Saving again must not add anything.
+    with app.app_context():
+        aid = db.session.scalar(db.select(Asset.id).where(Asset.tag == "LOC-A"))
+    client.post(f"/assets/{aid}/edit", data={
+        "name": "LOC-A", "tag": "LOC-A", "status": "In Use", "condition": "Good",
+        "depreciation_years": "5", "branch": "Mada 3", "building": "Building 1",
+        "floor": "GF", "location_name": "office"}, follow_redirects=True)
     with app.app_context():
         assert db.session.scalar(db.select(db.func.count(Location.id))) == before, \
-            "reloading the page duplicated locations"
+            "saving again duplicated locations"
 
 
 def test_a_hand_picked_location_is_not_overwritten(client, app):
@@ -1110,18 +1096,22 @@ def test_a_hand_picked_location_is_not_overwritten(client, app):
         chosen_id = chosen.id
 
     login(client)
-    client.get("/locations")
+    # Saving any asset triggers the sync; it must leave LOC-D's link alone.
+    client.post("/assets/new", data={
+        "name": "Other", "tag": "LOC-E", "status": "In Use", "condition": "Good",
+        "depreciation_years": "5", "branch": "Mada 1", "building": "Building 2",
+        "floor": "B1", "location_name": "Basement"}, follow_redirects=True)
     with app.app_context():
         a = db.session.scalar(db.select(Asset).where(Asset.tag == "LOC-D"))
         assert a.location_id == chosen_id, "the manual location was overwritten"
 
 
-def test_the_standard_locations_button_is_gone(client):
+def test_the_locations_screen_is_gone(client):
     login(client)
-    body = client.get("/locations").data.decode()
-    assert "Add standard locations" not in body
-    assert "/locations/standard" not in body
+    assert client.get("/locations").status_code == 404
     assert client.post("/locations/standard").status_code == 404
+    # And it is no longer offered in the sidebar.
+    assert "Locations</span>" not in client.get("/assets/").data.decode()
 
 
 def test_os_version_is_gone_from_the_form_but_kept_in_the_data(client, app):
@@ -1257,43 +1247,6 @@ def test_asset_form_shows_assignment_but_cannot_change_it(client, app):
             "the saving user was not stamped"
 
 
-def test_locations_are_paged_and_searchable(client, app):
-    """"Add standard locations" makes ~600 rows; printing them all was 354 KB."""
-    from itam.blueprints.org import LOCATION_PAGE_SIZE
-    from itam.models import Location
-
-    login(client)
-    with app.app_context():
-        cat = db.session.scalar(db.select(Category))
-        db.session.add_all([
-            Asset(tag=f"PG-{i:04d}", name=f"PC {i}", status="In Use",
-                  condition="Good", category=cat, branch="Mada 3",
-                  building=f"Building {i % 4 + 1}", floor=f"F{i % 6}",
-                  location_name=f"Room {i}")
-            for i in range(LOCATION_PAGE_SIZE + 40)])
-        db.session.commit()
-    client.get("/locations")
-    with app.app_context():
-        total = db.session.scalar(db.select(db.func.count(Location.id)))
-    assert total > LOCATION_PAGE_SIZE
-
-    body = client.get("/locations").data.decode()
-    table = body.split('class="bulk-form"', 1)[1].split("</table>", 1)[0]
-    assert table.count("<tr>") == LOCATION_PAGE_SIZE + 1, "the whole tree is still printed"
-    assert f"of {total}" in body, "the full count is not reported"
-    assert len(body) < 120_000, "the page is still oversized"
-
-    # Page 2 shows different rows, and searching narrows the table.
-    assert client.get("/locations?page=2").data != client.get("/locations").data
-    hit = client.get("/locations?q=Mada").data.decode()
-    hit_table = hit.split('class="bulk-form"', 1)[1].split("</table>", 1)[0]
-    assert "Mada" in hit_table
-    assert "No location matches" in client.get("/locations?q=zzzznope").data.decode()
-    # Out-of-range and junk page numbers must not blow up.
-    assert client.get("/locations?page=9999").status_code == 200
-    assert client.get("/locations?page=abc").status_code == 200
-
-
 def test_service_worker_cache_is_versioned(client):
     """A fixed cache name meant an installed PWA served last release's CSS."""
     from itam import APP_VERSION
@@ -1346,16 +1299,16 @@ def test_asset_filters_offer_only_locations_in_use(client, app):
 
     login(client)
     with app.app_context():
-        cat = db.session.scalar(db.select(Category))
-        # A room the assets name, so it is derived and populated...
-        db.session.add(Asset(tag="LOC-1", name="Desk PC", status="Available",
-                             condition="Good", category=cat, branch="Mada 1",
-                             building="Building 1", floor="GF",
-                             location_name="Reception"))
-        # ...and one added by hand that nothing lives in.
+        # A location added by hand that nothing lives in.
         db.session.add(Location(name="Empty Store", kind="Room"))
         db.session.commit()
-    client.get("/locations")          # derives the tree from the assets
+        cat_id = db.session.scalar(db.select(Category.id))
+    # Saving an asset derives its room and links it.
+    client.post("/assets/new", data={
+        "name": "Desk PC", "tag": "LOC-1", "category_id": cat_id,
+        "status": "Available", "condition": "Good", "depreciation_years": "5",
+        "branch": "Mada 1", "building": "Building 1", "floor": "GF",
+        "location_name": "Reception"}, follow_redirects=True)
     with app.app_context():
         used = db.session.scalar(db.select(Location).where(Location.name == "Reception"))
         empty = db.session.scalar(db.select(Location).where(Location.name == "Empty Store"))
@@ -1419,8 +1372,7 @@ def test_junk_query_arguments_do_not_crash_pages(client, app):
     login(client)
     for url in ("/assets/?location=notanumber", "/assets/?category=x&department=y",
                 "/assets/?page=abc", "/assets/new?clone=abc",
-                "/reports/custom?category=zzz", "/reports/custom?department=zzz",
-                "/locations?page=abc"):
+                "/reports/custom?category=zzz", "/reports/custom?department=zzz"):
         assert client.get(url).status_code == 200, f"{url} did not survive"
 
 

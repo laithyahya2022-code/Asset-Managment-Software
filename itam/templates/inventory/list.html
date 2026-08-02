@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import export_menu %}
 {% block title %}{{ t("Inventory") }}{% endblock %}
 {% block content %}
 <div class="page-head">
@@ -10,17 +11,80 @@
       <button class="btn" type="submit">Start physical audit</button>
     </form>
     {% endif %}
-    <a class="btn secondary" href="{{ url_for('ops.inventory_export_xlsx') }}">Export Excel</a>
+    {{ export_menu(url_for('ops.inventory_export_xlsx'),
+                   url_for('ops.inventory_export_csv')) }}
   </div>
 </div>
 
+<p class="muted" style="margin:-0.5rem 0 1rem">
+  Everything the school owns — equipment and software — in one place.
+</p>
+
 <div class="kpi-grid">
-  <div class="kpi"><span class="tile green">✓</span>
-    <div><span class="k-label">Assets on record</span><span class="k-value">{{ total_assets }}</span></div></div>
+  <a class="kpi" href="{{ url_for('assets.list_') }}"><span class="tile green">✓</span>
+    <div><span class="k-label">Equipment</span><span class="k-value">{{ total_assets }}</span>
+      <span class="k-sub">assets on record</span></div></a>
+  <a class="kpi" href="{{ url_for('ops.licenses') }}"><span class="tile purple">◆</span>
+    <div><span class="k-label">Software licences</span><span class="k-value">{{ license_count }}</span>
+      <span class="k-sub">{{ seats_used }} of {{ seats }} seats in use</span></div></a>
+  <div class="kpi"><span class="tile teal">$</span>
+    <div><span class="k-label">Total purchase value</span>
+      <span class="k-value">{{ "{:,.0f}".format(total_value) }}</span>
+      <span class="k-sub">{{ "{:,.0f}".format(asset_value) }} equipment ·
+        {{ "{:,.0f}".format(license_value) }} software</span></div></div>
   <div class="kpi"><span class="tile red">!</span>
-    <div><span class="k-label">{{ t("Missing") }}</span><span class="k-value">{{ missing | length }}</span></div></div>
+    <div><span class="k-label">{{ t("Missing") }}</span><span class="k-value">{{ missing | length }}</span>
+      {% if over_seats %}<span class="k-sub red">{{ over_seats | length }} licence(s) over seats</span>{% endif %}</div></div>
   <div class="kpi"><span class="tile blue">≡</span>
     <div><span class="k-label">Audits run</span><span class="k-value">{{ audits | length }}</span></div></div>
+</div>
+
+<div class="two-col">
+  <div class="card">
+    <p class="eyebrow">Equipment we own</p>
+    {% if by_category %}
+    <div class="table-wrap"><table>
+      <tr><th>{{ t("Category") }}</th><th>Count</th><th>Purchase value</th></tr>
+      {% for name, count, value in by_category %}
+      <tr>
+        <td>{{ name or "Uncategorised" }}</td>
+        <td>{{ count }}</td>
+        <td>{{ "{:,.2f}".format(value | float) if value else "—" }}</td>
+      </tr>
+      {% endfor %}
+      <tr><td><strong>Total</strong></td><td><strong>{{ total_assets }}</strong></td>
+          <td><strong>{{ "{:,.2f}".format(asset_value) }}</strong></td></tr>
+    </table></div>
+    {% else %}<p class="empty">No assets on record yet.</p>{% endif %}
+
+    <p class="eyebrow" style="margin-top:1.1rem">By status</p>
+    <div class="filters">
+      {% for status, count in by_status %}
+      <a class="btn secondary sm" href="{{ url_for('assets.list_', status=status) }}">{{ t(status) }} · {{ count }}</a>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="card">
+    <p class="eyebrow">Software we own</p>
+    {% if licenses %}
+    <div class="table-wrap"><table>
+      <tr><th>Licence</th><th>Vendor</th><th>Seats</th><th>Used</th><th>Cost</th></tr>
+      {% for l in licenses %}
+      <tr{{ ' class="red"' | safe if not l.compliant }}>
+        <td><a href="{{ url_for('ops.licenses') }}">{{ l.name }}</a></td>
+        <td>{{ l.vendor.name if l.vendor else "—" }}</td>
+        <td>{{ l.seats or "—" }}</td>
+        <td>{{ l.seats_used }}{% if not l.compliant %} ⚠{% endif %}</td>
+        <td>{{ "{:,.2f}".format(l.cost | float) if l.cost else "—" }}</td>
+      </tr>
+      {% endfor %}
+      <tr><td><strong>Total</strong></td><td></td>
+          <td><strong>{{ seats }}</strong></td><td><strong>{{ seats_used }}</strong></td>
+          <td><strong>{{ "{:,.2f}".format(license_value) }}</strong></td></tr>
+    </table></div>
+    {% else %}<p class="empty">No software licences recorded yet.</p>{% endif %}
+  </div>
 </div>
 
 {% if missing %}

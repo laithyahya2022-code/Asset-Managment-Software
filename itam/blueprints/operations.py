@@ -6,9 +6,9 @@ from sqlalchemy.orm import joinedload, selectinload
 
 from ..models import (BLOCKED_CHECKOUT_STATUSES, MAINTENANCE_KINDS,
                       MAINTENANCE_STATUSES, Asset,
-                      Assignment, Employee, InventoryAudit, InventoryCheck,
-                      License, LicenseAssignment, Maintenance, Reservation,
-                      User, Vendor, db)
+                      Assignment, Category, Employee, InventoryAudit,
+                      InventoryCheck, License, LicenseAssignment, Maintenance,
+                      Reservation, User, Vendor, db)
 from ..security import perm_required
 from ..utils import (csv_response, log_activity, parse_date, read_table,
                      xlsx_response)
@@ -97,14 +97,15 @@ def maintenance_export_xlsx():
 @bp.route("/inventory/export.xlsx")
 @perm_required("assets.view")
 def inventory_export_xlsx():
-    audit_rows = [(au.name, au.started_at.date(),
-                   au.completed_at.date() if au.completed_at else "in progress",
-                   au.verified_count, au.missing_count)
-                  for au in db.session.scalars(db.select(InventoryAudit)
-                                               .order_by(InventoryAudit.started_at.desc()))]
-    return xlsx_response(
-        ["Audit", "Started", "Completed", "Verified", "Missing"], audit_rows,
-        "inventory.xlsx", "Inventory")
+    """Everything owned -- equipment and software -- not just the audit log."""
+    return xlsx_response(INVENTORY_HEADERS, _inventory_rows(),
+                         "inventory.xlsx", "Inventory")
+
+
+@bp.route("/inventory/export.csv")
+@perm_required("assets.view")
+def inventory_export_csv():
+    return csv_response(INVENTORY_HEADERS, _inventory_rows(), "inventory.csv")
 
 
 # ---------------------------------------------------------------- checkouts
@@ -446,13 +447,78 @@ def license_delete(license_id):
 @bp.route("/inventory")
 @perm_required("assets.view")
 def inventory():
+    """Everything the school owns: equipment and software, in one place."""
     audits = db.session.scalars(
         db.select(InventoryAudit).order_by(InventoryAudit.started_at.desc())).all()
-    missing = db.session.scalars(db.select(Asset).where(Asset.status == "Missing")
-                                 .order_by(Asset.tag)).all()
-    total_assets = db.session.scalar(db.select(db.func.count(Asset.id))) or 0
+    missing = db.session.scalars(
+        db.select(Asset).options(joinedload(Asset.location))
+        .where(Asset.status == "Missing").order_by(Asset.tag)).all()
+    owned = _owned_summary()
     return render_template("inventory/list.html", audits=audits, missing=missing,
-                           total_assets=total_assets)
+                           **owned)
+
+
+def _owned_summary():
+    """Counts and breakdowns for the inventory page.
+
+    Grouped queries rather than loading the register: at three thousand assets
+    the page has to stay as quick as any other.
+    """
+    total_assets = db.session.scalar(db.select(db.func.count(Asset.id))) or 0
+    by_category = db.session.execute(
+        db.select(Category.name, db.func.count(Asset.id),
+                  db.func.sum(Asset.purchase_cost))
+        .select_from(Asset).outerjoin(Category, Asset.category_id == Category.id)
+        .group_by(Category.name).order_by(db.func.count(Asset.id).desc())).all()
+    by_status = db.session.execute(
+        db.select(Asset.status, db.func.count(Asset.id))
+        .group_by(Asset.status).order_by(db.func.count(Asset.id).desc())).all()
+
+    licenses = db.session.scalars(
+        db.select(License).options(joinedload(License.vendor))
+        .order_by(License.name)).all()
+    seats = sum(l.seats or 0 for l in licenses)
+    seats_used = sum(l.seats_used or 0 for l in licenses)
+
+    asset_value = db.session.scalar(
+        db.select(db.func.sum(Asset.purchase_cost))) or 0
+    license_value = sum(float(l.cost or 0) for l in licenses)
+
+    return dict(
+        total_assets=total_assets, by_category=by_category, by_status=by_status,
+        licenses=licenses, license_count=len(licenses), seats=seats,
+        seats_used=seats_used, over_seats=[l for l in licenses if not l.compliant],
+        asset_value=float(asset_value), license_value=license_value,
+        total_value=float(asset_value) + license_value)
+
+
+def _inventory_rows():
+    """One flat "what we own" table covering equipment and software."""
+    rows = []
+    for a in db.session.scalars(
+            db.select(Asset)
+            .options(joinedload(Asset.category), joinedload(Asset.department))
+            .order_by(Asset.tag)):
+        where = " · ".join(p for p in (a.branch, a.building, a.floor,
+                                       a.location_name) if p)
+        rows.append(["Asset", a.tag, a.name,
+                     a.category.name if a.category else "", a.status or "",
+                     a.serial or "", where,
+                     a.department.name if a.department else "",
+                     "", "", a.purchase_cost or ""])
+    for l in db.session.scalars(
+            db.select(License).options(joinedload(License.vendor))
+            .order_by(License.name)):
+        rows.append(["Software licence", l.key or "", l.name, "Software",
+                     "Compliant" if l.compliant else "OVER SEATS", "",
+                     l.vendor.name if l.vendor else "", "",
+                     l.seats or 0, l.seats_used or 0, l.cost or ""])
+    return rows
+
+
+INVENTORY_HEADERS = ["Kind", "ID / Key", "Name", "Category", "Status", "Serial",
+                     "Location / Vendor", "Department", "Seats", "Seats used",
+                     "Cost"]
 
 
 @bp.post("/inventory/new")

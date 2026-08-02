@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import select_all_th, row_check, bulk_button %}
+{% from "_macros.html" import select_all_th, row_check, bulk_button, export_menu %}
 {% block title %}{{ t("Employees") }}{% endblock %}
 {% block content %}
 <div class="page-head">
@@ -9,8 +9,8 @@
     <a class="btn" href="{{ url_for('org.employee_form') }}">+ New employee</a>
     <a class="btn secondary" href="{{ url_for('org.employees_import') }}">{{ t("Import") }} Excel/CSV</a>
     {% endif %}
-    <a class="btn secondary" href="{{ url_for('org.employees_export_xlsx') }}">Export Excel</a>
-    <a class="btn secondary" href="{{ url_for('org.employees_export_csv') }}">{{ t("Export CSV") }}</a>
+    {{ export_menu(url_for('org.employees_export_xlsx'),
+                   url_for('org.employees_export_csv')) }}
     {% if has_perm("people.manage") and rows %}{{ bulk_button(t("Delete selected"), danger=True) }}{% endif %}
   </div>
 </div>

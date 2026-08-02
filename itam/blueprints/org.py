@@ -200,96 +200,6 @@ def department_delete(dep_id):
     return redirect(url_for("org.departments"))
 
 
-# ---------------------------------------------------------------- locations
-
-@bp.route("/locations", methods=["GET", "POST"])
-@perm_required("assets.view")
-def locations():
-    if request.method == "POST":
-        loc_id = request.form.get("id")
-        if loc_id:
-            loc = db.get_or_404(Location, int(loc_id))
-        else:
-            loc = Location()
-            db.session.add(loc)
-        loc.name = request.form["name"].strip()
-        loc.kind = (request.form.get("kind") if request.form.get("kind") in LOCATION_KINDS
-                    else "Room")
-        parent = request.form.get("parent_id")
-        loc.parent_id = int(parent) if parent and (not loc.id or int(parent) != loc.id) else None
-        db.session.commit()
-        flash(f'Location "{loc.name}" saved.', "success")
-        return redirect(url_for("org.locations"))
-    # Keep the list in step with the register without anyone pressing a
-    # button: whatever places the assets name, this page shows.
-    sync_locations_from_assets()
-    rows = db.session.scalars(db.select(Location).order_by(Location.name)).all()
-    # Location.path walks up the parent chain and l.assets loads every asset,
-    # so a template touching both once per row cost a query per ancestor and
-    # per location. Resolve both up front in two queries instead.
-    by_id = {l.id: l for l in rows}
-    paths = {}
-
-    def path_of(loc):
-        if loc.id in paths:
-            return paths[loc.id]
-        parent = by_id.get(loc.parent_id)
-        paths[loc.id] = (f"{path_of(parent)} / {loc.name}"
-                         if parent and parent.id != loc.id else loc.name)
-        return paths[loc.id]
-
-    for loc in rows:
-        path_of(loc)
-    counts = dict(db.session.execute(
-        db.select(Asset.location_id, db.func.count(Asset.id))
-        .where(Asset.location_id.isnot(None)).group_by(Asset.location_id)).all())
-
-    # "Add standard locations" turns this into ~600 rows, and printing them all
-    # made this the heaviest page in the app. Filter and page the table; the
-    # parent dropdown still lists everything, since you must be able to pick
-    # any location as a parent.
-    q = request.args.get("q", "").strip().lower()
-    listed = [l for l in rows if not q or q in paths[l.id].lower()
-              or q in (l.kind or "").lower()]
-    listed.sort(key=lambda l: paths[l.id])
-    page_rows, paging = _paginate(listed, request.args.get("page"))
-    return render_template("org/locations.html", rows=rows, page_rows=page_rows,
-                           kinds=LOCATION_KINDS, paths=paths, counts=counts,
-                           paging=paging, q=request.args.get("q", ""))
-
-
-#: Rows per page on the Locations table.
-LOCATION_PAGE_SIZE = 50
-
-
-def _paginate(items, page_arg):
-    total = len(items)
-    pages = max(1, -(-total // LOCATION_PAGE_SIZE))
-    try:
-        page = int(page_arg or 1)
-    except (TypeError, ValueError):
-        page = 1
-    page = min(max(page, 1), pages)
-    start = (page - 1) * LOCATION_PAGE_SIZE
-    window = items[start:start + LOCATION_PAGE_SIZE]
-    return window, {"page": page, "pages": pages, "total": total,
-                    "first": start + 1 if window else 0,
-                    "last": start + len(window)}
-
-
-@bp.post("/locations/<int:loc_id>/delete")
-@perm_required("org.manage")
-def location_delete(loc_id):
-    loc = db.get_or_404(Location, loc_id)
-    if loc.assets or loc.children:
-        flash("Location has assets or sub-locations and cannot be deleted.", "error")
-    else:
-        db.session.delete(loc)
-        db.session.commit()
-        flash("Location deleted.", "success")
-    return redirect(url_for("org.locations"))
-
-
 # ------------------------------------------------------------------ vendors
 
 @bp.route("/vendors")
@@ -392,15 +302,6 @@ def departments_bulk_delete():
         Department, request.form.getlist("ids", type=int),
         lambda d: (f"{d.name} has assets or employees." if d.assets or d.employees else None),
         "org.departments", "department")
-
-
-@bp.post("/locations/bulk-delete")
-@perm_required("org.manage")
-def locations_bulk_delete():
-    return _bulk_delete(
-        Location, request.form.getlist("ids", type=int),
-        lambda l: (f"{l.name} has assets or sub-locations." if l.assets or l.children else None),
-        "org.locations", "location")
 
 
 def sync_locations_from_assets():
