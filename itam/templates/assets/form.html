@@ -153,21 +153,6 @@
 </div>
 
 <script>
-// "Choose from the list, or Other… to type your own." The <select> is what
-// people see; the text input beside it is what actually gets submitted.
-(function () {
-  document.querySelectorAll("select[data-other]").forEach(function (pick) {
-    var field = document.getElementById(pick.dataset.other);
-    if (!field) return;
-    function sync() {
-      var other = pick.value === "__other__";
-      field.hidden = !other;
-      if (other) { field.focus(); } else { field.value = pick.value; }
-    }
-    pick.addEventListener("change", sync);
-  });
-})();
-
 function printLabelPreview() {
   document.body.classList.add("printing-label");
   window.print();

@@ -324,12 +324,10 @@ def locations():
               or q in (l.kind or "").lower()]
     listed.sort(key=lambda l: paths[l.id])
     page_rows, paging = _paginate(listed, request.args.get("page"))
-    from ..models import BRANCHES, BUILDINGS, FLOORS, PLACES
     return render_template("org/locations.html", rows=rows, page_rows=page_rows,
                            kinds=LOCATION_KINDS, paths=paths, counts=counts,
                            paging=paging, q=request.args.get("q", ""),
-                           branches=BRANCHES, buildings=BUILDINGS,
-                           floors=FLOORS, places=PLACES,
+                           **_level_options(),
                            departments=db.session.scalars(
                                db.select(Department).order_by(Department.name)).all(),
                            # One grouped query rather than len(d.assets) per
@@ -342,6 +340,34 @@ def locations():
 
 #: Rows per page on the Locations table.
 LOCATION_PAGE_SIZE = 50
+
+
+def _level_options():
+    """What to offer for each level of the tree.
+
+    Whatever the school has already created, plus the standard names, so the
+    lists grow with real use instead of being stuck on the constants compiled
+    into the app.
+    """
+    from ..models import BRANCHES, BUILDINGS, FLOORS, PLACES
+
+    used = {}
+    for kind, name in db.session.execute(
+            db.select(Location.kind, Location.name).distinct()).all():
+        used.setdefault(kind, set()).add(name)
+
+    def merge(kind, standard):
+        return sorted(used.get(kind, set()) | set(standard))
+
+    return {
+        "branches": merge("Branch", BRANCHES),
+        "buildings": merge("Building", BUILDINGS),
+        "floors": merge("Floor", FLOORS),
+        "rooms": merge("Room", PLACES) + merge("Storage Area", []),
+        "dept_names": sorted(
+            used.get("Department", set())
+            | {d.name for d in db.session.scalars(db.select(Department))}),
+    }
 
 
 def _paginate(items, page_arg):

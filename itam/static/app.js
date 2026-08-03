@@ -266,3 +266,26 @@ document.querySelectorAll("form.bulk-form").forEach((form) => {
   // Forms revealed later (the location editor) get picked up too.
   new MutationObserver(scan).observe(document.body, { childList: true, subtree: true });
 })();
+
+
+// ------------------------------------------------------------- other option
+// A dropdown that ends with "Other…" reveals the text box named by
+// data-other, so a value that is not in the list can still be typed. The text
+// box is what gets submitted; the dropdown just fills it in.
+(() => {
+  const wire = (pick) => {
+    if (pick.dataset.otherWired) return;
+    pick.dataset.otherWired = "1";
+    const field = document.getElementById(pick.dataset.other);
+    if (!field) return;
+    const sync = () => {
+      const other = pick.value === "__other__";
+      field.hidden = !other;
+      if (other) { field.value = ""; field.focus(); } else { field.value = pick.value; }
+    };
+    pick.addEventListener("change", sync);
+  };
+  const scan = () => document.querySelectorAll("select[data-other]").forEach(wire);
+  scan();
+  new MutationObserver(scan).observe(document.body, { childList: true, subtree: true });
+})();

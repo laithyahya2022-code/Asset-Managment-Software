@@ -2266,3 +2266,76 @@ def test_dropdowns_are_enhanced_but_the_real_select_still_submits(client, app):
         a = db.session.scalar(db.select(Asset).where(Asset.tag == "DD-1"))
         assert a is not None and a.category_id == cat_id, \
             "the select no longer submits its value"
+
+
+def test_every_location_level_offers_other_and_creates_it(client, app):
+    """The levels were fixed lists compiled into the app, so a school could
+    only ever pick a branch, building or floor we had thought of."""
+    from itam.models import Location
+
+    login(client)
+    body = client.get("/locations").data.decode()
+    for level in ("branch", "building", "dept", "floor", "room"):
+        block = body.split(f'id="loc-{level}-pick"', 1)[1].split("</select>", 1)[0]
+        assert "__other__" in block, f"{level} has no Other option"
+        # Other… must come last, after the real choices.
+        assert block.rindex("__other__") > block.rindex('<option value="">'), \
+            f"{level}'s Other option is not after the others"
+
+    # Typing new values creates the whole chain.
+    client.post("/locations", data={
+        "branch": "Mada 4", "building": "Annexe A", "department": "Robotics",
+        "floor": "Mezzanine", "room": "Robotics Lab"}, follow_redirects=True)
+    with app.app_context():
+        room = db.session.scalar(db.select(Location).where(Location.name == "Robotics Lab"))
+        assert room.path == "Mada 4 / Annexe A / Robotics / Mezzanine / Robotics Lab"
+        for name, kind in (("Mada 4", "Branch"), ("Annexe A", "Building"),
+                           ("Robotics", "Department"), ("Mezzanine", "Floor")):
+            got = db.session.scalar(db.select(Location).where(Location.name == name))
+            assert got is not None and got.kind == kind, f"{name} was not created as a {kind}"
+
+    # And they are offered next time rather than having to be retyped.
+    body = client.get("/locations").data.decode()
+    for name in ("Mada 4", "Annexe A", "Mezzanine", "Robotics Lab"):
+        assert name in body, f"{name} is not offered after being created"
+
+
+def test_a_location_can_be_deleted_from_its_own_row(client, app):
+    """Bulk delete existed; removing one row needed its own button."""
+    from itam.models import Location
+
+    login(client)
+    client.post("/locations", data={"branch": "Temp Branch", "room": "Temp Room"},
+                follow_redirects=True)
+    with app.app_context():
+        room = db.session.scalar(db.select(Location).where(Location.name == "Temp Room"))
+        room_id = room.id
+
+    body = client.get("/locations?q=Temp Room").data.decode()
+    assert f'id="del-{room_id}"' in body, "no per-row delete form"
+    assert f"form=\"del-{room_id}\"" in body, "no per-row delete button"
+
+    client.post(f"/locations/{room_id}/delete", follow_redirects=True)
+    with app.app_context():
+        assert db.session.get(Location, room_id) is None, "the row was not deleted"
+
+
+def test_a_location_holding_assets_is_not_deleted(client, app):
+    """Deleting a place that still has equipment in it would orphan the link."""
+    from itam.models import Category, Location
+
+    with app.app_context():
+        loc = Location(name="Busy Room", kind="Room")
+        db.session.add(loc)
+        db.session.flush()
+        db.session.add(Asset(tag="BUSY-1", name="PC", status="In Use",
+                             condition="Good", location_id=loc.id,
+                             category=db.session.scalar(db.select(Category))))
+        db.session.commit()
+        loc_id = loc.id
+
+    login(client)
+    resp = client.post(f"/locations/{loc_id}/delete", follow_redirects=True)
+    assert b"cannot be deleted" in resp.data
+    with app.app_context():
+        assert db.session.get(Location, loc_id) is not None, "a location in use was deleted"

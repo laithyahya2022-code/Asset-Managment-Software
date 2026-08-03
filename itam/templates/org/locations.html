@@ -21,29 +21,48 @@
   <form method="post">
     <input type="hidden" name="id" id="loc-id">
     <div class="form-grid">
-      <div><label for="loc-branch">Branch</label>
-        <select name="branch" id="loc-branch"><option value="">—</option>
+      {# Each level is a combo: pick one that exists, or "Other…" to type a new
+         one. Typing a new Branch, Building, Department or Floor creates it --
+         the lists are built from what the school already has, so it grows. #}
+      <div><label for="loc-branch-pick">Branch</label>
+        <select id="loc-branch-pick" data-other="loc-branch">
+          <option value="">—</option>
           {% for b in branches %}<option value="{{ b }}">{{ b }}</option>{% endfor %}
-        </select></div>
-      <div><label for="loc-building">Building</label>
-        <select name="building" id="loc-building"><option value="">—</option>
+          <option value="__other__">{{ t("Other…") }}</option>
+        </select>
+        <input name="branch" id="loc-branch" placeholder="New branch name" hidden></div>
+
+      <div><label for="loc-building-pick">Building</label>
+        <select id="loc-building-pick" data-other="loc-building">
+          <option value="">—</option>
           {% for b in buildings %}<option value="{{ b }}">{{ b }}</option>{% endfor %}
-        </select></div>
-      <div><label for="loc-dept">{{ t("Department") }}</label>
-        <select name="department" id="loc-dept"><option value="">—</option>
-          {% for d in departments %}<option value="{{ d.name }}">{{ d.name }}</option>{% endfor %}
-        </select></div>
-      <div><label for="loc-floor">Floor</label>
-        <select name="floor" id="loc-floor"><option value="">—</option>
+          <option value="__other__">{{ t("Other…") }}</option>
+        </select>
+        <input name="building" id="loc-building" placeholder="New building name" hidden></div>
+
+      <div><label for="loc-dept-pick">{{ t("Department") }}</label>
+        <select id="loc-dept-pick" data-other="loc-dept">
+          <option value="">—</option>
+          {% for d in dept_names %}<option value="{{ d }}">{{ d }}</option>{% endfor %}
+          <option value="__other__">{{ t("Other…") }}</option>
+        </select>
+        <input name="department" id="loc-dept" placeholder="New department name" hidden></div>
+
+      <div><label for="loc-floor-pick">Floor</label>
+        <select id="loc-floor-pick" data-other="loc-floor">
+          <option value="">—</option>
           {% for f in floors %}<option value="{{ f }}">{{ f }}</option>{% endfor %}
-        </select></div>
-      <div><label for="loc-room">Room</label>
-        <input name="room" id="loc-room" list="room-names" autocomplete="off"
-               placeholder="Room or storage area">
-        <datalist id="room-names">
-          {% for pl in places %}<option value="{{ pl }}">{% endfor %}
-        </datalist></div>
-    </div>
+          <option value="__other__">{{ t("Other…") }}</option>
+        </select>
+        <input name="floor" id="loc-floor" placeholder="New floor name" hidden></div>
+
+      <div><label for="loc-room-pick">Room</label>
+        <select id="loc-room-pick" data-other="loc-room">
+          <option value="">—</option>
+          {% for r in rooms %}<option value="{{ r }}">{{ r }}</option>{% endfor %}
+          <option value="__other__">{{ t("Other…") }}</option>
+        </select>
+        <input name="room" id="loc-room" placeholder="New room or storage area" hidden></div>
     <div class="form-actions">
       <button class="btn" type="submit" id="loc-save">{{ t("Add location") }}</button>
       <button class="btn secondary" type="button" id="loc-cancel" hidden>{{ t("Cancel") }}</button>
@@ -111,12 +130,20 @@
       <button class="btn secondary sm loc-edit" type="button" data-id="{{ l.id }}"
               data-name="{{ l.name }}" data-kind="{{ l.kind }}"
               data-parent="{{ l.parent_id or '' }}">{{ t("Edit") }}</button>
+      <button class="btn secondary sm" type="submit" form="del-{{ l.id }}"
+              data-confirm="Delete “{{ paths[l.id] }}”?">{{ t("Delete") }}</button>
       {% endif %}
     </td>
   </tr>
   {% endfor %}
 </table></div>
 </form>
+{% if has_perm("org.manage") %}
+{% for l in page_rows %}
+<form id="del-{{ l.id }}" method="post" hidden
+      action="{{ url_for('org.location_delete', loc_id=l.id) }}"></form>
+{% endfor %}
+{% endif %}
 {% if paging.pages > 1 %}
 <div class="pager no-print">
   <span class="muted">{{ paging.first }}–{{ paging.last }} {{ t("of") }} {{ paging.total }}</span>
@@ -149,9 +176,11 @@ function locEdit(id, name, kind, parentId) {
   // row uses the plain name, kind and parent.
   document.getElementById("loc-edit-fields").hidden = !editing;
   document.querySelectorAll("#loc-editor .form-grid")[0].hidden = editing;
-  ["loc-branch", "loc-building", "loc-dept", "loc-floor", "loc-room"].forEach(function (f) {
-    var el = document.getElementById(f);
-    if (el) { el.disabled = editing; if (!editing) el.value = ""; }
+  ["branch", "building", "dept", "floor", "room"].forEach(function (level) {
+    var pick = document.getElementById("loc-" + level + "-pick");
+    var box = document.getElementById("loc-" + level);
+    if (pick) { pick.disabled = editing; if (!editing) pick.selectedIndex = 0; }
+    if (box) { box.disabled = editing; if (!editing) { box.value = ""; box.hidden = true; } }
   });
 
   document.getElementById("loc-title").textContent =
@@ -160,8 +189,9 @@ function locEdit(id, name, kind, parentId) {
     editing ? "{{ t('Save changes') }}" : "{{ t('Add location') }}";
   document.getElementById("loc-cancel").hidden = !editing;
   document.getElementById("loc-editor").scrollIntoView({ block: "nearest" });
-  (editing ? document.getElementById("loc-name")
-           : document.getElementById("loc-branch")).focus();
+  var first = editing ? document.getElementById("loc-name")
+                      : document.getElementById("loc-branch-pick");
+  if (first) first.focus();
 }
 document.querySelectorAll(".loc-edit").forEach(function (b) {
   b.addEventListener("click", function () {
