@@ -2058,7 +2058,8 @@ def test_assets_list_offers_select_all(client, app):
 
     login(client)
     body = client.get("/assets/").data.decode()
-    assert "data-check-all" in body, "Assets has no select-all"
+    assert "bulk-toggle" in body, "Assets has no Select all button"
+    assert 'class="bulk-all"' in body, "Assets has no header tick-box"
     assert 'name="id"' in body, "rows are not selectable"
 
 def test_adding_a_location_builds_the_whole_chain(client, app):
@@ -2153,3 +2154,82 @@ def test_lists_offer_a_visible_select_all_button(client, app):
     body = client.get("/employees").data.decode()
     assert "bulk-toggle" in body, "no visible Select all button"
     assert 'data-form="bulk"' in body, "the button does not target the list's form"
+
+
+def test_select_all_appears_on_every_list_that_has_rows(client, app):
+    """All nine lists, checked together rather than one at a time.
+
+    Assets had its own selection code and never picked up the shared button,
+    and the others only render the toolbar once a list has rows -- which on a
+    new install is never, so it looked like nothing had one.
+    """
+    from itam.models import (Assignment, Category, Department, Employee,
+                             InventoryAudit, License, Location, Maintenance,
+                             Vendor)
+
+    with app.app_context():
+        cat = db.session.scalar(db.select(Category))
+        emp = db.session.scalar(db.select(Employee))
+        db.session.add_all([Department(name="D One"), Location(name="L One", kind="Room"),
+                            License(name="Lic One", seats=3), Vendor(name="V One"),
+                            InventoryAudit(name="A One")])
+        a = Asset(tag="SEL-ALL", name="Thing", status="Checked Out",
+                  condition="Good", category=cat)
+        db.session.add(a)
+        db.session.flush()
+        db.session.add_all([Maintenance(asset=a, title="Fix"),
+                            Assignment(asset=a, employee=emp)])
+        db.session.commit()
+
+    login(client)
+    missing = []
+    for path in ("/assets/", "/checkouts", "/licenses", "/maintenance", "/inventory",
+                 "/locations", "/employees", "/departments", "/vendors"):
+        body = client.get(path).data.decode()
+        if not ("bulk-toggle" in body and 'class="bulk-all"' in body
+                and 'class="bulk-pick"' in body):
+            missing.append(path)
+    assert not missing, f"no working select-all on: {missing}"
+
+
+def test_arabic_translates_the_whole_page(client, app):
+    """Most of the interface never called t(), so Arabic was largely English."""
+    login(client)
+    client.get("/lang/ar")
+    body = client.get("/assets/").data.decode()
+
+    for english in ("All statuses", "All categories", "All departments",
+                    "All branches", "All buildings", "All floors",
+                    "All locations", "All conditions", "Filter",
+                    "No assets found"):
+        assert english not in body, f"{english!r} is still in English"
+    for arabic in ("كل الحالات", "كل الفئات", "تصفية", "لا توجد أصول"):
+        assert arabic in body, f"{arabic} is missing"
+
+    # English is untouched.
+    client.get("/lang/en")
+    body = client.get("/assets/").data.decode()
+    assert "All statuses" in body and "كل الحالات" not in body
+
+
+def test_arabic_never_rewrites_data_or_scripts(client, app):
+    """Only exact UI phrases are swapped, and never inside a script."""
+    from itam.models import Category
+
+    with app.app_context():
+        db.session.add(Asset(tag="AR-1", name="Filter unit for the pool",
+                             status="Available", condition="Good",
+                             category=db.session.scalar(db.select(Category))))
+        db.session.commit()
+
+    login(client)
+    client.get("/lang/ar")
+    body = client.get("/assets/").data.decode()
+    # A longer name containing a translated word is left alone.
+    assert "Filter unit for the pool" in body
+    # Script contents are skipped, so the JavaScript still works.
+    from itam.i18n import translate_html
+    js = '<script>var s = "Filter";</script><p>Filter</p>'
+    out = translate_html(js)
+    assert 'var s = "Filter";' in out, "script contents were rewritten"
+    assert "<p>تصفية</p>" in out

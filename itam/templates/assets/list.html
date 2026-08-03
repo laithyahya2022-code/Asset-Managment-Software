@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import status_badge, export_menu %}
+{% from "_macros.html" import status_badge, export_menu, select_all_th, row_check %}
 {% block title %}{{ t("Assets") }}{% endblock %}
 {% block content %}
 <div class="page-head">
@@ -66,17 +66,22 @@
 </div>
 
 {% if assets %}
-<form method="post" action="{{ url_for('assets.bulk') }}">
+<form id="bulk" method="post" action="{{ url_for('assets.bulk') }}" class="bulk-form">
 <div class="card table-wrap">
   <table>
     <tr>
-      {% if has_perm("assets.manage") %}<th><input type="checkbox" data-check-all></th>{% endif %}
+      {% if has_perm("assets.manage") %}{{ select_all_th() }}{% endif %}
       <th>Tag</th><th>{{ t("Name") }}</th><th>{{ t("Category") }}</th><th>{{ t("Status") }}</th>
       <th>Branch</th><th>Floor</th><th>{{ t("Location") }}</th><th>Assigned to</th><th>{{ t("Department") }}</th>
     </tr>
     {% for a in assets %}
     <tr>
-      {% if has_perm("assets.manage") %}<td><input type="checkbox" name="id" value="{{ a.id }}"></td>{% endif %}
+      {% if has_perm("assets.manage") %}
+      <td class="pick no-print">
+        <input type="checkbox" class="bulk-pick" name="id" value="{{ a.id }}"
+               aria-label="{{ t('Select row') }}">
+      </td>
+      {% endif %}
       <td><a href="{{ url_for('assets.detail', asset_id=a.id) }}">{{ a.tag }}</a></td>
       <td>{{ a.name }}</td>
       <td>{{ a.category.name if a.category else "—" }}</td>
@@ -92,6 +97,8 @@
 </div>
 {% if has_perm("assets.manage") %}
 <div class="actions-row no-print">
+  <button class="btn secondary bulk-toggle" type="button" form="bulk" data-form="bulk"
+          data-on="{{ t('Select all') }}" data-off="{{ t('Clear selection') }}">{{ t("Select all") }}</button>
   <span class="muted">Bulk action for selected:</span>
   <select name="action" style="width:auto">
     <option value="labels">Print labels</option>
@@ -112,7 +119,8 @@
   <select name="location_id" id="bulk-loc" style="width:auto">
     <option value="">(location…)</option>
   </select>
-  <button class="btn secondary" type="submit" data-confirm="Apply this bulk action to the selected assets?">Apply</button>
+  <button class="btn secondary bulk-go" type="submit" form="bulk" disabled
+          data-label="{{ t('Apply') }}">{{ t("Apply") }}</button>
 </div>
 {% endif %}
 </form>

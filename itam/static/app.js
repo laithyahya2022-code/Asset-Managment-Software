@@ -76,20 +76,25 @@ if ("serviceWorker" in navigator) {
 // Wires the select-all checkbox, the row ticks and the bulk action button on
 // every list page that uses the bulk_form/select_all_th/row_check macros.
 document.querySelectorAll("form.bulk-form").forEach((form) => {
+  // getAttribute, not form.id: a form exposes its named controls as
+  // properties, so a checkbox called "id" -- which the asset list uses --
+  // shadows the form's own id and every selector built from it silently
+  // matches nothing.
+  const formId = form.getAttribute("id");
   const all = form.querySelector(".bulk-all");
   const picks = [...form.querySelectorAll(".bulk-pick")];
   // The action button sits in the page head and points back with form=,
   // so look outside the form as well as inside it.
   const buttons = [...new Set([
     ...form.querySelectorAll(".bulk-go"),
-    ...(form.id ? document.querySelectorAll(`.bulk-go[form="${form.id}"]`) : []),
+    ...(formId ? document.querySelectorAll(`.bulk-go[form="${formId}"]`) : []),
   ])];
   if (!picks.length || !buttons.length) return;
 
   // A visible "Select all" button, for anyone who never spots the tick-box in
   // the table header. Both it and the header box drive the same selection.
-  const toggles = form.id
-    ? [...document.querySelectorAll(`.bulk-toggle[data-form="${form.id}"]`)] : [];
+  const toggles = formId
+    ? [...document.querySelectorAll(`.bulk-toggle[data-form="${formId}"]`)] : [];
   const syncToggle = () => {
     const chosen = picks.filter((p) => p.checked).length;
     toggles.forEach((t) => {

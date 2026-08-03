@@ -4,9 +4,9 @@ from datetime import datetime
 
 from flask import Flask, g, redirect, request, session, url_for
 
-APP_VERSION = "2026.08.03.3"  # bumped on each release so users can confirm their build
+APP_VERSION = "2026.08.03.4"  # bumped on each release so users can confirm their build
 
-from .i18n import LANGS, t
+from .i18n import LANGS, t, translate_html
 from .models import (DEFAULT_ROLE_PERMS, PERMISSIONS, ROLES, Notification,
                      RolePermission, Setting, User, db)
 from .security import has_perm, load_user
@@ -96,6 +96,17 @@ def create_app(test_config=None, instance_path=None):
         load_user()
         g.lang = session.get("lang") or (g.user.language if g.user else "en")
         _auto_backup(app)
+
+    @app.after_request
+    def arabic(response):
+        """Translate the finished page when the user is reading Arabic."""
+        if (getattr(g, "lang", "en") == "ar"
+                and response.content_type
+                and response.content_type.startswith("text/html")
+                and response.direct_passthrough is False):
+            body = response.get_data(as_text=True)
+            response.set_data(translate_html(body))
+        return response
 
     @app.get("/lang/<code>")
     def set_lang(code):
