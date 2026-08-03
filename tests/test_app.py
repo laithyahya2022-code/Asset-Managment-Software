@@ -2233,3 +2233,36 @@ def test_arabic_never_rewrites_data_or_scripts(client, app):
     out = translate_html(js)
     assert 'var s = "Filter";' in out, "script contents were rewritten"
     assert "<p>تصفية</p>" in out
+
+
+def test_dropdowns_are_enhanced_but_the_real_select_still_submits(client, app):
+    """The native popup is drawn by the OS and opens upward when it runs out of
+    room below, which no CSS or script can override. The popup is replaced, but
+    the <select> itself stays, so submitting is unchanged."""
+    import pathlib
+
+    js = pathlib.Path("itam/static/app.js").read_text()
+    css = pathlib.Path("itam/static/style.css").read_text()
+
+    assert "sel-list" in js and "sel-btn" in js, "the dropdown script is missing"
+    # It must never flip upward: no 'bottom' positioning on the list.
+    rule = css.split(".sel-list {", 1)[1].split("}", 1)[0]
+    assert "top: calc(100% + 2px)" in rule, "the list is not pinned below the field"
+    assert "bottom:" not in rule, "the list can still flip upward"
+    # List boxes and multi-selects keep the native behaviour.
+    assert "s.multiple" in js and "s.size" in js
+
+    # The form still works exactly as before.
+    from itam.models import Category
+
+    login(client)
+    with app.app_context():
+        cat_id = db.session.scalar(db.select(Category.id))
+    client.post("/assets/new", data={
+        "name": "Dropdown test", "tag": "DD-1", "category_id": cat_id,
+        "status": "Available", "condition": "Good", "depreciation_years": "5"},
+        follow_redirects=True)
+    with app.app_context():
+        a = db.session.scalar(db.select(Asset).where(Asset.tag == "DD-1"))
+        assert a is not None and a.category_id == cat_id, \
+            "the select no longer submits its value"

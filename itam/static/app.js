@@ -140,3 +140,129 @@ document.querySelectorAll("form.bulk-form").forEach((form) => {
 
   sync();
 });
+
+// ---------------------------------------------------------------- dropdowns
+// A native <select> popup is drawn by the operating system: the browser
+// decides whether it opens up or down from the space available, and neither
+// CSS nor script can override that. On a long list near the middle of a form
+// it flips upward and covers the page. This replaces the popup -- and only the
+// popup -- with our own list that always opens downward and is styled like the
+// rest of the app.
+//
+// The real <select> stays in the DOM, so form submission, existing script that
+// reads .value or .options, and the no-JavaScript case all behave exactly as
+// before. Anything with size= or multiple is left alone: those are list boxes,
+// not popups.
+(() => {
+  const isPopup = (s) => !s.multiple && (!s.size || s.size <= 1)
+    && !s.closest("[data-native-select]");
+
+  const build = (select) => {
+    if (select.dataset.enhanced) return;
+    select.dataset.enhanced = "1";
+
+    const wrap = document.createElement("div");
+    wrap.className = "sel";
+    select.parentNode.insertBefore(wrap, select);
+    wrap.appendChild(select);
+
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "sel-btn";
+    button.setAttribute("aria-haspopup", "listbox");
+    button.setAttribute("aria-expanded", "false");
+    if (select.id) button.id = `${select.id}-btn`;
+
+    const list = document.createElement("div");
+    list.className = "sel-list";
+    list.setAttribute("role", "listbox");
+    list.hidden = true;
+
+    wrap.append(button, list);
+
+    const label = () => {
+      const opt = select.options[select.selectedIndex];
+      button.textContent = opt ? opt.textContent.trim() || "—" : "—";
+      button.classList.toggle("placeholder", !!opt && !opt.value);
+    };
+
+    const render = () => {
+      list.textContent = "";
+      [...select.options].forEach((opt, i) => {
+        const row = document.createElement("div");
+        row.className = "sel-opt";
+        row.textContent = opt.textContent.trim() || "—";
+        row.setAttribute("role", "option");
+        row.dataset.index = String(i);
+        if (opt.disabled) row.classList.add("is-disabled");
+        if (i === select.selectedIndex) row.classList.add("is-on");
+        list.appendChild(row);
+      });
+      label();
+    };
+
+    const close = () => {
+      list.hidden = true;
+      button.setAttribute("aria-expanded", "false");
+    };
+
+    const open = () => {
+      document.querySelectorAll(".sel-list:not([hidden])").forEach((l) => {
+        if (l !== list) l.hidden = true;
+      });
+      render();
+      list.hidden = false;
+      button.setAttribute("aria-expanded", "true");
+      const on = list.querySelector(".is-on");
+      if (on) on.scrollIntoView({ block: "nearest" });
+      // Opening downward can run past the fold; bring it into view rather
+      // than flipping the list upward.
+      const room = window.innerHeight - list.getBoundingClientRect().bottom;
+      if (room < 0) wrap.scrollIntoView({ block: "center", behavior: "smooth" });
+    };
+
+    const choose = (i) => {
+      const opt = select.options[i];
+      if (!opt || opt.disabled) return;
+      select.selectedIndex = i;
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+      label();
+      close();
+      button.focus();
+    };
+
+    button.addEventListener("click", () => (list.hidden ? open() : close()));
+    list.addEventListener("click", (e) => {
+      const row = e.target.closest(".sel-opt");
+      if (row) choose(Number(row.dataset.index));
+    });
+
+    button.addEventListener("keydown", (e) => {
+      if (["ArrowDown", "ArrowUp", "Enter", " "].includes(e.key)) {
+        e.preventDefault();
+        if (list.hidden) { open(); return; }
+      }
+      if (e.key === "Escape") close();
+    });
+    list.addEventListener("keydown", (e) => { if (e.key === "Escape") { close(); button.focus(); } });
+
+    document.addEventListener("click", (e) => {
+      if (!wrap.contains(e.target)) close();
+    });
+
+    // Lists that are refilled from the server (the lending picker, the bulk
+    // transfer box) must redraw rather than show a stale set.
+    new MutationObserver(() => { if (!list.hidden) render(); else label(); })
+      .observe(select, { childList: true });
+    select.addEventListener("change", label);
+
+    render();
+  };
+
+  const scan = () => document.querySelectorAll("select").forEach((s) => {
+    if (isPopup(s)) build(s);
+  });
+  scan();
+  // Forms revealed later (the location editor) get picked up too.
+  new MutationObserver(scan).observe(document.body, { childList: true, subtree: true });
+})();
