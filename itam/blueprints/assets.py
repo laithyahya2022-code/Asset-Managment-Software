@@ -19,8 +19,8 @@ from ..models import (ASSET_CONDITIONS, ASSET_STATUSES, BRANCHES, BUILDINGS,
                       Reservation, Transfer, Vendor, db)
 from ..security import has_perm, login_required, perm_required
 from ..utils import (barcode_svg, csv_response, custom_field_names,
-                     get_setting, label_layout, log_activity, parse_date,
-                     qr_svg)
+                     get_setting, label_layout, level_values, log_activity,
+                     parse_date, qr_svg)
 
 bp = Blueprint("assets", __name__, url_prefix="/assets")
 
@@ -37,15 +37,12 @@ def _lookups():
         employees=db.session.scalars(db.select(Employee).where(Employee.active)
                                      .order_by(Employee.name)).all(),
         statuses=ASSET_STATUSES, conditions=ASSET_CONDITIONS,
-        branches=BRANCHES, buildings=BUILDINGS, floors=FLOORS, places=PLACES,
-        # The room list offers the standard names plus whatever rooms the
-        # register already uses, so an imported room is one keystroke away
-        # instead of having to be retyped exactly.
-        rooms=sorted(set(PLACES) | {
-            r for (r,) in db.session.execute(
-                db.select(Asset.location_name).where(
-                    Asset.location_name.isnot(None),
-                    Asset.location_name != "").distinct()).all() if r}),
+        # Every level comes from the Locations screen plus whatever the
+        # register already uses, so a branch or building added there is
+        # immediately available here.
+        branches=level_values("branch"), buildings=level_values("building"),
+        floors=level_values("floor"), rooms=level_values("room"),
+        places=level_values("room"),
         operating_systems=OPERATING_SYSTEMS, today_iso=date.today().isoformat(),
         custom_names=custom_field_names(),
     )
@@ -104,9 +101,12 @@ def _from_form(a, form):
                   "invoice_number"):
         if field in form:
             setattr(a, field, form.get(field, "").strip() or None)
-    a.branch = form.get("branch") if form.get("branch") in BRANCHES else None
-    a.building = form.get("building") if form.get("building") in BUILDINGS else None
-    a.floor = form.get("floor") if form.get("floor") in FLOORS else None
+    # Validate against the levels that actually exist, not a list compiled
+    # into the app: a school with a fourth campus used to have the value
+    # silently thrown away on save.
+    for level in ("branch", "building", "floor"):
+        value = form.get(level, "").strip()
+        setattr(a, level, value if value in level_values(level) else None)
     a.location_name = form.get("location_name", "").strip() or None
     if "department_id" in form:
         dep = form.get("department_id")

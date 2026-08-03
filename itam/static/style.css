@@ -391,3 +391,18 @@ tr.picked td { background: #f2f9f4 !important; }
 .sel-opt.is-on { background: var(--accent); color: #fff; }
 .sel-opt.is-disabled { color: var(--muted); cursor: not-allowed; }
 .filters .sel { width: auto; min-width: 9rem; display: inline-block; }
+
+
+/* level manager on the Locations screen */
+.level-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 1rem; align-items: start; }
+.level-add { display: flex; gap: 0.35rem; margin-bottom: 0.5rem; }
+.level-add input { font-size: 0.86rem; }
+.level-list { list-style: none; margin: 0; padding: 0; max-height: 15rem; overflow-y: auto; }
+.level-list li { display: flex; align-items: center; gap: 0.4rem;
+  padding: 0.28rem 0.35rem; border-radius: 6px; font-size: 0.88rem; }
+.level-list li:hover { background: var(--bg); }
+.level-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; }
+.level-acts { display: none; gap: 0.25rem; flex-shrink: 0; }
+.level-list li:hover .level-acts, .level-list li:focus-within .level-acts { display: flex; }

@@ -410,3 +410,40 @@ def parse_date(value):
 
 def month_key(d):
     return d.strftime("%b %y")
+
+
+# --------------------------------------------------------------- location levels
+
+#: Which Location kind backs each level of the asset form.
+LEVEL_KINDS = {"branch": "Branch", "building": "Building",
+               "floor": "Floor", "room": "Room"}
+
+
+def level_values(level):
+    """Every name in use for one level of the hierarchy.
+
+    The asset form used to offer -- and validate against -- lists compiled
+    into the app, so a school could not record a fourth campus or a new
+    annexe: the value was silently dropped on save. This reads what actually
+    exists, plus the standard names as a starting point.
+    """
+    from .models import (BRANCHES, BUILDINGS, FLOORS, PLACES, Asset, Location,
+                         db)
+
+    kind = LEVEL_KINDS.get(level)
+    standard = {"branch": BRANCHES, "building": BUILDINGS,
+                "floor": FLOORS, "room": PLACES}.get(level, [])
+    names = set(standard)
+    if kind:
+        names |= {n for (n,) in db.session.execute(
+            db.select(Location.name).where(Location.kind == kind).distinct())}
+        if kind == "Room":       # storage areas are rooms as far as an asset cares
+            names |= {n for (n,) in db.session.execute(
+                db.select(Location.name).where(Location.kind == "Storage Area").distinct())}
+    # Whatever the register itself already says, so an import is never lost.
+    column = {"branch": Asset.branch, "building": Asset.building,
+              "floor": Asset.floor, "room": Asset.location_name}.get(level)
+    if column is not None:
+        names |= {n for (n,) in db.session.execute(
+            db.select(column).where(column.isnot(None), column != "").distinct())}
+    return sorted(n for n in names if n)

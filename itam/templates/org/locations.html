@@ -88,6 +88,63 @@
 </div>
 {% endif %}
 
+{# One field per level. Everything here feeds the asset form directly, so a
+   building added on this page is on the New Asset screen straight away. #}
+<div class="card no-print" id="levels">
+  <p class="eyebrow">Branches, buildings, floors, departments &amp; rooms</p>
+  <p class="muted" style="margin:-0.3rem 0 0.9rem;font-size:0.86rem">
+    Whatever you list here is what the asset form offers.
+  </p>
+  <div class="level-grid">
+    {% for key, label, values in levels %}
+    <div class="level">
+      <p class="eyebrow" style="margin-bottom:0.5rem">{{ label }} <span class="muted">({{ values | length }})</span></p>
+      {% if has_perm("org.manage") %}
+      <form method="post" action="{{ url_for('org.location_level') }}" class="level-add">
+        <input type="hidden" name="level" value="{{ key }}">
+        <input type="hidden" name="action" value="add">
+        <input name="name" placeholder="{{ t('Add') }} {{ label|lower }}…" required>
+        <button class="btn sm" type="submit">+</button>
+      </form>
+      {% endif %}
+      <ul class="level-list">
+        {% for v in values %}
+        <li>
+          <span class="level-name">{{ v }}</span>
+          {% if has_perm("org.manage") %}
+          <span class="level-acts">
+            <button class="btn secondary sm level-rename" type="button"
+                    data-level="{{ key }}" data-name="{{ v }}">{{ t("Edit") }}</button>
+            <button class="btn secondary sm" type="submit"
+                    form="lvl-{{ key }}-{{ loop.index0 }}"
+                    data-confirm="Remove “{{ v }}”?">{{ t("Delete") }}</button>
+          </span>
+          {% endif %}
+        </li>
+        {% endfor %}
+        {% if not values %}<li class="empty">Nothing yet.</li>{% endif %}
+      </ul>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% if has_perm("org.manage") %}
+{% for key, label, values in levels %}{% for v in values %}
+<form id="lvl-{{ key }}-{{ loop.index0 }}" method="post" hidden
+      action="{{ url_for('org.location_level') }}">
+  <input type="hidden" name="level" value="{{ key }}">
+  <input type="hidden" name="action" value="delete">
+  <input type="hidden" name="name" value="{{ v }}">
+</form>
+{% endfor %}{% endfor %}
+<form id="level-rename" method="post" action="{{ url_for('org.location_level') }}" hidden>
+  <input type="hidden" name="action" value="rename">
+  <input type="hidden" name="level" id="rn-level">
+  <input type="hidden" name="was" id="rn-was">
+  <input type="hidden" name="name" id="rn-name">
+</form>
+{% endif %}
+
 {# Departments live here now rather than on their own screen: both describe
    where an asset sits, and keeping them apart meant two places to look. #}
 <div class="card" id="departments">
@@ -203,6 +260,18 @@ document.querySelectorAll(".loc-edit").forEach(function (b) {
   if (el) el.addEventListener("click", function () { locEdit(); });
 });
 locEdit();     // start in "add" mode
+
+// Renaming a level value: one prompt, then the hidden form carries it.
+document.querySelectorAll(".level-rename").forEach(function (b) {
+  b.addEventListener("click", function () {
+    var next = window.prompt("Rename to:", b.dataset.name);
+    if (!next || next === b.dataset.name) return;
+    document.getElementById("rn-level").value = b.dataset.level;
+    document.getElementById("rn-was").value = b.dataset.name;
+    document.getElementById("rn-name").value = next;
+    document.getElementById("level-rename").submit();
+  });
+});
 </script>
 {% endif %}
 {% endblock %}

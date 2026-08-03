@@ -2339,3 +2339,130 @@ def test_a_location_holding_assets_is_not_deleted(client, app):
     assert b"cannot be deleted" in resp.data
     with app.app_context():
         assert db.session.get(Location, loc_id) is not None, "a location in use was deleted"
+
+
+def test_levels_added_on_locations_reach_the_asset_form(client, app):
+    """The whole point: Branch/Building/Floor were lists compiled into the app.
+
+    The asset form offered only those, and _from_form threw away anything
+    else, so a school with a fourth campus could not record it at all.
+    """
+    from itam.models import Category, Location
+
+    login(client)
+    client.post("/locations/level", data={
+        "level": "building", "action": "add", "name": "Annexe A"},
+        follow_redirects=True)
+    with app.app_context():
+        assert db.session.scalar(db.select(Location).where(
+            Location.name == "Annexe A", Location.kind == "Building"))
+
+    # offered on the form...
+    body = client.get("/assets/new").data.decode()
+    picker = body.split('id="f-building"', 1)[1].split("</select>", 1)[0]
+    assert "Annexe A" in picker, "a building added on Locations is not on the asset form"
+
+    # ...and kept on save, which is what used to fail silently.
+    with app.app_context():
+        cat_id = db.session.scalar(db.select(Category.id))
+    client.post("/assets/new", data={
+        "name": "Annexe PC", "tag": "ANX-1", "category_id": cat_id,
+        "status": "Available", "condition": "Good", "depreciation_years": "5",
+        "building": "Annexe A"}, follow_redirects=True)
+    with app.app_context():
+        a = db.session.scalar(db.select(Asset).where(Asset.tag == "ANX-1"))
+        assert a.building == "Annexe A", "the new building was discarded on save"
+
+
+def test_a_level_can_be_renamed_everywhere_at_once(client, app):
+    """Assets store these as text, so a rename has to reach them too."""
+    from itam.models import Category, Location
+
+    login(client)
+    client.post("/locations/level", data={
+        "level": "branch", "action": "add", "name": "Mada 4"}, follow_redirects=True)
+    with app.app_context():
+        cat_id = db.session.scalar(db.select(Category.id))
+    client.post("/assets/new", data={
+        "name": "Campus PC", "tag": "CMP-1", "category_id": cat_id,
+        "status": "Available", "condition": "Good", "depreciation_years": "5",
+        "branch": "Mada 4"}, follow_redirects=True)
+
+    client.post("/locations/level", data={
+        "level": "branch", "action": "rename", "was": "Mada 4",
+        "name": "Mada 4 — New Campus"}, follow_redirects=True)
+
+    with app.app_context():
+        assert db.session.scalar(db.select(Location).where(
+            Location.name == "Mada 4 — New Campus"))
+        a = db.session.scalar(db.select(Asset).where(Asset.tag == "CMP-1"))
+        assert a.branch == "Mada 4 — New Campus", \
+            "the asset still points at the old name"
+
+
+def test_a_level_in_use_is_not_removed(client, app):
+    """Removing a building that assets sit in would orphan them."""
+    from itam.models import Category, Location
+
+    login(client)
+    client.post("/locations/level", data={
+        "level": "floor", "action": "add", "name": "Mezzanine"}, follow_redirects=True)
+    with app.app_context():
+        cat_id = db.session.scalar(db.select(Category.id))
+    client.post("/assets/new", data={
+        "name": "Mez PC", "tag": "MEZ-1", "category_id": cat_id,
+        "status": "Available", "condition": "Good", "depreciation_years": "5",
+        "floor": "Mezzanine"}, follow_redirects=True)
+
+    resp = client.post("/locations/level", data={
+        "level": "floor", "action": "delete", "name": "Mezzanine"},
+        follow_redirects=True)
+    assert b"was kept" in resp.data
+    with app.app_context():
+        assert db.session.scalar(db.select(Location).where(Location.name == "Mezzanine"))
+
+    # An unused one goes.
+    client.post("/locations/level", data={
+        "level": "floor", "action": "add", "name": "Unused Floor"}, follow_redirects=True)
+    client.post("/locations/level", data={
+        "level": "floor", "action": "delete", "name": "Unused Floor"},
+        follow_redirects=True)
+    with app.app_context():
+        assert not db.session.scalar(db.select(Location).where(Location.name == "Unused Floor"))
+
+
+def test_departments_can_be_managed_from_locations(client, app):
+    """Departments are their own table -- that is what assets link to."""
+    from itam.models import Department
+
+    login(client)
+    body = client.get("/locations").data.decode()
+    assert 'value="department"' in body, "no department field on Locations"
+
+    client.post("/locations/level", data={
+        "level": "department", "action": "add", "name": "Robotics Club"},
+        follow_redirects=True)
+    with app.app_context():
+        dep = db.session.scalar(db.select(Department).where(Department.name == "Robotics Club"))
+        assert dep is not None
+
+    client.post("/locations/level", data={
+        "level": "department", "action": "rename", "was": "Robotics Club",
+        "name": "Robotics"}, follow_redirects=True)
+    with app.app_context():
+        assert db.session.scalar(db.select(Department).where(Department.name == "Robotics"))
+
+    # It is offered on the asset form.
+    assert "Robotics" in client.get("/assets/new").data.decode()
+
+
+def test_a_viewer_cannot_change_levels(client, app):
+    from itam.models import Location
+
+    login(client, "viewer", "viewer123")
+    client.post("/locations/level", data={
+        "level": "branch", "action": "add", "name": "Sneaky Branch"},
+        follow_redirects=True)
+    with app.app_context():
+        assert not db.session.scalar(
+            db.select(Location).where(Location.name == "Sneaky Branch"))

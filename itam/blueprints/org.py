@@ -6,8 +6,8 @@ from flask import (Blueprint, flash, g, redirect, render_template, request,
 from ..models import (EMPLOYEE_TYPES, LOCATION_KINDS, Asset, Category,
                       Department, Employee, Location, Vendor, db)
 from ..security import has_perm, perm_required
-from ..utils import (csv_response, log_activity, parse_date, read_table,
-                     xlsx_response)
+from ..utils import (csv_response, level_values, log_activity, parse_date,
+                     read_table, xlsx_response)
 
 bp = Blueprint("org", __name__)
 
@@ -328,6 +328,15 @@ def locations():
                            kinds=LOCATION_KINDS, paths=paths, counts=counts,
                            paging=paging, q=request.args.get("q", ""),
                            **_level_options(),
+                           levels=[
+                               ("branch", "Branches", level_values("branch")),
+                               ("building", "Buildings", level_values("building")),
+                               ("floor", "Floors", level_values("floor")),
+                               ("department", "Departments",
+                                [d.name for d in db.session.scalars(
+                                    db.select(Department).order_by(Department.name))]),
+                               ("room", "Rooms", level_values("room")),
+                           ],
                            departments=db.session.scalars(
                                db.select(Department).order_by(Department.name)).all(),
                            # One grouped query rather than len(d.assets) per
@@ -597,3 +606,110 @@ def vendors_bulk_delete():
         lambda v: (f"{v.name} still has assets or licences."
                    if v.assets or v.licenses else None),
         "org.vendors", "vendor")
+
+
+# ------------------------------------------------- branch / building / floor
+# Managed as plain name lists rather than tree rows: the asset form only ever
+# needs the name, and asking someone to pick a parent for every floor of every
+# building was the reason these were hard-coded in the first place.
+
+LEVEL_KIND = {"branch": "Branch", "building": "Building",
+              "floor": "Floor", "room": "Room"}
+
+
+@bp.post("/locations/level")
+@perm_required("org.manage")
+def location_level():
+    """Add, rename or remove one value of a level, everywhere it appears."""
+    level = request.form.get("level", "")
+    action = request.form.get("action", "")
+    name = request.form.get("name", "").strip()
+    was = request.form.get("was", "").strip()
+
+    if level == "department":
+        return _department_level(action, name, was)
+
+    kind = LEVEL_KIND.get(level)
+    if not kind or action not in ("add", "rename", "delete"):
+        flash("Unknown request.", "error")
+        return redirect(url_for("org.locations"))
+
+    rows = db.session.scalars(db.select(Location).where(
+        Location.kind == kind, Location.name == (was or name))).all()
+
+    if action == "add":
+        if not name:
+            flash("Give it a name.", "error")
+        elif rows:
+            flash(f'"{name}" already exists.', "error")
+        else:
+            db.session.add(Location(name=name, kind=kind))
+            db.session.commit()
+            flash(f'{kind} "{name}" added.', "success")
+
+    elif action == "rename":
+        if not name or not was:
+            flash("Give it a name.", "error")
+        else:
+            for row in rows:
+                row.name = name
+            # The register stores these as text on each asset, so rename there
+            # too or every asset would still point at the old name.
+            column = {"Branch": Asset.branch, "Building": Asset.building,
+                      "Floor": Asset.floor, "Room": Asset.location_name}[kind]
+            moved = db.session.execute(
+                db.update(Asset).where(column == was).values(**{column.key: name}))
+            db.session.commit()
+            flash(f'Renamed to "{name}"' +
+                  (f" — {moved.rowcount} asset(s) updated." if moved.rowcount else "."),
+                  "success")
+
+    elif action == "delete":
+        column = {"Branch": Asset.branch, "Building": Asset.building,
+                  "Floor": Asset.floor, "Room": Asset.location_name}[kind]
+        in_use = db.session.scalar(
+            db.select(db.func.count(Asset.id)).where(column == name))
+        children = any(r.children for r in rows)
+        if in_use:
+            flash(f'"{name}" is on {in_use} asset(s) and was kept.', "error")
+        elif children:
+            flash(f'"{name}" still has locations inside it and was kept.', "error")
+        else:
+            for row in rows:
+                db.session.delete(row)
+            db.session.commit()
+            flash(f'"{name}" removed.', "success")
+
+    return redirect(url_for("org.locations"))
+
+
+def _department_level(action, name, was):
+    """Departments are a table of their own -- that is what assets link to."""
+    if action == "add":
+        if not name:
+            flash("Give it a name.", "error")
+        elif db.session.scalar(db.select(Department).where(Department.name == name)):
+            flash(f'"{name}" already exists.', "error")
+        else:
+            db.session.add(Department(name=name))
+            db.session.commit()
+            flash(f'Department "{name}" added.', "success")
+    elif action == "rename":
+        dep = db.session.scalar(db.select(Department).where(Department.name == was))
+        if dep and name:
+            dep.name = name
+            db.session.commit()
+            flash(f'Renamed to "{name}".', "success")
+        else:
+            flash("Could not rename that department.", "error")
+    elif action == "delete":
+        dep = db.session.scalar(db.select(Department).where(Department.name == name))
+        if not dep:
+            flash("No such department.", "error")
+        elif dep.assets or dep.employees:
+            flash(f'"{name}" still has assets or employees and was kept.', "error")
+        else:
+            db.session.delete(dep)
+            db.session.commit()
+            flash(f'"{name}" removed.', "success")
+    return redirect(url_for("org.locations"))
