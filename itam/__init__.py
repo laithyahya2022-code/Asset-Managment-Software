@@ -4,7 +4,7 @@ from datetime import datetime
 
 from flask import Flask, g, redirect, request, session, url_for
 
-APP_VERSION = "2026.08.01.8"  # bumped on each release so users can confirm their build
+APP_VERSION = "2026.08.01.9"  # bumped on each release so users can confirm their build
 
 from .i18n import LANGS, t
 from .models import (DEFAULT_ROLE_PERMS, PERMISSIONS, ROLES, Notification,
@@ -285,4 +285,25 @@ def _ensure_defaults():
                      email="admin@example.com", role="admin")
         admin.set_password("admin123")
         db.session.add(admin)
+    # Categories a school actually has. Without these a fresh install opened
+    # with an empty Category list, and since the Asset ID is generated from
+    # the category, there was no way to add a properly numbered asset until
+    # someone worked out they had to go and create categories first.
+    # Only ever seeded into an empty table, so nobody's own list is touched.
+    from .models import Category
+    if not db.session.scalar(db.select(Category).limit(1)):
+        for name, prefix in DEFAULT_CATEGORIES:
+            db.session.add(Category(name=name, prefix=prefix))
     db.session.commit()
+
+
+#: (name, Asset ID prefix) seeded on a brand-new database only.
+DEFAULT_CATEGORIES = [
+    ("Desktop Computers", "PC"), ("Laptops", "LT"), ("Servers", "SRV"),
+    ("Monitors", "MN"), ("Printers", "PRN"), ("Projectors", "PRJ"),
+    ("Scanners", "SCN"), ("Tablets", "TAB"), ("Phones", "PH"),
+    ("Telephones", "TEL"), ("Switches", "SW"), ("Routers", "RTR"),
+    ("Access Points", "AP"), ("Firewalls", "FW"), ("UPS Devices", "UPS"),
+    ("CCTV", "CCTV"), ("Networking", "NET"), ("Peripherals", "PER"),
+    ("Accessories", "ACC"), ("Software Licenses", "SL"), ("Other", "AST"),
+]

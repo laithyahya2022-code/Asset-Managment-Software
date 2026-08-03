@@ -72,13 +72,21 @@
         <select id="f-dept" name="department_id"><option value="">—</option>
           {% for d in departments %}<option value="{{ d.id }}" {{ 'selected' if a and a.department_id == d.id }}>{{ d.name }}</option>{% endfor %}
         </select></div>
-      {# Assignment is owned by Lending now — shown here for reference, changed
-         there. Both controls are disabled, so neither is submitted and neither
-         can overwrite what Lending recorded. #}
+      {# On a new asset you can hand it straight to someone. On an existing one
+         the field is read-only: the loan belongs to Lending, and silently
+         changing it here would end whatever loan is running. #}
       <div><label for="f-assign">Assign to</label>
+        {% if asset %}
         <input id="f-assign" disabled
-               value="{{ asset.current_assignment.employee.name if asset and asset.current_assignment else '— (unassigned)' }}">
-        <p class="field-note">Change this on <a href="{{ url_for('ops.checkouts') }}">{{ t("Lending") }}</a>.</p></div>
+               value="{{ asset.current_assignment.employee.name if asset.current_assignment else '— (unassigned)' }}">
+        <p class="field-note">Change this on <a href="{{ url_for('ops.checkouts') }}">{{ t("Lending") }}</a>.</p>
+        {% else %}
+        <select id="f-assign" name="assign_employee_id"><option value="">— (unassigned)</option>
+          {% for e in employees %}<option value="{{ e.id }}">{{ e.name }}{{ " (" ~ e.emp_code ~ ")" if e.emp_code }}</option>{% endfor %}
+        </select>
+        <p class="field-note">Optional — you can also lend it later from
+          <a href="{{ url_for('ops.checkouts') }}">{{ t("Lending") }}</a>.</p>
+        {% endif %}</div>
       <div><label for="f-updby">Updated by (data entry)</label>
         <input id="f-updby" disabled
                value="{{ a.updated_by or '' if a else (g.user.name if g.user else '') }}">

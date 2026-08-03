@@ -52,15 +52,29 @@ def _lookups():
 
 
 def next_tag(category):
-    """Sequential per-category tag, e.g. PC-000001 (spec section 10)."""
+    """The next Asset ID for a category, in the format the register already uses.
+
+    This only ever looked for "PREFIX-999999". A school whose asset IDs are
+    written PC00010, with no separator, matched nothing: the count restarted
+    at 1 *and* switched format, so picking a category on a register of a
+    thousand PCs suggested "PC-000001". Read the separator and the digit width
+    off the tags that exist and carry on from the highest.
+    """
+    import re
+    from collections import Counter
+
     prefix = category.tag_prefix if category else "AST"
-    top = 0
+    top, shapes = 0, Counter()
+    pattern = re.compile(rf"^{re.escape(prefix)}([-_/ ]?)(\d+)$", re.IGNORECASE)
     for (tag,) in db.session.execute(
-            db.select(Asset.tag).where(Asset.tag.like(f"{prefix}-%"))).all():
-        suffix = tag.rsplit("-", 1)[-1]
-        if suffix.isdigit():
-            top = max(top, int(suffix))
-    return f"{prefix}-{top + 1:06d}"
+            db.select(Asset.tag).where(Asset.tag.like(f"{prefix}%"))).all():
+        match = pattern.match(tag or "")
+        if match:
+            shapes[(match.group(1), len(match.group(2)))] += 1
+            top = max(top, int(match.group(2)))
+    # Follow the majority shape; a register with none falls back to PC-000001.
+    separator, width = shapes.most_common(1)[0][0] if shapes else ("-", 6)
+    return f"{prefix}{separator}{top + 1:0{width}d}"
 
 
 def _next_tag_map():

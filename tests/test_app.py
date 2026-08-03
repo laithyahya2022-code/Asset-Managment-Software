@@ -20,7 +20,10 @@ def app(tmp_path):
                       email="viewer@example.com", role="viewer")
         viewer.set_password("viewer123")
         db.session.add(viewer)
-        db.session.add(Category(name="Laptops"))
+        # "Laptops" is one of the categories a fresh database now seeds, so
+        # only add it when it is genuinely missing.
+        if not db.session.scalar(db.select(Category).where(Category.name == "Laptops")):
+            db.session.add(Category(name="Laptops"))
         db.session.add(Employee(name="Alice Hart", email="alice@example.com"))
         db.session.commit()
     return app
@@ -430,7 +433,10 @@ def test_upgrading_over_an_older_database_adds_missing_columns(tmp_path):
     instance = tmp_path / "instance"
     app = create_app(instance_path=str(instance))
     with app.app_context():
-        db.session.add(Category(name="Laptops"))
+        # "Laptops" is one of the categories a fresh database now seeds, so
+        # only add it when it is genuinely missing.
+        if not db.session.scalar(db.select(Category).where(Category.name == "Laptops")):
+            db.session.add(Category(name="Laptops"))
         db.session.commit()
         db.session.add(Asset(tag="LT-0001", name="ThinkPad", branch="Mada 1",
                              floor="F1", status="Available", condition="Good"))
@@ -1741,3 +1747,101 @@ def test_room_list_offers_rooms_already_in_the_data(client, app):
     datalist = body.split('id="place-list"', 1)[1].split("</datalist>", 1)[0]
     assert "Grade 4 Annexe" in datalist, "a room already in use is not offered"
     assert "Reception" in datalist, "the standard rooms are no longer offered"
+
+
+def test_a_fresh_database_has_categories(app):
+    """An empty Category list made the Asset ID impossible to generate.
+
+    The ID comes from the category, so with none seeded a new install could
+    not add a properly numbered asset until someone worked out they had to go
+    and create categories first.
+    """
+    from itam.models import Category
+
+    with app.app_context():
+        names = {c.name for c in db.session.scalars(db.select(Category))}
+        assert len(names) > 5, "a fresh database still has no categories"
+        assert {"Desktop Computers", "Laptops", "Printers"} <= names
+        # Every one can generate an ID.
+        for c in db.session.scalars(db.select(Category)):
+            assert c.tag_prefix, f"{c.name} has no Asset ID prefix"
+
+
+def test_seeded_categories_never_touch_an_existing_list(app):
+    """A school that made its own categories must not have ours added."""
+    from itam import _ensure_defaults
+    from itam.models import Category
+
+    with app.app_context():
+        db.session.execute(db.delete(Category))
+        db.session.add(Category(name="Our Own Thing", prefix="OWN"))
+        db.session.commit()
+        _ensure_defaults()
+        names = {c.name for c in db.session.scalars(db.select(Category))}
+        assert names == {"Our Own Thing"}, "defaults were added over a real list"
+
+
+def test_next_tag_follows_the_format_already_in_use(app):
+    """PC00010 must continue as PC00017, not restart as PC-000001."""
+    from itam.blueprints.assets import next_tag
+    from itam.models import Category
+
+    with app.app_context():
+        cat = Category(name="School Desktops", prefix="PC")
+        db.session.add(cat)
+        db.session.flush()
+        for t in ("PC00010", "PC00011", "PC00012", "PC00013",
+                  "PC00014", "PC00015", "PC00016"):
+            db.session.add(Asset(tag=t, name=t, status="In Use",
+                                 condition="Good", category=cat))
+        db.session.commit()
+        assert next_tag(cat) == "PC00017"
+
+        # A different width is followed too.
+        wide = Category(name="Wide", prefix="WD")
+        db.session.add(wide)
+        db.session.flush()
+        db.session.add(Asset(tag="WD-000042", name="w", status="In Use",
+                             condition="Good", category=wide))
+        db.session.commit()
+        assert next_tag(wide) == "WD-000043"
+
+        # And a category with nothing yet still gets the original default.
+        fresh = Category(name="Brand New", prefix="BN")
+        db.session.add(fresh)
+        db.session.commit()
+        assert next_tag(fresh) == "BN-000001"
+
+
+def test_assign_to_is_editable_when_adding_but_not_when_editing(client, app):
+    from itam.models import Category, Employee
+
+    login(client)
+    body = client.get("/assets/new").data.decode()
+    assert 'name="assign_employee_id"' in body, "Assign to is not offered on a new asset"
+
+    with app.app_context():
+        cat_id = db.session.scalar(db.select(Category.id))
+        emp_id = db.session.scalar(db.select(Employee.id))
+
+    client.post("/assets/new", data={
+        "name": "Handed over", "tag": "ASG-1", "category_id": cat_id,
+        "status": "Available", "condition": "Good", "depreciation_years": "5",
+        "assign_employee_id": emp_id}, follow_redirects=True)
+
+    with app.app_context():
+        a = db.session.scalar(db.select(Asset).where(Asset.tag == "ASG-1"))
+        assert a.current_assignment is not None, "the asset was not handed over"
+        assert a.current_assignment.employee_id == emp_id
+        assert a.current_assignment.handled_by == "Administrator"
+        assert a.status == "Checked Out"
+        aid = a.id
+
+    # On an existing asset it stays read-only, so a save cannot end the loan.
+    edit = client.get(f"/assets/{aid}/edit").data.decode()
+    assert 'name="assign_employee_id"' not in edit
+    client.post(f"/assets/{aid}/edit", data={
+        "name": "Handed over", "tag": "ASG-1", "status": "Checked Out",
+        "condition": "Good", "depreciation_years": "5"}, follow_redirects=True)
+    with app.app_context():
+        assert db.session.get(Asset, aid).current_assignment is not None
