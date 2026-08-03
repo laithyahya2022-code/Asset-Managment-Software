@@ -644,7 +644,8 @@ def _print_or_show(html, what):
     from .. import printing
 
     printer = get_setting("label_printer")
-    if printing.can_print_directly(printer) and printing.print_html(html, printer):
+    if (printing.can_print_directly(printer, request.remote_addr)
+            and printing.print_html(html, printer)):
         flash(f"{what} sent to {printer}.", "success")
         return redirect(request.referrer or url_for("assets.list_"))
     return html

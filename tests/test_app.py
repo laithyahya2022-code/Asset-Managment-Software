@@ -1972,6 +1972,28 @@ def test_direct_printing_is_refused_off_windows(app):
     assert printing.list_printers() == [] or printing.is_windows()
 
 
+def test_a_remote_user_never_prints_on_the_server(monkeypatch):
+    """Printing happens where AMS runs, not where the person is sitting.
+
+    On a server install, staff at their own desks must get their own print
+    dialog -- otherwise they are told the label was sent while it comes out
+    of a printer in the server room.
+    """
+    import sys
+
+    from itam import printing
+
+    monkeypatch.setattr(printing, "is_windows", lambda: True)
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+
+    # At the machine running AMS: print directly.
+    assert printing.can_print_directly("XP-490B", "127.0.0.1") is True
+    assert printing.can_print_directly("XP-490B", "::1") is True
+    # Someone else on the network: hand them the browser dialog.
+    assert printing.can_print_directly("XP-490B", "192.168.100.55") is False
+    assert printing.can_print_directly("XP-490B", "10.0.0.9") is False
+
+
 def test_employee_id_is_generated(client, app):
     """A manual add left it blank, and an import without the column made
     employees with no ID -- the very field the importer matches on."""

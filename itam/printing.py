@@ -99,6 +99,21 @@ def _browsers():
     ]
 
 
-def can_print_directly(printer):
-    """True when a direct print is worth attempting for this request."""
-    return bool(printer) and is_windows() and getattr(sys, "frozen", False)
+LOCAL_ADDRESSES = {"127.0.0.1", "::1", "localhost"}
+
+
+def can_print_directly(printer, client_address=None):
+    """True when a direct print is worth attempting for this request.
+
+    The last condition is the one that matters once AMS is installed on a
+    server: printing happens on the machine running AMS, not on the machine
+    of whoever clicked. A member of staff at their own desk pressing "Print
+    label" would otherwise be told the label was sent while it came out of a
+    printer in the server room. So a direct print is only attempted when the
+    request came from the same machine -- which is always true for the
+    desktop app, and true at the server's own console. Everyone else gets the
+    browser's print dialog and their own printer, which is what they want.
+    """
+    if not printer or not is_windows() or not getattr(sys, "frozen", False):
+        return False
+    return client_address is None or client_address in LOCAL_ADDRESSES
