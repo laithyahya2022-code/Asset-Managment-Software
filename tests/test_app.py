@@ -1845,3 +1845,48 @@ def test_assign_to_is_editable_when_adding_but_not_when_editing(client, app):
         "condition": "Good", "depreciation_years": "5"}, follow_redirects=True)
     with app.app_context():
         assert db.session.get(Asset, aid).current_assignment is not None
+
+
+def test_a_viewer_cannot_change_departments(client, app):
+    """The Departments page is readable by anyone who can see assets.
+
+    The write branch shares that permission, so a viewer or an auditor could
+    create and rename departments through it.
+    """
+    from itam.models import Department
+
+    login(client, "viewer", "viewer123")
+    assert client.get("/departments").status_code == 200, "a viewer should still see them"
+
+    client.post("/departments", data={"name": "Sneaky Dept"}, follow_redirects=True)
+    with app.app_context():
+        assert not db.session.scalar(
+            db.select(Department).where(Department.name == "Sneaky Dept")), \
+            "a viewer created a department"
+
+    # And an admin still can.
+    client.get("/logout")
+    login(client)
+    client.post("/departments", data={"name": "Real Dept"}, follow_redirects=True)
+    with app.app_context():
+        assert db.session.scalar(
+            db.select(Department).where(Department.name == "Real Dept")), \
+            "an admin can no longer create departments"
+
+
+def test_no_write_endpoint_is_reachable_by_a_viewer(client, app):
+    """Sweep every parameterless POST route rather than trusting a spot check."""
+    login(client, "viewer", "viewer123")
+    public = {"/login", "/forgot", "/profile", "/notifications/read",
+              "/assets/searches"}          # own account / own saved searches
+    reached = []
+    for rule in app.url_map.iter_rules():
+        path = str(rule)
+        if "POST" not in (rule.methods - {"HEAD", "OPTIONS"}) or "<" in path:
+            continue
+        if path in public:
+            continue
+        resp = client.post(path, data={}, follow_redirects=False)
+        if resp.status_code not in (302, 401, 403):
+            reached.append((path, resp.status_code))
+    assert not reached, f"a viewer reached write endpoints: {reached}"

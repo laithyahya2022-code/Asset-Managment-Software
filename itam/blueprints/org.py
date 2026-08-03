@@ -5,7 +5,7 @@ from flask import (Blueprint, flash, g, redirect, render_template, request,
 
 from ..models import (EMPLOYEE_TYPES, LOCATION_KINDS, Asset, Category,
                       Department, Employee, Location, Vendor, db)
-from ..security import perm_required
+from ..security import has_perm, perm_required
 from ..utils import (csv_response, log_activity, parse_date, read_table,
                      xlsx_response)
 
@@ -171,6 +171,12 @@ def employee_delete(emp_id):
 @perm_required("assets.view")
 def departments():
     if request.method == "POST":
+        # The route is readable by anyone who can see assets, so the write
+        # branch needs its own check -- otherwise a viewer or an auditor could
+        # create and rename departments. (Categories already does this.)
+        if not has_perm("org.manage"):
+            flash("You do not have permission to do that.", "error")
+            return redirect(url_for("org.departments"))
         dep_id = request.form.get("id")
         name = request.form["name"].strip()
         if dep_id:

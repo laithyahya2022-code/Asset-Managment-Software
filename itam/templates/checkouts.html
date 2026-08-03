@@ -140,7 +140,15 @@
       dd.textContent = (data && data[dd.dataset.fact]) || "—";
     });
   }
+  // A <select size="6"> is a list box, and a list box selects nothing by
+  // default. Without this the details card stayed empty until you clicked a
+  // row, and the form was invalid even though an asset was plainly visible.
+  function selectFirst() {
+    if (sel.selectedIndex < 0 && sel.options.length) sel.selectedIndex = 0;
+  }
+
   function showDetails() {
+    selectFirst();
     var id = sel.value;
     if (!id) { fill(null); return; }
     if (id === shownFor) return;
@@ -165,6 +173,7 @@
             rows.forEach(function (row) {
               sel.add(new Option(row.label, row.id));
             });
+            selectFirst();      // a fresh list selects nothing on its own
             if (count) {
               count.textContent = rows.length
                 ? rows.length + " match" + (rows.length === 1 ? "" : "es")
