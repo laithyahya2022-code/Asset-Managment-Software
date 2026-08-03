@@ -16,8 +16,9 @@
         <select id="e-type" name="emp_type"><option value="">—</option>
           {% for tp in emp_types %}<option {{ 'selected' if emp and emp.emp_type == tp }}>{{ tp }}</option>{% endfor %}
         </select></div>
-      <div><label for="e-email">Email *</label>
-        <input id="e-email" name="email" type="email" required value="{{ emp.email if emp else '' }}"></div>
+      <div><label for="e-email">Email</label>
+        <input id="e-email" name="email" type="email" value="{{ emp.email if emp else '' }}">
+        <p class="field-note">Optional — plenty of staff don't have one.</p></div>
       <div><label for="e-phone">Phone</label>
         <input id="e-phone" name="phone" value="{{ emp.phone or '' if emp else '' }}"></div>
       <div><label for="e-title">Job title</label>

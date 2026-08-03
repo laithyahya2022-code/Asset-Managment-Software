@@ -2060,3 +2060,96 @@ def test_assets_list_offers_select_all(client, app):
     body = client.get("/assets/").data.decode()
     assert "data-check-all" in body, "Assets has no select-all"
     assert 'name="id"' in body, "rows are not selectable"
+
+def test_adding_a_location_builds_the_whole_chain(client, app):
+    """Fill in the levels you know; the branch, building, floor and room are
+    created and linked in one go rather than four separate adds."""
+    from itam.models import Location
+
+    login(client)
+    body = client.get("/locations").data.decode()
+    for field in ("branch", "building", "department", "floor", "room"):
+        assert f'name="{field}"' in body, f"the {field} field is missing"
+
+    client.post("/locations", data={
+        "branch": "Mada 2", "building": "Building 3", "department": "IT Department",
+        "floor": "F4", "room": "Robotics Lab"}, follow_redirects=True)
+
+    with app.app_context():
+        room = db.session.scalar(db.select(Location).where(Location.name == "Robotics Lab"))
+        assert room is not None and room.kind == "Room"
+        assert room.path == "Mada 2 / Building 3 / IT Department / F4 / Robotics Lab"
+
+    # Adding it again reuses every level instead of duplicating them.
+    with app.app_context():
+        before = db.session.scalar(db.select(db.func.count(Location.id)))
+    client.post("/locations", data={
+        "branch": "Mada 2", "building": "Building 3", "department": "IT Department",
+        "floor": "F4", "room": "Robotics Lab"}, follow_redirects=True)
+    with app.app_context():
+        assert db.session.scalar(db.select(db.func.count(Location.id))) == before
+
+    # A partial chain is fine too.
+    client.post("/locations", data={"branch": "Mada 3", "room": "Store"},
+                follow_redirects=True)
+    with app.app_context():
+        store = db.session.scalar(db.select(Location).where(Location.name == "Store"))
+        assert store.path == "Mada 3 / Store"
+
+    # And an empty form is refused rather than making a nameless row.
+    resp = client.post("/locations", data={}, follow_redirects=True)
+    assert b"at least one level" in resp.data
+
+
+def test_departments_are_reachable_from_locations(client, app):
+    """They share a screen now; the separate sidebar entry is gone."""
+    login(client)
+    body = client.get("/locations").data.decode()
+    assert 'id="departments"' in body, "departments are not shown on Locations"
+    assert "/departments" in body, "no way through to manage them"
+    # The page still works, it just isn't in the sidebar any more.
+    assert client.get("/departments").status_code == 200
+    assert 'href="/departments"' not in client.get("/assets/").data.decode() \
+        or True   # the sidebar link is what matters, checked below
+    nav = client.get("/assets/").data.decode().split("<nav>")[1].split("</nav>")[0]
+    assert ">Departments<" not in nav, "still in the sidebar"
+
+
+def test_an_employee_needs_no_email(client, app):
+    """Drivers, cleaners and security often have none; the form demanded one."""
+    from itam.models import Employee
+
+    login(client)
+    body = client.get("/employees/new").data.decode()
+    email_field = body.split('id="e-email"', 1)[1].split(">", 1)[0]
+    assert "required" not in email_field, "email is still mandatory"
+
+    resp = client.post("/employees/new", data={"name": "Driver One", "active": "1"},
+                       follow_redirects=True)
+    assert resp.status_code == 200
+    with app.app_context():
+        e = db.session.scalar(db.select(Employee).where(Employee.name == "Driver One"))
+        assert e is not None, "an employee without an email could not be added"
+        assert e.email is None and e.emp_code
+
+    # A shared inbox is allowed, which is what the model always said.
+    for name in ("Shared One", "Shared Two"):
+        client.post("/employees/new", data={"name": name, "email": "office@school.test",
+                                            "active": "1"}, follow_redirects=True)
+    with app.app_context():
+        assert db.session.scalar(db.select(db.func.count(Employee.id))
+                                 .where(Employee.email == "office@school.test")) == 2
+
+
+def test_lists_offer_a_visible_select_all_button(client, app):
+    """The tick-box in the table header was too easy to miss."""
+    from itam.models import Department
+
+    with app.app_context():
+        db.session.add(Department(name="Bulk Dept"))
+        db.session.commit()
+
+    login(client)
+    body = client.get("/employees").data.decode()
+    assert "bulk-toggle" in body, "no visible Select all button"
+    assert 'data-form="bulk"' in body, "the button does not target the list's form"

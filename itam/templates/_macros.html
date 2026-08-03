@@ -24,6 +24,11 @@
 {# The button lives in the page head, outside the table's form, so it has to
    name the form it submits. Without form= it would be inert. #}
 {% macro bulk_button(label, danger=True, form_id="bulk") -%}
+{# The tick-box in the table header is easy to miss, so offer it as a button
+   too. Both drive the same selection. #}
+<button class="btn secondary bulk-toggle" type="button"
+        form="{{ form_id }}" data-form="{{ form_id }}"
+        data-on="{{ t('Select all') }}" data-off="{{ t('Clear selection') }}">{{ t("Select all") }}</button>
 <button class="btn {{ 'danger' if danger else 'secondary' }} bulk-go" type="submit"
         form="{{ form_id }}" disabled data-label="{{ label }}">{{ label }}</button>
 {%- endmacro %}

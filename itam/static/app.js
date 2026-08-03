@@ -86,6 +86,17 @@ document.querySelectorAll("form.bulk-form").forEach((form) => {
   ])];
   if (!picks.length || !buttons.length) return;
 
+  // A visible "Select all" button, for anyone who never spots the tick-box in
+  // the table header. Both it and the header box drive the same selection.
+  const toggles = form.id
+    ? [...document.querySelectorAll(`.bulk-toggle[data-form="${form.id}"]`)] : [];
+  const syncToggle = () => {
+    const chosen = picks.filter((p) => p.checked).length;
+    toggles.forEach((t) => {
+      t.textContent = chosen === picks.length ? t.dataset.off : t.dataset.on;
+    });
+  };
+
   const sync = () => {
     const chosen = picks.filter((p) => p.checked).length;
     buttons.forEach((b) => {
@@ -97,7 +108,14 @@ document.querySelectorAll("form.bulk-form").forEach((form) => {
       // Partial selection reads as neither on nor off.
       all.indeterminate = chosen > 0 && chosen < picks.length;
     }
+    syncToggle();
   };
+
+  toggles.forEach((t) => t.addEventListener("click", () => {
+    const everything = picks.every((p) => p.checked);
+    picks.forEach((p) => { p.checked = !everything; });
+    sync();
+  }));
 
   if (all) {
     all.addEventListener("change", () => {

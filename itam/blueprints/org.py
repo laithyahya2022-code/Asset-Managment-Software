@@ -116,29 +116,30 @@ def employees_import():
 def employee_form(emp_id=None):
     emp = db.get_or_404(Employee, emp_id) if emp_id else None
     if request.method == "POST":
-        email = request.form["email"].strip().lower()
-        other = db.session.scalar(db.select(Employee).where(Employee.email == email))
-        if other and (not emp or other.id != emp.id):
-            flash(f'An employee with email "{email}" already exists.', "error")
-        else:
-            if not emp:
-                emp = Employee()
-                db.session.add(emp)
-            emp.name = request.form["name"].strip()
-            emp.emp_code = (request.form.get("emp_code", "").strip()
-                            or emp.emp_code or next_employee_code())
-            emp.emp_type = request.form.get("emp_type", "").strip() or None
-            emp.email = email
-            emp.phone = request.form.get("phone", "").strip() or None
-            emp.title = request.form.get("title", "").strip() or None
-            emp.department_id = (int(request.form["department_id"])
-                                 if request.form.get("department_id") else None)
-            emp.active = request.form.get("active") == "1"
-            db.session.flush()
-            log_activity("employee_saved", "employee", emp.id, emp.name)
-            db.session.commit()
-            flash(f"Employee {emp.name} saved.", "success")
-            return redirect(url_for("org.employee_detail", emp_id=emp.id))
+        # The model has always said email is optional and may repeat -- a
+        # school has drivers, cleaners and security with no address, and
+        # departments that share one inbox. The form demanded it anyway and
+        # refused duplicates, so those people could not be added at all.
+        # Identity is the Employee ID; that is what the importer matches on.
+        email = request.form.get("email", "").strip().lower() or None
+        if not emp:
+            emp = Employee()
+            db.session.add(emp)
+        emp.name = request.form["name"].strip()
+        emp.emp_code = (request.form.get("emp_code", "").strip()
+                        or emp.emp_code or next_employee_code())
+        emp.emp_type = request.form.get("emp_type", "").strip() or None
+        emp.email = email
+        emp.phone = request.form.get("phone", "").strip() or None
+        emp.title = request.form.get("title", "").strip() or None
+        emp.department_id = (int(request.form["department_id"])
+                             if request.form.get("department_id") else None)
+        emp.active = request.form.get("active") == "1"
+        db.session.flush()
+        log_activity("employee_saved", "employee", emp.id, emp.name)
+        db.session.commit()
+        flash(f"Employee {emp.name} saved.", "success")
+        return redirect(url_for("org.employee_detail", emp_id=emp.id))
     from ..models import EMPLOYEE_TYPES
     departments = db.session.scalars(db.select(Department).order_by(Department.name)).all()
     return render_template("org/employee_form.html", emp=emp, departments=departments,
@@ -247,17 +248,49 @@ def locations():
             return redirect(url_for("org.locations"))
         loc_id = request.form.get("id")
         if loc_id:
+            # Editing one row: plain name / kind / parent.
             loc = db.get_or_404(Location, int(loc_id))
-        else:
-            loc = Location()
-            db.session.add(loc)
-        loc.name = request.form["name"].strip()
-        loc.kind = (request.form.get("kind") if request.form.get("kind") in LOCATION_KINDS
-                    else "Room")
-        parent = request.form.get("parent_id")
-        loc.parent_id = int(parent) if parent and (not loc.id or int(parent) != loc.id) else None
+            loc.name = request.form.get("name", "").strip() or loc.name
+            loc.kind = (request.form.get("kind")
+                        if request.form.get("kind") in LOCATION_KINDS else loc.kind)
+            parent = request.form.get("parent_id")
+            loc.parent_id = (int(parent) if parent and int(parent) != loc.id
+                             else None)
+            db.session.commit()
+            flash(f'Location "{loc.name}" saved.', "success")
+            return redirect(url_for("org.locations"))
+
+        # Adding: fill in the levels you know and the chain is built for you,
+        # rather than adding a branch, then a building, then a floor, then a
+        # room, choosing the right parent every time.
+        levels = [(request.form.get("branch", "").strip(), "Branch"),
+                  (request.form.get("building", "").strip(), "Building"),
+                  (request.form.get("department", "").strip(), "Department"),
+                  (request.form.get("floor", "").strip(), "Floor"),
+                  (request.form.get("room", "").strip(), "Room")]
+        if not any(name for name, _ in levels):
+            flash("Fill in at least one level.", "error")
+            return redirect(url_for("org.locations"))
+
+        node, made = None, 0
+        for name, kind in levels:
+            if not name:
+                continue
+            parent_id = node.id if node else None
+            existing = db.session.scalar(db.select(Location).where(
+                Location.name == name, Location.kind == kind,
+                Location.parent_id == parent_id))
+            if existing:
+                node = existing
+                continue
+            node = Location(name=name, kind=kind, parent_id=parent_id)
+            db.session.add(node)
+            db.session.flush()
+            made += 1
         db.session.commit()
-        flash(f'Location "{loc.name}" saved.', "success")
+        path = " / ".join(name for name, _ in levels if name)
+        flash(f'"{path}" is ready.' if made else f'"{path}" already existed.',
+              "success")
         return redirect(url_for("org.locations"))
     # Keep the list in step with the register without anyone pressing a
     # button: whatever places the assets name, this page shows.
@@ -291,9 +324,20 @@ def locations():
               or q in (l.kind or "").lower()]
     listed.sort(key=lambda l: paths[l.id])
     page_rows, paging = _paginate(listed, request.args.get("page"))
+    from ..models import BRANCHES, BUILDINGS, FLOORS, PLACES
     return render_template("org/locations.html", rows=rows, page_rows=page_rows,
                            kinds=LOCATION_KINDS, paths=paths, counts=counts,
-                           paging=paging, q=request.args.get("q", ""))
+                           paging=paging, q=request.args.get("q", ""),
+                           branches=BRANCHES, buildings=BUILDINGS,
+                           floors=FLOORS, places=PLACES,
+                           departments=db.session.scalars(
+                               db.select(Department).order_by(Department.name)).all(),
+                           # One grouped query rather than len(d.assets) per
+                           # department, which is a query each.
+                           dept_counts=dict(db.session.execute(
+                               db.select(Asset.department_id, db.func.count(Asset.id))
+                               .where(Asset.department_id.isnot(None))
+                               .group_by(Asset.department_id)).all()))
 
 
 #: Rows per page on the Locations table.

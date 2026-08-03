@@ -3,7 +3,7 @@
 {% block title %}{{ t("Locations") }}{% endblock %}
 {% block content %}
 <div class="page-head">
-  <h1>{{ t("Locations") }}</h1>
+  <h1>{{ t("Locations") }} &amp; {{ t("Departments") }}</h1>
   {% if has_perm("org.manage") %}
   <div class="actions-row no-print">
     <button class="btn" type="button" id="loc-new">+ {{ t("New location") }}</button>
@@ -15,20 +15,77 @@
 {% if has_perm("org.manage") %}
 <div class="card no-print" id="loc-editor">
   <p class="eyebrow" id="loc-title">{{ t("New location") }}</p>
-  <form method="post" class="filters" style="margin:0">
+  {# Fill in the levels you know and the whole chain is created for you, so
+     nobody has to add a branch, then a building, then a floor, then a room,
+     picking the right parent each time. #}
+  <form method="post">
     <input type="hidden" name="id" id="loc-id">
-    <input name="name" id="loc-name" placeholder="{{ t('Location name') }}" required>
-    <select name="kind" id="loc-kind">{% for k in kinds %}<option>{{ k }}</option>{% endfor %}</select>
-    <select name="parent_id" id="loc-parent"><option value="">No parent (top level)</option>
-      {% for l in rows %}<option value="{{ l.id }}">{{ paths[l.id] }}</option>{% endfor %}
-    </select>
-    <button class="btn" type="submit" id="loc-save">{{ t("Add location") }}</button>
-    <button class="btn secondary" type="button" id="loc-cancel"
-            hidden>{{ t("Cancel") }}</button>
+    <div class="form-grid">
+      <div><label for="loc-branch">Branch</label>
+        <select name="branch" id="loc-branch"><option value="">—</option>
+          {% for b in branches %}<option value="{{ b }}">{{ b }}</option>{% endfor %}
+        </select></div>
+      <div><label for="loc-building">Building</label>
+        <select name="building" id="loc-building"><option value="">—</option>
+          {% for b in buildings %}<option value="{{ b }}">{{ b }}</option>{% endfor %}
+        </select></div>
+      <div><label for="loc-dept">{{ t("Department") }}</label>
+        <select name="department" id="loc-dept"><option value="">—</option>
+          {% for d in departments %}<option value="{{ d.name }}">{{ d.name }}</option>{% endfor %}
+        </select></div>
+      <div><label for="loc-floor">Floor</label>
+        <select name="floor" id="loc-floor"><option value="">—</option>
+          {% for f in floors %}<option value="{{ f }}">{{ f }}</option>{% endfor %}
+        </select></div>
+      <div><label for="loc-room">Room</label>
+        <input name="room" id="loc-room" list="room-names" autocomplete="off"
+               placeholder="Room or storage area">
+        <datalist id="room-names">
+          {% for pl in places %}<option value="{{ pl }}">{% endfor %}
+        </datalist></div>
+    </div>
+    <div class="form-actions">
+      <button class="btn" type="submit" id="loc-save">{{ t("Add location") }}</button>
+      <button class="btn secondary" type="button" id="loc-cancel" hidden>{{ t("Cancel") }}</button>
+    </div>
+    {# Editing one row still needs the plain name/kind/parent controls. #}
+    <div id="loc-edit-fields" hidden>
+      <div class="form-grid">
+        <div><label for="loc-name">{{ t("Location name") }}</label>
+          <input name="name" id="loc-name"></div>
+        <div><label for="loc-kind">Kind</label>
+          <select name="kind" id="loc-kind">{% for k in kinds %}<option>{{ k }}</option>{% endfor %}</select></div>
+        <div><label for="loc-parent">Inside</label>
+          <select name="parent_id" id="loc-parent"><option value="">No parent (top level)</option>
+            {% for l in rows %}<option value="{{ l.id }}">{{ paths[l.id] }}</option>{% endfor %}
+          </select></div>
+      </div>
+    </div>
   </form>
-  <p class="muted" style="margin:0.5rem 0 0">Build a hierarchy: Branch → Building → Floor → Room → Storage Area.</p>
+  <p class="muted" style="margin:0.6rem 0 0">
+    Fill in as much as you know — Branch → Building → Department → Floor → Room.
+    Anything already there is reused rather than duplicated.
+  </p>
 </div>
 {% endif %}
+
+{# Departments live here now rather than on their own screen: both describe
+   where an asset sits, and keeping them apart meant two places to look. #}
+<div class="card" id="departments">
+  <div class="actions-row" style="justify-content:space-between;align-items:center">
+    <p class="eyebrow" style="margin:0">{{ t("Departments") }}</p>
+    <a class="btn secondary sm no-print" href="{{ url_for('org.departments') }}">
+      {{ t("Manage") }} &amp; {{ t("Import") }} →</a>
+  </div>
+  {% if departments %}
+  <div class="filters" style="margin:0">
+    {% for d in departments %}
+    <a class="btn secondary sm" href="{{ url_for('assets.list_', department=d.id) }}">
+      {{ d.name }} <span class="muted">· {{ dept_counts.get(d.id, 0) }}</span></a>
+    {% endfor %}
+  </div>
+  {% else %}<p class="empty">No departments yet.</p>{% endif %}
+</div>
 
 {% if rows %}
 <form class="filters no-print" method="get">
@@ -79,18 +136,32 @@
 <script>
 // Load a row into the editor at the top, or reset it for a new location.
 function locEdit(id, name, kind, parentId) {
+  var editing = !!id;
   document.getElementById("loc-id").value = id || "";
   document.getElementById("loc-name").value = name || "";
   document.getElementById("loc-kind").value = kind || "Room";
   var parent = document.getElementById("loc-parent");
   parent.value = parentId ? String(parentId) : "";
   // A location cannot be its own parent.
-  [...parent.options].forEach(function (o) { o.disabled = !!id && o.value === String(id); });
-  document.getElementById("loc-title").textContent = id ? "Edit " + name : "{{ t('New location') }}";
-  document.getElementById("loc-save").textContent = id ? "{{ t('Save changes') }}" : "{{ t('Add location') }}";
-  document.getElementById("loc-cancel").hidden = !id;
+  [...parent.options].forEach(function (o) { o.disabled = editing && o.value === String(id); });
+
+  // Adding uses the Branch/Building/Department/Floor/Room levels; editing one
+  // row uses the plain name, kind and parent.
+  document.getElementById("loc-edit-fields").hidden = !editing;
+  document.querySelectorAll("#loc-editor .form-grid")[0].hidden = editing;
+  ["loc-branch", "loc-building", "loc-dept", "loc-floor", "loc-room"].forEach(function (f) {
+    var el = document.getElementById(f);
+    if (el) { el.disabled = editing; if (!editing) el.value = ""; }
+  });
+
+  document.getElementById("loc-title").textContent =
+    editing ? "Edit " + name : "{{ t('New location') }}";
+  document.getElementById("loc-save").textContent =
+    editing ? "{{ t('Save changes') }}" : "{{ t('Add location') }}";
+  document.getElementById("loc-cancel").hidden = !editing;
   document.getElementById("loc-editor").scrollIntoView({ block: "nearest" });
-  document.getElementById("loc-name").focus();
+  (editing ? document.getElementById("loc-name")
+           : document.getElementById("loc-branch")).focus();
 }
 document.querySelectorAll(".loc-edit").forEach(function (b) {
   b.addEventListener("click", function () {
@@ -101,6 +172,7 @@ document.querySelectorAll(".loc-edit").forEach(function (b) {
   var el = document.getElementById(id);
   if (el) el.addEventListener("click", function () { locEdit(); });
 });
+locEdit();     // start in "add" mode
 </script>
 {% endif %}
 {% endblock %}
