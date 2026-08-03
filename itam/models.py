@@ -21,7 +21,20 @@ BUILDINGS = ["Building 1", "Building 2", "Building 3"]
 FLOORS = ["B1", "GF", "F1", "F2", "F3", "F4", "F5"]
 PLACES = ["Reception", "Admin Office", "Registration office", "Teachers Room",
           "Supervisor Room", "Principal", "Secretary Office", "Class Room"]
-LOCATION_KINDS = ["Branch", "Building", "Floor", "Room", "Storage Area"]
+# Widest to narrowest, so the "kind" dropdown reads down the hierarchy the way
+# someone building a location actually thinks about it.
+LOCATION_KINDS = ["Branch", "Building", "Floor", "Department", "Room",
+                  "Storage Area"]
+
+#: Seeded into an empty database so nothing starts out with an empty dropdown.
+DEFAULT_DEPARTMENTS = [
+    "Administration", "Admissions & Registration", "Finance & Accounting",
+    "Human Resources", "IT Department", "Academic Affairs", "Primary School",
+    "Middle School", "High School", "Kindergarten", "Science Labs",
+    "Computer Labs", "Library", "Student Affairs", "Counselling",
+    "Health Clinic", "Maintenance", "Security", "Transportation",
+    "Cafeteria", "Sports & Activities", "Marketing & Public Relations",
+]
 # Suggestions for the asset form's Operating system box. The field stays free
 # text, so anything not listed here (or already imported) is still accepted.
 OPERATING_SYSTEMS = [

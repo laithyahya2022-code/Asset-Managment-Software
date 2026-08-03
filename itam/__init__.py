@@ -4,7 +4,7 @@ from datetime import datetime
 
 from flask import Flask, g, redirect, request, session, url_for
 
-APP_VERSION = "2026.08.02.1"  # bumped on each release so users can confirm their build
+APP_VERSION = "2026.08.03.1"  # bumped on each release so users can confirm their build
 
 from .i18n import LANGS, t
 from .models import (DEFAULT_ROLE_PERMS, PERMISSIONS, ROLES, Notification,
@@ -290,11 +290,44 @@ def _ensure_defaults():
     # the category, there was no way to add a properly numbered asset until
     # someone worked out they had to go and create categories first.
     # Only ever seeded into an empty table, so nobody's own list is touched.
-    from .models import Category
+    from .models import Category, Department, Location
     if not db.session.scalar(db.select(Category).limit(1)):
         for name, prefix in DEFAULT_CATEGORIES:
             db.session.add(Category(name=name, prefix=prefix))
+    # Same reasoning for departments: the asset and employee forms both offer
+    # one, and both opened with nothing to choose.
+    from .models import DEFAULT_DEPARTMENTS
+    if not db.session.scalar(db.select(Department).limit(1)):
+        for name in DEFAULT_DEPARTMENTS:
+            db.session.add(Department(name=name))
+    # And the school's Branch / Building / Floor / Room tree, so Locations and
+    # "Transfer to location" are usable from the first minute.
+    if not db.session.scalar(db.select(Location).limit(1)):
+        _seed_locations()
     db.session.commit()
+
+
+def _seed_locations():
+    """The standard Branch → Building → Floor → Room tree, built once."""
+    from .models import BRANCHES, BUILDINGS, FLOORS, PLACES, Location
+
+    for branch_name in BRANCHES:
+        branch = Location(name=branch_name, kind="Branch")
+        db.session.add(branch)
+        db.session.flush()
+        for building_name in BUILDINGS:
+            building = Location(name=building_name, kind="Building",
+                                parent_id=branch.id)
+            db.session.add(building)
+            db.session.flush()
+            for floor_name in FLOORS:
+                floor = Location(name=floor_name, kind="Floor",
+                                 parent_id=building.id)
+                db.session.add(floor)
+                db.session.flush()
+                for room_name in PLACES:
+                    db.session.add(Location(name=room_name, kind="Room",
+                                            parent_id=floor.id))
 
 
 #: (name, Asset ID prefix) seeded on a brand-new database only.

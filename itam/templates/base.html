@@ -35,6 +35,7 @@
       <a href="{{ url_for('ops.licenses') }}" class="{{ 'active' if ep.startswith('ops.license') }}">{{ icon("license") }}<span>{{ t("Licenses") }}</span></a>
       <a href="{{ url_for('ops.maintenance_list') }}" class="{{ 'active' if ep.startswith('ops.maintenance') }}">{{ icon("wrench") }}<span>{{ t("Maintenance") }}</span></a>
       <a href="{{ url_for('ops.inventory') }}" class="{{ 'active' if ep.startswith('ops.inventory') }}">{{ icon("clipboard") }}<span>{{ t("Inventory") }}</span></a>
+      <a href="{{ url_for('org.locations') }}" class="{{ 'active' if ep.startswith('org.location') }}">{{ icon("location") }}<span>{{ t("Locations") }}</span></a>
       <a href="{{ url_for('org.employees') }}" class="{{ 'active' if ep.startswith('org.employee') }}">{{ icon("user") }}<span>{{ t("Employees") }}</span></a>
       <a href="{{ url_for('org.departments') }}" class="{{ 'active' if ep.startswith('org.department') }}">{{ icon("building") }}<span>{{ t("Departments") }}</span></a>
       <a href="{{ url_for('org.vendors') }}" class="{{ 'active' if ep.startswith('org.vendor') }}">{{ icon("truck") }}<span>{{ t("Vendors") }}</span></a>

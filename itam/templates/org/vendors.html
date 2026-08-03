@@ -1,17 +1,23 @@
 {% extends "base.html" %}
+{% from "_macros.html" import select_all_th, row_check, bulk_button %}
 {% block title %}{{ t("Vendors") }}{% endblock %}
 {% block content %}
 <div class="page-head">
   <h1>{{ t("Vendors") }} / Stores</h1>
   {% if has_perm("org.manage") %}
-  <a class="btn no-print" href="{{ url_for('org.vendor_form') }}">+ Add store / vendor</a>
+  <div class="actions-row no-print">
+    <a class="btn" href="{{ url_for('org.vendor_form') }}">+ Add store / vendor</a>
+    {% if rows %}{{ bulk_button(t("Delete selected"), danger=True) }}{% endif %}
+  </div>
   {% endif %}
 </div>
 {% if rows %}
+<form id="bulk" method="post" action="{{ url_for('org.vendors_bulk_delete') }}" class="bulk-form">
 <div class="card table-wrap"><table>
-  <tr><th>{{ t("Name") }}</th><th>Contact</th><th>Email</th><th>Phone</th><th>{{ t("Assets") }}</th><th>{{ t("Licenses") }}</th><th></th></tr>
+  <tr>{% if has_perm("org.manage") %}{{ select_all_th() }}{% endif %}<th>{{ t("Name") }}</th><th>Contact</th><th>Email</th><th>Phone</th><th>{{ t("Assets") }}</th><th>{{ t("Licenses") }}</th><th></th></tr>
   {% for v in rows %}
   <tr>
+    {% if has_perm("org.manage") %}{{ row_check(v.id) }}{% endif %}
     <td><a href="{{ url_for('org.vendor_detail', vendor_id=v.id) }}">{{ v.name }}</a></td>
     <td>{{ v.contact_name or "—" }}</td>
     <td>{% if v.email %}<a href="mailto:{{ v.email }}">{{ v.email }}</a>{% else %}—{% endif %}</td>
@@ -26,5 +32,6 @@
   </tr>
   {% endfor %}
 </table></div>
+</form>
 {% else %}<p class="empty">No vendors/stores yet.</p>{% endif %}
 {% endblock %}

@@ -62,12 +62,19 @@
       {# Room replaces the old "Location" field. It writes the same column, so
          existing records keep their value and the Locations tree -- which is
          derived from branch/building/floor/room -- still builds correctly. #}
+      {# A <datalist> is drawn by the browser itself and cannot be styled, so it
+         appeared as a black list next to the app's own dropdowns. A <select>
+         matches every other picker on the form. "Other" reveals a text box so
+         a room that isn't listed can still be typed. #}
       <div><label for="f-place">Room</label>
-        <input id="f-place" name="location_name" list="place-list" autocomplete="off"
-               value="{{ a.location_name or '' if a else '' }}" placeholder="Choose or type a room">
-        <datalist id="place-list">
-          {% for pl in rooms %}<option value="{{ pl }}">{% endfor %}
-        </datalist></div>
+        <select id="f-place-pick" data-other="f-place">
+          <option value="">—</option>
+          {% for pl in rooms %}<option value="{{ pl }}" {{ 'selected' if a and a.location_name == pl }}>{{ pl }}</option>{% endfor %}
+          <option value="__other__" {{ 'selected' if a and a.location_name and a.location_name not in rooms }}>Other…</option>
+        </select>
+        <input id="f-place" name="location_name" placeholder="Type the room name"
+               value="{{ a.location_name or '' if a else '' }}"
+               {{ 'hidden' if not (a and a.location_name and a.location_name not in rooms) }}></div>
       <div><label for="f-dept">{{ t("Department") }}</label>
         <select id="f-dept" name="department_id"><option value="">—</option>
           {% for d in departments %}<option value="{{ d.id }}" {{ 'selected' if a and a.department_id == d.id }}>{{ d.name }}</option>{% endfor %}
@@ -110,13 +117,14 @@
         <input id="f-invoice" name="invoice_number" value="{{ a.invoice_number or '' if a else '' }}"></div>
       <div class="full"><p class="eyebrow" style="margin:1rem 0 0">Technical specifications</p></div>
       <div><label for="f-os">Operating system</label>
-        {# Combo box: pick from the list or type anything else, so imported
-           values that aren't listed still round-trip. #}
-        <input id="f-os" name="os_name" list="os-list" autocomplete="off"
-               value="{{ a.os_name or '' if a else '' }}" placeholder="Choose or type an OS">
-        <datalist id="os-list">
-          {% for os in operating_systems %}<option value="{{ os }}">{% endfor %}
-        </datalist></div>
+        <select id="f-os-pick" data-other="f-os">
+          <option value="">—</option>
+          {% for os in operating_systems %}<option value="{{ os }}" {{ 'selected' if a and a.os_name == os }}>{{ os }}</option>{% endfor %}
+          <option value="__other__" {{ 'selected' if a and a.os_name and a.os_name not in operating_systems }}>Other…</option>
+        </select>
+        <input id="f-os" name="os_name" placeholder="Type the operating system"
+               value="{{ a.os_name or '' if a else '' }}"
+               {{ 'hidden' if not (a and a.os_name and a.os_name not in operating_systems) }}></div>
       <div><label for="f-cpu">CPU</label>
         <input id="f-cpu" name="cpu" value="{{ a.cpu or '' if a else '' }}" placeholder="Intel Core i5-1335U"></div>
       <div><label for="f-ram">RAM</label>
@@ -145,6 +153,21 @@
 </div>
 
 <script>
+// "Choose from the list, or Other… to type your own." The <select> is what
+// people see; the text input beside it is what actually gets submitted.
+(function () {
+  document.querySelectorAll("select[data-other]").forEach(function (pick) {
+    var field = document.getElementById(pick.dataset.other);
+    if (!field) return;
+    function sync() {
+      var other = pick.value === "__other__";
+      field.hidden = !other;
+      if (other) { field.focus(); } else { field.value = pick.value; }
+    }
+    pick.addEventListener("change", sync);
+  });
+})();
+
 function printLabelPreview() {
   document.body.classList.add("printing-label");
   window.print();

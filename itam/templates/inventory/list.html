@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import export_menu %}
+{% from "_macros.html" import export_menu, select_all_th, row_check, bulk_button %}
 {% block title %}{{ t("Inventory") }}{% endblock %}
 {% block content %}
 <div class="page-head">
@@ -13,6 +13,7 @@
     {% endif %}
     {{ export_menu(url_for('ops.inventory_export_xlsx'),
                    url_for('ops.inventory_export_csv')) }}
+    {% if audits and has_perm("inventory.manage") %}{{ bulk_button(t("Delete selected"), danger=True) }}{% endif %}
   </div>
 </div>
 
@@ -103,10 +104,12 @@
 <div class="card">
   <p class="eyebrow">Audits</p>
   {% if audits %}
+  <form id="bulk" method="post" action="{{ url_for('ops.inventory_bulk_delete') }}" class="bulk-form">
   <div class="table-wrap"><table>
-    <tr><th>{{ t("Name") }}</th><th>Started</th><th>Completed</th><th>Verified</th><th>{{ t("Missing") }}</th><th></th></tr>
+    <tr>{% if has_perm("inventory.manage") %}{{ select_all_th() }}{% endif %}<th>{{ t("Name") }}</th><th>Started</th><th>Completed</th><th>Verified</th><th>{{ t("Missing") }}</th><th></th></tr>
     {% for au in audits %}
     <tr>
+      {% if has_perm("inventory.manage") %}{{ row_check(au.id) }}{% endif %}
       <td><a href="{{ url_for('ops.inventory_audit', audit_id=au.id) }}">{{ au.name }}</a></td>
       <td>{{ au.started_at.strftime("%Y-%m-%d") }}</td>
       <td>{{ au.completed_at.strftime("%Y-%m-%d") if au.completed_at else "in progress" }}</td>
@@ -115,6 +118,7 @@
     </tr>
     {% endfor %}
   </table></div>
+  </form>
   {% else %}<p class="empty">No audits yet. Start one to verify your physical inventory.</p>{% endif %}
 </div>
 {% endblock %}

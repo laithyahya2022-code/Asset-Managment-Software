@@ -640,3 +640,19 @@ def checkouts_bulk_checkin():
     flash(f"{count} asset{'' if count == 1 else 's'} checked in." if count
           else "Nothing selected.", "success" if count else "error")
     return redirect(url_for("ops.checkouts"))
+
+
+@bp.post("/inventory/bulk-delete")
+@perm_required("inventory.manage")
+def inventory_bulk_delete():
+    ids = request.form.getlist("ids", type=int)
+    audits = db.session.scalars(
+        db.select(InventoryAudit).where(InventoryAudit.id.in_(ids))).all()
+    for audit in audits:
+        for check in list(audit.checks):
+            db.session.delete(check)
+        db.session.delete(audit)
+    db.session.commit()
+    flash(f"{len(audits)} audit(s) deleted." if audits else "Nothing selected.",
+          "success" if audits else "error")
+    return redirect(url_for("ops.inventory"))

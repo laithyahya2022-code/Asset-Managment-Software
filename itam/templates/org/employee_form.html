@@ -8,7 +8,10 @@
       <div><label for="e-name">{{ t("Name") }} *</label>
         <input id="e-name" name="name" required value="{{ emp.name if emp else '' }}"></div>
       <div><label for="e-code">Employee ID</label>
-        <input id="e-code" name="emp_code" value="{{ emp.emp_code or '' if emp else '' }}" placeholder="EMP-1001"></div>
+        <input id="e-code" name="emp_code"
+               value="{{ emp.emp_code or '' if emp else (suggested_code or '') }}"
+               placeholder="{{ suggested_code or 'EMP-1001' }}">
+        {% if not emp %}<p class="field-note">Generated for you — change it if your school numbers staff differently.</p>{% endif %}</div>
       <div><label for="e-type">Employee type</label>
         <select id="e-type" name="emp_type"><option value="">—</option>
           {% for tp in emp_types %}<option {{ 'selected' if emp and emp.emp_type == tp }}>{{ tp }}</option>{% endfor %}

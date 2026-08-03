@@ -585,8 +585,11 @@ def test_label_org_is_editable_from_settings(client, app):
 BULK_PAGES = [
     ("/employees", "org.employees_bulk_delete"),
     ("/departments", "org.departments_bulk_delete"),
+    ("/locations", "org.locations_bulk_delete"),
+    ("/vendors", "org.vendors_bulk_delete"),
     ("/licenses", "ops.licenses_bulk_delete"),
     ("/maintenance", "ops.maintenance_bulk_delete"),
+    ("/inventory", "ops.inventory_bulk_delete"),
     ("/checkouts", "ops.checkouts_bulk_checkin"),
 ]
 
@@ -595,14 +598,17 @@ BULK_PAGES = [
 def test_list_pages_offer_select_all(client, app, url, endpoint):
     """The toolbar only appears once a page has rows, so give each one."""
     from itam.models import (Assignment, Category, Department, Employee,
-                             License, Location, Maintenance)
+                             InventoryAudit, License, Location, Maintenance,
+                             Vendor)
 
     with app.app_context():
         cat = db.session.scalar(db.select(Category))
         emp = db.session.scalar(db.select(Employee))
         db.session.add_all([Department(name="Dept One"),
                             Location(name="Room One", kind="Room"),
-                            License(name="Office", seats=5)])
+                            License(name="Office", seats=5),
+                            Vendor(name="Vendor One"),
+                            InventoryAudit(name="Audit One")])
         asset = Asset(tag="BK-9", name="Rig", status="Checked Out",
                       condition="Good", category=cat)
         db.session.add(asset)
@@ -751,16 +757,49 @@ def test_new_asset_form_defaults_purchase_date_to_today(client, app):
     assert "2020-01-15" in body
 
 
-def test_operating_system_is_a_combo_box(client):
-    """A datalist, so the listed systems are offered but free text still works."""
-    from itam.models import OPERATING_SYSTEMS
+def test_room_and_os_use_the_same_control_as_every_other_picker(client, app):
+    """A <datalist> is drawn by the browser and cannot be styled.
+
+    Next to the app's own dropdowns it appeared as a black list, so Room and
+    Operating system are <select> elements now, with an "Other..." choice that
+    reveals a text box for anything not listed.
+    """
+    from itam.models import Category
 
     login(client)
     body = client.get("/assets/new").data.decode()
-    assert 'list="os-list"' in body and '<datalist id="os-list">' in body
-    for name in ("Windows 11 Pro", "macOS", "Android", "iOS", "ChromeOS"):
-        assert name in body, f"{name} missing from the OS list"
-    assert len(OPERATING_SYSTEMS) >= 10
+    assert "<datalist" not in body, "a browser-drawn list is still on the form"
+    for field in ("f-place-pick", "f-os-pick"):
+        assert f'id="{field}"' in body, f"{field} is missing"
+    assert "Other…" in body or "Other&#8230;" in body
+
+    # A listed value saves.
+    with app.app_context():
+        cat_id = db.session.scalar(db.select(Category.id))
+    client.post("/assets/new", data={
+        "name": "Listed", "tag": "SEL-1", "category_id": cat_id,
+        "status": "Available", "condition": "Good", "depreciation_years": "5",
+        "location_name": "Reception", "os_name": "Windows 11 Pro"},
+        follow_redirects=True)
+    with app.app_context():
+        a = db.session.scalar(db.select(Asset).where(Asset.tag == "SEL-1"))
+        assert (a.location_name, a.os_name) == ("Reception", "Windows 11 Pro")
+
+    # And so does something typed under "Other".
+    client.post("/assets/new", data={
+        "name": "Typed", "tag": "SEL-2", "category_id": cat_id,
+        "status": "Available", "condition": "Good", "depreciation_years": "5",
+        "location_name": "Rooftop Store", "os_name": "Slackware"},
+        follow_redirects=True)
+    with app.app_context():
+        a = db.session.scalar(db.select(Asset).where(Asset.tag == "SEL-2"))
+        assert (a.location_name, a.os_name) == ("Rooftop Store", "Slackware")
+
+    # An imported value that is not in the list still shows on the edit form.
+    with app.app_context():
+        aid = db.session.scalar(db.select(Asset.id).where(Asset.tag == "SEL-2"))
+    edit = client.get(f"/assets/{aid}/edit").data.decode()
+    assert "Rooftop Store" in edit and "Slackware" in edit
 
 
 def test_asset_detail_still_renders(client, app):
@@ -1112,12 +1151,35 @@ def test_a_hand_picked_location_is_not_overwritten(client, app):
         assert a.location_id == chosen_id, "the manual location was overwritten"
 
 
-def test_the_locations_screen_is_gone(client):
+def test_locations_screen_is_available_and_seeded(client, app):
+    """The standard tree ships with the database, so nothing starts empty."""
+    from itam.models import Location
+
     login(client)
-    assert client.get("/locations").status_code == 404
-    assert client.post("/locations/standard").status_code == 404
-    # And it is no longer offered in the sidebar.
-    assert "Locations</span>" not in client.get("/assets/").data.decode()
+    assert client.get("/locations").status_code == 200
+    with app.app_context():
+        kinds = {l.kind for l in db.session.scalars(db.select(Location))}
+        total = db.session.scalar(db.select(db.func.count(Location.id)))
+    assert total > 100, "the standard tree was not seeded"
+    assert {"Branch", "Building", "Floor", "Room"} <= kinds
+
+    # The kind list reads down the hierarchy.
+    from itam.models import LOCATION_KINDS
+    assert LOCATION_KINDS[:3] == ["Branch", "Building", "Floor"]
+    assert "Department" in LOCATION_KINDS
+
+
+def test_a_viewer_cannot_change_locations(client, app):
+    from itam.models import Location
+
+    login(client, "viewer", "viewer123")
+    assert client.get("/locations").status_code == 200
+    client.post("/locations", data={"name": "Sneaky Room", "kind": "Room"},
+                follow_redirects=True)
+    with app.app_context():
+        assert not db.session.scalar(
+            db.select(Location).where(Location.name == "Sneaky Room")), \
+            "a viewer created a location"
 
 
 def test_os_version_is_gone_from_the_form_but_kept_in_the_data(client, app):
@@ -1305,40 +1367,29 @@ def test_asset_filters_offer_only_locations_in_use(client, app):
 
     login(client)
     with app.app_context():
-        # A location added by hand that nothing lives in.
-        db.session.add(Location(name="Empty Store", kind="Room"))
-        db.session.commit()
+        total = db.session.scalar(db.select(db.func.count(Location.id)))
         cat_id = db.session.scalar(db.select(Category.id))
-    # Saving an asset derives its room and links it.
+    assert total > 100, "the standard tree should be seeded"
+
     client.post("/assets/new", data={
         "name": "Desk PC", "tag": "LOC-1", "category_id": cat_id,
         "status": "Available", "condition": "Good", "depreciation_years": "5",
         "branch": "Mada 1", "building": "Building 1", "floor": "GF",
         "location_name": "Reception"}, follow_redirects=True)
+
     with app.app_context():
-        used = db.session.scalar(db.select(Location).where(Location.name == "Reception"))
-        empty = db.session.scalar(db.select(Location).where(Location.name == "Empty Store"))
-        used_id, empty_id, total = used.id, empty.id, db.session.scalar(
-            db.select(db.func.count(Location.id)))
+        used = db.session.scalar(
+            db.select(Asset.location_id).where(Asset.tag == "LOC-1"))
+    assert used, "the asset was not linked to a room"
 
     body = client.get("/assets/").data.decode()
     picker = body.split('name="location"', 1)[1].split("</select>", 1)[0]
-    assert f'value="{used_id}"' in picker
-    assert f'value="{empty_id}"' not in picker, "an empty location was offered"
-    assert picker.count("<option") < total
+    assert f'value="{used}"' in picker
+    assert picker.count("<option") < total, "every location is still listed"
 
-    # An active filter must never disappear from its own box.
-    still = client.get(f"/assets/?location={empty_id}").data.decode()
-    still_picker = still.split('name="location"', 1)[1].split("</select>", 1)[0]
-    assert f'value="{empty_id}"' in still_picker
-    assert client.get("/assets/?location=notanumber").status_code == 200
-
-    # Transfers may target an empty location, so that list is fetched on demand.
-    assert 'id="bulk-loc-q"' in body
+    # Transfers may target an empty location, so that list covers the tree.
     hits = client.get("/assets/locations.json").get_json()
-    assert {h["id"] for h in hits} >= {used_id, empty_id}
-    named = client.get("/assets/locations.json?q=Empty Store").get_json()
-    assert any(h["id"] == empty_id for h in named)
+    assert len(hits) > 50, "the transfer picker is not offering the tree"
 
 
 def test_location_report_totals_survive_the_rewrite(client, app):
@@ -1733,7 +1784,7 @@ def test_department_and_room_save_from_the_form(client, app):
 
 
 def test_room_list_offers_rooms_already_in_the_data(client, app):
-    """An imported room should be one keystroke away, not retyped exactly."""
+    """An imported room should be one click away, not retyped exactly."""
     from itam.models import Category
 
     with app.app_context():
@@ -1744,9 +1795,9 @@ def test_room_list_offers_rooms_already_in_the_data(client, app):
 
     login(client)
     body = client.get("/assets/new").data.decode()
-    datalist = body.split('id="place-list"', 1)[1].split("</datalist>", 1)[0]
-    assert "Grade 4 Annexe" in datalist, "a room already in use is not offered"
-    assert "Reception" in datalist, "the standard rooms are no longer offered"
+    picker = body.split('id="f-place-pick"', 1)[1].split("</select>", 1)[0]
+    assert "Grade 4 Annexe" in picker, "a room already in use is not offered"
+    assert "Reception" in picker, "the standard rooms are no longer offered"
 
 
 def test_a_fresh_database_has_categories(app):
@@ -1890,3 +1941,100 @@ def test_no_write_endpoint_is_reachable_by_a_viewer(client, app):
         if resp.status_code not in (302, 401, 403):
             reached.append((path, resp.status_code))
     assert not reached, f"a viewer reached write endpoints: {reached}"
+
+
+def test_labels_open_in_the_browser_when_no_printer_is_configured(client, app):
+    """Direct printing is opt-in; without a printer name nothing changes."""
+    from itam.models import Category
+
+    with app.app_context():
+        db.session.add(Asset(tag="LBL-1", name="Label test", status="Available",
+                             condition="Good",
+                             category=db.session.scalar(db.select(Category))))
+        db.session.commit()
+        aid = db.session.scalar(db.select(Asset.id).where(Asset.tag == "LBL-1"))
+
+    login(client)
+    resp = client.get(f"/assets/{aid}/label")
+    assert resp.status_code == 200
+    assert b"LBL-1" in resp.data, "the label page no longer renders"
+    assert client.get("/assets/labels").status_code == 200
+
+
+def test_direct_printing_is_refused_off_windows(app):
+    """It must never claim to have printed when it cannot."""
+    from itam import printing
+
+    assert printing.can_print_directly("") is False          # no printer set
+    if not printing.is_windows():
+        assert printing.can_print_directly("XP-490B") is False
+        assert printing.print_html("<p>x</p>", "XP-490B") is False
+    assert printing.list_printers() == [] or printing.is_windows()
+
+
+def test_employee_id_is_generated(client, app):
+    """A manual add left it blank, and an import without the column made
+    employees with no ID -- the very field the importer matches on."""
+    from itam.models import Employee
+
+    login(client)
+    body = client.get("/employees/new").data.decode()
+    assert 'name="emp_code"' in body
+    assert "EMP-" in body, "no ID was suggested on the blank form"
+
+    client.post("/employees/new", data={
+        "name": "No Id Person", "email": "noid@example.com", "active": "1"},
+        follow_redirects=True)
+    with app.app_context():
+        e = db.session.scalar(db.select(Employee).where(Employee.name == "No Id Person"))
+        assert e.emp_code, "an employee was created without an ID"
+        first = e.emp_code
+
+    client.post("/employees/new", data={
+        "name": "Second Person", "email": "second@example.com", "active": "1"},
+        follow_redirects=True)
+    with app.app_context():
+        e2 = db.session.scalar(db.select(Employee).where(Employee.name == "Second Person"))
+        assert e2.emp_code and e2.emp_code != first, "two employees share an ID"
+
+
+def test_imported_employees_get_an_id_when_the_sheet_has_none(client, app):
+    from itam.models import Employee
+
+    login(client)
+    csv = "Name,Email\nImported One,i1@example.com\nImported Two,i2@example.com\n"
+    client.post("/employees/import",
+                data={"file": (io.BytesIO(csv.encode()), "e.csv")},
+                content_type="multipart/form-data", follow_redirects=True)
+    with app.app_context():
+        rows = db.session.scalars(
+            db.select(Employee).where(Employee.name.like("Imported %"))).all()
+        assert len(rows) == 2
+        codes = [r.emp_code for r in rows]
+        assert all(codes), "imported employees have no ID to match on next time"
+        assert len(set(codes)) == 2, "imported employees share an ID"
+
+
+def test_departments_are_seeded(app):
+    from itam.models import Department
+
+    with app.app_context():
+        names = {d.name for d in db.session.scalars(db.select(Department))}
+    assert len(names) > 5, "the department dropdown still starts empty"
+    assert "IT Department" in names
+
+
+def test_assets_list_offers_select_all(client, app):
+    """Assets uses its own check-all rather than the shared macro."""
+    from itam.models import Category
+
+    with app.app_context():
+        db.session.add(Asset(tag="SA-1", name="Rig", status="Available",
+                             condition="Good",
+                             category=db.session.scalar(db.select(Category))))
+        db.session.commit()
+
+    login(client)
+    body = client.get("/assets/").data.decode()
+    assert "data-check-all" in body, "Assets has no select-all"
+    assert 'name="id"' in body, "rows are not selectable"

@@ -26,6 +26,7 @@ DEFAULT_SETTINGS = {
     "label_width_mm": "152.4", "label_height_mm": "76.2",
     # Printed on every label. This is the organisation that owns the asset,
     # which is not the same thing as the name of this software.
+    "label_printer": "",
     "label_org": "Mada International Academy",
     # Self-update. Only ever contacts the GitHub Releases API; a failed check
     # is silent. update_token is only needed while the repository is private.

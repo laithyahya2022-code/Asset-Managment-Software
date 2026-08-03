@@ -626,10 +626,28 @@ def barcode(asset_id):
 @perm_required("assets.view")
 def label(asset_id):
     a = db.get_or_404(Asset, asset_id)
-    return render_template("assets/label.html", asset=a,
+    html = render_template("assets/label.html", asset=a,
                            app_name=get_setting("label_org"),
                            L=label_layout(),
                            auto=request.args.get("auto") == "1")
+    return _print_or_show(html, f"Label for {a.tag}")
+
+
+def _print_or_show(html, what):
+    """Send the label to the configured printer, or fall back to the browser.
+
+    With a printer named in Settings and AMS running as the packaged Windows
+    app, the label goes straight to that printer -- no tab, no print dialog,
+    no chance of picking the wrong one. Anywhere else, or if the print fails
+    for any reason, the page opens as it always did.
+    """
+    from .. import printing
+
+    printer = get_setting("label_printer")
+    if printing.can_print_directly(printer) and printing.print_html(html, printer):
+        flash(f"{what} sent to {printer}.", "success")
+        return redirect(request.referrer or url_for("assets.list_"))
+    return html
 
 
 @bp.route("/labels")
@@ -639,10 +657,11 @@ def labels():
     stmt = db.select(Asset).order_by(Asset.tag)
     if ids:
         stmt = stmt.where(Asset.id.in_(ids))
-    return render_template("assets/labels.html",
+    html = render_template("assets/labels.html",
                            assets=db.session.scalars(stmt).all(),
                            app_name=get_setting("label_org"),
                            L=label_layout())
+    return _print_or_show(html, "Label sheet")
 
 
 # ------------------------------------------------------------------ bulk
