@@ -478,7 +478,7 @@ def test_schema_sync_is_idempotent(tmp_path):
 
 
 @pytest.mark.parametrize("w,h", [(152.4, 76.2), (101.6, 152.4), (101.6, 50.8),
-                                 (70, 38), (50, 30), (40, 20)])
+                                 (70, 38), (55, 38), (50, 30), (40, 20)])
 def test_label_layout_fits_every_offered_size(w, h):
     """Nothing may be sized past the sticker it prints on."""
     from itam.utils import label_layout
@@ -504,6 +504,8 @@ def test_tiny_labels_drop_detail_fields():
     assert label_layout(40, 20, org_name="Mada AMS")["fields"] == []
     assert label_layout(40, 20, org_name="Mada AMS")["show_org"] is False
     assert label_layout(152.4, 76.2, org_name="Mada AMS")["fields"]
+    # A mid-size thermal sticker still carries the department.
+    assert "department" in label_layout(55, 38, org_name="Mada AMS")["fields"]
 
 
 def test_label_size_setting_drives_the_printed_page(client, app):

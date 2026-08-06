@@ -123,9 +123,9 @@ def label_layout(width_mm=None, height_mm=None, org_name=None):
     show_org = short >= 24
     if short < 24:
         fields = []
-    elif short < 34:
+    elif short < 30:
         fields = ["serial"]
-    elif short < 45:
+    elif short < 34:
         fields = ["branch", "serial"]
     else:
         fields = ["branch", "department", "serial"]
