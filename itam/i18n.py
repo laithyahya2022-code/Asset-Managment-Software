@@ -216,6 +216,53 @@ AR.update({
     "Everything the school owns — equipment and software — in one place.":
         "كل ما تملكه المدرسة — معدات وبرمجيات — في مكان واحد.",
     "Menu": "القائمة", "Update ready": "تحديث جاهز", "version": "الإصدار",
+
+    # --- shell rail groups
+    "Operations": "العمليات", "Registry": "السجل", "People": "الأشخاص",
+    "Insight": "الرؤى",
+
+    # --- landing page
+    "Product": "المنتج", "Workflow": "سير العمل", "Sign in": "تسجيل الدخول",
+    "Asset register": "سجل الأصول",
+    "Every device on campus, accounted for.": "كل جهاز في الحرم المدرسي، محسوب.",
+    "AMS is the IT department's register: what the school owns, where it lives, who holds it, and when it comes back. Lending, warranties, licenses, maintenance and inventory in one place — in English and Arabic.":
+        "AMS هو سجل قسم تقنية المعلومات: ما تملكه المدرسة، وأين يوجد، ومن يحمله، ومتى يعود. الإعارة والضمانات والتراخيص والصيانة والجرد في مكان واحد — بالعربية والإنجليزية.",
+    "Enter AMS": "دخول AMS",
+    "Assets tracked": "أصل مسجّل", "On loan today": "معار اليوم",
+    "Rooms & stores": "غرفة ومخزن", "Languages": "لغتان",
+    "Built for the daily round": "مصمم للجولة اليومية",
+    "Scan to find": "امسح لتجد",
+    "Every asset carries a QR label. Scan it with any phone and the record opens.":
+        "كل أصل يحمل ملصق QR. امسحه بأي هاتف ويفتح السجل.",
+    "Lending in two clicks": "إعارة بنقرتين",
+    "Check equipment out to a member of staff with a due date, and back in when it returns.":
+        "أعر الأجهزة لموظف مع تاريخ استحقاق، واستلمها عند عودتها.",
+    "Warranty watch": "مراقبة الضمان",
+    "Expiring warranties and licenses surface on the dashboard before they lapse.":
+        "تظهر الضمانات والتراخيص المنتهية على لوحة التحكم قبل انقضائها.",
+    "Licenses beside hardware": "التراخيص بجانب الأجهزة",
+    "Seats owned against seats in use, kept next to the machines they run on.":
+        "المقاعد المملوكة مقابل المستخدمة، بجانب الأجهزة التي تعمل عليها.",
+    "Term-end inventory": "جرد نهاية الفصل",
+    "Physical audits record what was verified and what is missing, room by room.":
+        "يسجل الجرد الفعلي ما تم التحقق منه وما هو مفقود، غرفة غرفة.",
+    "Arabic and English": "العربية والإنجليزية",
+    "The whole interface mirrors to Arabic, right to left, per user.":
+        "الواجهة كاملة تنعكس إلى العربية، من اليمين إلى اليسار، لكل مستخدم.",
+    "Ready to sign in?": "جاهز لتسجيل الدخول؟",
+    "Use your school account. Access is limited to IT-department staff.":
+        "استخدم حساب مدرستك. الوصول مقصور على موظفي قسم تقنية المعلومات.",
+    "IT Department": "قسم تقنية المعلومات", "Internal system": "نظام داخلي",
+
+    # --- sign-in
+    "Back": "رجوع",
+    "The register is behind the door.": "السجل خلف الباب.",
+    "Every device on campus, its holder, its history. Sign in with your IT-department account to continue.":
+        "كل جهاز في الحرم، حامله، وتاريخه. سجّل الدخول بحساب قسم تقنية المعلومات للمتابعة.",
+    "Sign in to AMS": "تسجيل الدخول إلى AMS",
+    "Use your school account.": "استخدم حساب مدرستك.",
+    "Forgot password?": "نسيت كلمة المرور؟",
+    "Access to this system is logged.": "الوصول إلى هذا النظام مسجّل.",
 })
 
 LANGS = {"en": "English", "ar": "العربية"}

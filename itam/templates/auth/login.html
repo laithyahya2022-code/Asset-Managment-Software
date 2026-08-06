@@ -1,17 +1,41 @@
 {% extends "base.html" %}
 {% block title %}{{ t("Log in") }}{% endblock %}
 {% block auth_content %}
-<div class="auth-card">
-  <img class="auth-logo-img" src="{{ url_for('static', filename='icon.svg') }}" alt="" width="72" height="72">
-  <h1>{{ app_short }}</h1>
-  <p class="muted">{{ app_full or t("Log in") }}</p>
-  <form method="post">
-    <label for="username">Username</label>
-    <input id="username" name="username" required autofocus autocomplete="username">
-    <label for="password">Password</label>
-    <input id="password" name="password" type="password" required autocomplete="current-password">
-    <button class="btn wide" type="submit">{{ t("Log in") }}</button>
-  </form>
-  <p class="auth-links"><a href="{{ url_for('auth.forgot') }}">Forgot password?</a></p>
+<div class="auth-split">
+  <div class="auth-side">
+    <a class="btn secondary sm back" href="{{ url_for('main.welcome') }}">← {{ t("Back") }}</a>
+    <div class="pitch">
+      <div class="accent-mark" aria-hidden="true"></div>
+      <h2>{{ t("The register is behind the door.") }}</h2>
+      <p class="sub">{{ t("Every device on campus, its holder, its history. Sign in with your IT-department account to continue.") }}</p>
+    </div>
+    <p class="foot">Mada Academy · IT Department</p>
+  </div>
+  <div class="auth-form-col">
+    <div class="auth-card">
+      <div style="display:flex;align-items:center;gap:.55rem">
+        <span class="brand-mark" style="width:26px;height:26px;border:1px solid var(--color-accent);border-radius:6px;display:grid;place-items:center;color:var(--color-accent-300);font-size:12px;font-weight:600">A</span>
+        <span class="wordmark" style="font-size:13px;font-weight:500;letter-spacing:.06em;text-transform:uppercase">AMS</span>
+        <a class="top-icon" style="margin-inline-start:auto"
+           href="{{ url_for('set_lang', code='ar' if g.lang == 'en' else 'en') }}"
+           title="{{ 'العربية' if g.lang == 'en' else 'English' }}">
+          <span class="lang-tag">{{ 'ع' if g.lang == 'en' else 'EN' }}</span>
+        </a>
+      </div>
+      <h1 style="margin-top:26px">{{ t("Sign in to AMS") }}</h1>
+      <p class="muted">{{ t("Use your school account.") }}</p>
+      <form method="post">
+        <label for="username">{{ t("Username") }}</label>
+        <input id="username" name="username" required autofocus
+               autocomplete="username" dir="ltr" style="text-align:start">
+        <label for="password">{{ t("Password") }}</label>
+        <input id="password" name="password" type="password" required
+               autocomplete="current-password" dir="ltr" style="text-align:start">
+        <button class="btn wide" type="submit">{{ t("Log in") }}</button>
+      </form>
+      <p class="auth-links"><a href="{{ url_for('auth.forgot') }}">{{ t("Forgot password?") }}</a></p>
+      <p class="field-note">{{ t("Access to this system is logged.") }}</p>
+    </div>
+  </div>
 </div>
 {% endblock %}

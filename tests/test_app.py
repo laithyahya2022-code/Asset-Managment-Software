@@ -2110,10 +2110,8 @@ def test_departments_are_reachable_from_locations(client, app):
     assert "/departments" in body, "no way through to manage them"
     # The page still works, it just isn't in the sidebar any more.
     assert client.get("/departments").status_code == 200
-    assert 'href="/departments"' not in client.get("/assets/").data.decode() \
-        or True   # the sidebar link is what matters, checked below
-    nav = client.get("/assets/").data.decode().split("<nav>")[1].split("</nav>")[0]
-    assert ">Departments<" not in nav, "still in the sidebar"
+    rail = client.get("/assets/").data.decode().split('class="rail')[1].split("</aside>")[0]
+    assert ">Departments<" not in rail, "still in the navigation rail"
 
 
 def test_an_employee_needs_no_email(client, app):

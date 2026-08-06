@@ -306,11 +306,11 @@ def barcode_svg(data):
 
 # ------------------------------------------------------------------ SVG charts
 
-PALETTE = ["#22a04a", "#2f6fed", "#e8a13c", "#7c5cd6", "#18a8a0",
+PALETTE = ["#b8c95e", "#7fa6f2", "#e0a94f", "#b3a1e8", "#6ec4bc",
            "#d05574", "#8a929e", "#4a4f57"]
 
 
-def bar_chart(pairs, color="#22a04a", height=210):
+def bar_chart(pairs, color="#b8c95e", height=210):
     """pairs: [(label, value)] -> responsive SVG bar chart."""
     if not pairs:
         return Markup("<p class='empty'>No data.</p>")
@@ -369,7 +369,7 @@ def donut_chart(pairs, size=190):
         f'</svg><div class="legend">{legend}</div></div>')
 
 
-def line_chart(pairs, color="#22a04a", height=200, money=False):
+def line_chart(pairs, color="#b8c95e", height=200, money=False):
     """pairs: [(label, value)] month series -> SVG line/area chart."""
     if not pairs:
         return Markup("<p class='empty'>No data.</p>")

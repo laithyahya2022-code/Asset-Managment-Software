@@ -14,11 +14,13 @@ from ..utils import (bar_chart, donut_chart, get_setting, line_chart,
 
 bp = Blueprint("main", __name__)
 
+# The five handoff status tones, extended to the app's full status list with
+# neighbours on the same low-chroma lightness step.
 STATUS_COLORS = {
-    "Available": "#22a04a", "Checked Out": "#2f6fed", "In Use": "#4c5fd6",
-    "Reserved": "#7c5cd6", "In Storage": "#18a8a0", "Under Maintenance": "#e8a13c",
-    "Lost": "#d05574", "Damaged": "#c2452f", "Missing": "#a83252",
-    "Retired": "#8a929e", "Disposed": "#5c636e",
+    "Available": "#b8c95e", "Checked Out": "#7fa6f2", "In Use": "#9db1ea",
+    "Reserved": "#b3a1e8", "In Storage": "#6ec4bc", "Under Maintenance": "#e0a94f",
+    "Lost": "#e8886a", "Damaged": "#e8886a", "Missing": "#e8886a",
+    "Retired": "#98958a", "Disposed": "#7c796e",
 }
 
 
@@ -79,6 +81,36 @@ def service_worker():
     return resp
 
 
+@bp.route("/welcome")
+def welcome():
+    """The public landing page from the design handoff.
+
+    No sign-in required: it explains the system and routes to /login. The
+    stat band uses live numbers -- they are wayfinding, not secrets, and this
+    page only exists inside the school's network.
+    """
+    from ..i18n import t as tr
+    assets = db.session.scalar(db.select(func.count(Asset.id))) or 0
+    loans = db.session.scalar(db.select(func.count(Assignment.id))
+                              .where(Assignment.returned_at.is_(None))) or 0
+    from ..models import Location
+    rooms = db.session.scalar(db.select(func.count(Location.id))
+                              .where(Location.kind.in_(["Room", "Storage Area"]))) or 0
+    stats = [(f"{assets:,}", tr("Assets tracked")),
+             (f"{loans:,}", tr("On loan today")),
+             (f"{rooms:,}", tr("Rooms & stores")),
+             ("2", tr("Languages"))]
+    features = [
+        (tr("Scan to find"), tr("Every asset carries a QR label. Scan it with any phone and the record opens.")),
+        (tr("Lending in two clicks"), tr("Check equipment out to a member of staff with a due date, and back in when it returns.")),
+        (tr("Warranty watch"), tr("Expiring warranties and licenses surface on the dashboard before they lapse.")),
+        (tr("Licenses beside hardware"), tr("Seats owned against seats in use, kept next to the machines they run on.")),
+        (tr("Term-end inventory"), tr("Physical audits record what was verified and what is missing, room by room.")),
+        (tr("Arabic and English"), tr("The whole interface mirrors to Arabic, right to left, per user.")),
+    ]
+    return render_template("welcome.html", stats=stats, features=features)
+
+
 @bp.route("/")
 @login_required
 def dashboard():
@@ -114,7 +146,7 @@ def dashboard():
         db.select(Department.name, func.count(Asset.id))
         .join(Asset, Asset.department_id == Department.id)
         .group_by(Department.name).order_by(func.count(Asset.id).desc())).all()
-    dept_chart = bar_chart([(n, c) for n, c in by_dept], color="#2f6fed")
+    dept_chart = bar_chart([(n, c) for n, c in by_dept], color="#7fa6f2")
 
     due_soon = db.session.scalars(
         db.select(Assignment).where(
@@ -176,8 +208,8 @@ def analytics():
                      / len(active_assets))
     return render_template("analytics.html",
                            added_chart=line_chart(added),
-                           spend_chart=line_chart(spend, color="#2f6fed", money=True),
-                           mnt_chart=line_chart(mnt_cost, color="#e8a13c", money=True),
+                           spend_chart=line_chart(spend, color="#7fa6f2", money=True),
+                           mnt_chart=line_chart(mnt_cost, color="#e0a94f", money=True),
                            dept_rows=dept_rows, utilization=util)
 
 

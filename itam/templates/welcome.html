@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="{{ g.lang }}" dir="{{ 'rtl' if g.lang == 'ar' else 'ltr' }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#171613">
+  <title>AMS · Mada Asset Management System</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v=app_version) }}">
+  <link rel="icon" href="{{ url_for('static', filename='icon.svg') }}" type="image/svg+xml">
+</head>
+<body>
+<div class="landing">
+  <header>
+    <div class="inner">
+      <a class="brand" href="{{ url_for('main.welcome') }}">
+        <span class="brand-mark">A</span><span class="wordmark">AMS</span>
+      </a>
+      <nav>
+        <a href="#features">{{ t("Product") }}</a>
+        <a href="#workflow">{{ t("Workflow") }}</a>
+      </nav>
+      <a class="top-icon" href="{{ url_for('set_lang', code='ar' if g.lang == 'en' else 'en') }}"
+         title="{{ 'العربية' if g.lang == 'en' else 'English' }}">
+        <span class="lang-tag">{{ 'ع' if g.lang == 'en' else 'EN' }}</span>
+      </a>
+      <a class="btn secondary sm" href="{{ url_for('auth.login') }}">{{ t("Sign in") }}</a>
+    </div>
+  </header>
+
+  <section class="hero">
+    <div class="inner">
+      <span class="kicker">{{ t("Asset register") }} · Mada Academy IT</span>
+      <h1>{{ t("Every device on campus, accounted for.") }}</h1>
+      <p>{{ t("AMS is the IT department's register: what the school owns, where it lives, who holds it, and when it comes back. Lending, warranties, licenses, maintenance and inventory in one place — in English and Arabic.") }}</p>
+      <div class="cta-row">
+        <a class="btn" href="{{ url_for('auth.login') }}">{{ t("Enter AMS") }}</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="stat-band" id="workflow">
+    <div class="inner">
+      {% for num, label in stats %}
+      <div><div class="num" dir="ltr">{{ num }}</div><div class="lbl">{{ label }}</div></div>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="features" id="features">
+    <div class="inner">
+      <h2>{{ t("Built for the daily round") }}</h2>
+      <div class="grid">
+        {% for title, body in features %}
+        <div class="card feature">
+          <div class="accent-mark" aria-hidden="true"></div>
+          <h3>{{ title }}</h3>
+          <p>{{ body }}</p>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="inner">
+      <div class="card cta-card">
+        <div>
+          <h2>{{ t("Ready to sign in?") }}</h2>
+          <p>{{ t("Use your school account. Access is limited to IT-department staff.") }}</p>
+        </div>
+        <a class="btn" href="{{ url_for('auth.login') }}">{{ t("Sign in") }}</a>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="inner">
+      <span>© 2026 Mada Academy · {{ t("IT Department") }}</span>
+      <span>{{ t("Internal system") }}</span>
+    </div>
+  </footer>
+</div>
+</body>
+</html>

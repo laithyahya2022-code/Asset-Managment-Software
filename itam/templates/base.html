@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#0F1826">
+  <meta name="theme-color" content="#171613">
   <title>{% block title %}{{ t("Dashboard") }}{% endblock %} · {{ app_name }}</title>
   {# ?v= so a new build is a new URL: browser and service-worker caches both
      miss it and fetch the current file instead of last release's copy. #}
@@ -21,63 +21,82 @@
 {% from "_icons.html" import icon %}
 {% if g.user %}
 <input type="checkbox" id="nav-toggle" hidden>
+{% set ep = request.endpoint or "" %}
+<header class="topbar no-print">
+  <label for="nav-toggle" class="nav-btn" aria-label="{{ t('Menu') }}">{{ icon("menu") }}</label>
+  <a class="brand" href="{{ url_for('main.dashboard') }}">
+    <span class="brand-mark">A</span>
+    <span class="wordmark">AMS</span>
+  </a>
+  <span class="divider" aria-hidden="true"></span>
+  <form class="global-search" action="{{ url_for('main.search') }}" method="get">
+    {{ icon("search", 16) }}
+    <input type="search" name="q" value="{{ request.args.get('q', '') if request.endpoint == 'main.search' else '' }}"
+           placeholder="{{ t('Search') }}…" aria-label="{{ t('Search') }}">
+  </form>
+  <div class="top-actions">
+    <a class="top-icon" href="{{ url_for('set_lang', code='ar' if g.lang == 'en' else 'en') }}" title="{{ 'العربية' if g.lang == 'en' else 'English' }}">
+      {{ icon("globe") }}<span class="lang-tag">{{ 'ع' if g.lang == 'en' else 'EN' }}</span>
+    </a>
+    <a class="top-icon" href="{{ url_for('main.notifications') }}" title="{{ t('Notifications') }}">
+      {{ icon("bell") }}
+      {% if unread_count %}<span class="bell-badge">{{ unread_count if unread_count < 100 else "99+" }}</span>{% endif %}
+    </a>
+    <a class="user-chip" href="{{ url_for('auth.profile') }}" title="{{ t('Profile') }}">
+      <span class="avatar">{{ g.user.name[:1] | upper }}</span>
+      <span class="user-name">{{ g.user.name }}<small>{{ g.user.role }}</small></span>
+    </a>
+    <a class="top-icon" href="{{ url_for('auth.logout') }}" title="{{ t('Log out') }}">{{ icon("logout") }}</a>
+  </div>
+</header>
+
 <div class="shell">
-  <aside class="sidebar">
-    <div class="side-brand">
-      <img class="brand-mark" src="{{ url_for('static', filename='icon.svg') }}" alt="" width="34" height="34">
-      <span><strong>{{ g.user.name }}</strong></span>
+  <aside class="rail no-print">
+    {% macro ritem(endpoint, label, active, count=None) -%}
+    <a class="ritem {{ 'active' if active }}" href="{{ url_for(endpoint) }}"
+       {% if active %}aria-current="page"{% endif %}>
+      <span class="mark" aria-hidden="true"></span>
+      <span class="rl">{{ label }}</span>
+      {% if count is not none %}<span class="rcount">{{ count }}</span>{% endif %}
+    </a>
+    {%- endmacro %}
+    <div class="rail-group">
+      <div class="rg-label">{{ t("Operations") }}</div>
+      {{ ritem("main.dashboard", t("Dashboard"), ep == "main.dashboard") }}
+      {{ ritem("assets.list_", t("Assets"), ep.startswith("assets."), rail_counts.get("assets")) }}
+      {{ ritem("ops.checkouts", t("Lending"), ep == "ops.checkouts", rail_counts.get("loans")) }}
+      {{ ritem("ops.maintenance_list", t("Maintenance"), ep.startswith("ops.maintenance"), rail_counts.get("maintenance")) }}
+      {{ ritem("main.scanner", t("QR Scanner"), ep == "main.scanner") }}
     </div>
-    <nav>
-      {% set ep = request.endpoint or "" %}
-      <a href="{{ url_for('main.dashboard') }}" class="{{ 'active' if ep == 'main.dashboard' }}">{{ icon("dashboard") }}<span>{{ t("Dashboard") }}</span></a>
-      <a href="{{ url_for('assets.list_') }}" class="{{ 'active' if ep.startswith('assets.') }}">{{ icon("asset") }}<span>{{ t("Assets") }}</span></a>
-      <a href="{{ url_for('ops.checkouts') }}" class="{{ 'active' if ep == 'ops.checkouts' }}">{{ icon("checkout") }}<span>{{ t("Lending") }}</span></a>
-      <a href="{{ url_for('ops.licenses') }}" class="{{ 'active' if ep.startswith('ops.license') }}">{{ icon("key") }}<span>{{ t("Licenses") }}</span></a>
-      <a href="{{ url_for('ops.maintenance_list') }}" class="{{ 'active' if ep.startswith('ops.maintenance') }}">{{ icon("wrench") }}<span>{{ t("Maintenance") }}</span></a>
-      <a href="{{ url_for('ops.inventory') }}" class="{{ 'active' if ep.startswith('ops.inventory') }}">{{ icon("clipboard") }}<span>{{ t("Inventory") }}</span></a>
-      <a href="{{ url_for('org.locations') }}" class="{{ 'active' if ep.startswith('org.location') or ep.startswith('org.department') }}">{{ icon("location") }}<span>{{ t("Locations") }}</span></a>
-      <a href="{{ url_for('org.employees') }}" class="{{ 'active' if ep.startswith('org.employee') }}">{{ icon("user") }}<span>{{ t("Employees") }}</span></a>
-      <a href="{{ url_for('org.vendors') }}" class="{{ 'active' if ep.startswith('org.vendor') }}">{{ icon("truck") }}<span>{{ t("Vendors") }}</span></a>
-      <a href="{{ url_for('main.scanner') }}" class="{{ 'active' if ep == 'main.scanner' }}">{{ icon("qr") }}<span>{{ t("QR Scanner") }}</span></a>
-      {% if has_perm("reports.view") %}
-      <a href="{{ url_for('reports.index') }}" class="{{ 'active' if ep.startswith('reports.') }}">{{ icon("report") }}<span>{{ t("Reports") }}</span></a>
-      <a href="{{ url_for('main.analytics') }}" class="{{ 'active' if ep == 'main.analytics' }}">{{ icon("trend") }}<span>{{ t("Analytics") }}</span></a>
-      {% endif %}
+    <div class="rail-group">
+      <div class="rg-label">{{ t("Registry") }}</div>
+      {{ ritem("ops.licenses", t("Licenses"), ep.startswith("ops.license"), rail_counts.get("licenses")) }}
+      {{ ritem("ops.inventory", t("Inventory"), ep.startswith("ops.inventory")) }}
+      {{ ritem("org.locations", t("Locations"), ep.startswith("org.location") or ep.startswith("org.department"), rail_counts.get("locations")) }}
+      {{ ritem("org.vendors", t("Vendors"), ep.startswith("org.vendor"), rail_counts.get("vendors")) }}
+    </div>
+    <div class="rail-group">
+      <div class="rg-label">{{ t("People") }}</div>
+      {{ ritem("org.employees", t("Employees"), ep.startswith("org.employee"), rail_counts.get("employees")) }}
       {% if has_perm("admin.users") %}
-      <a href="{{ url_for('admin.users') }}" class="{{ 'active' if ep.startswith('admin.user') or ep == 'admin.roles' }}">{{ icon("users") }}<span>{{ t("Users") }}</span></a>
+      {{ ritem("admin.users", t("Users"), ep.startswith("admin.user") or ep == "admin.roles", rail_counts.get("users")) }}
       {% endif %}
-      <a href="{{ url_for('main.activity') }}" class="{{ 'active' if ep == 'main.activity' }}">{{ icon("activity") }}<span>{{ t("Activity") }}</span></a>
+    </div>
+    <div class="rail-group">
+      <div class="rg-label">{{ t("Insight") }}</div>
+      {% if has_perm("reports.view") %}
+      {{ ritem("reports.index", t("Reports"), ep.startswith("reports.")) }}
+      {{ ritem("main.analytics", t("Analytics"), ep == "main.analytics") }}
+      {% endif %}
+      {{ ritem("main.activity", t("Activity"), ep == "main.activity") }}
       {% if has_perm("admin.settings") %}
-      <a href="{{ url_for('admin.settings') }}" class="{{ 'active' if ep in ('admin.settings', 'admin.backups') }}">{{ icon("settings") }}<span>{{ t("Settings") }}</span></a>
+      {{ ritem("admin.settings", t("Settings"), ep in ("admin.settings", "admin.backups")) }}
       {% endif %}
-    </nav>
+    </div>
     <div class="side-version">v{{ app_version }}</div>
   </aside>
 
   <div class="content">
-    <header class="topbar no-print">
-      <label for="nav-toggle" class="nav-btn" aria-label="Menu">{{ icon("menu") }}</label>
-      <form class="global-search" action="{{ url_for('main.search') }}" method="get">
-        {{ icon("search", 16) }}
-        <input type="search" name="q" value="{{ request.args.get('q', '') if request.endpoint == 'main.search' else '' }}"
-               placeholder="{{ t('Search') }}…" aria-label="{{ t('Search') }}">
-      </form>
-      <div class="top-actions">
-        <a class="top-icon" href="{{ url_for('set_lang', code='ar' if g.lang == 'en' else 'en') }}" title="{{ 'العربية' if g.lang == 'en' else 'English' }}">
-          {{ icon("globe") }}<span class="lang-tag">{{ 'ع' if g.lang == 'en' else 'EN' }}</span>
-        </a>
-        <a class="top-icon" href="{{ url_for('main.notifications') }}" title="{{ t('Notifications') }}">
-          {{ icon("bell") }}
-          {% if unread_count %}<span class="bell-badge">{{ unread_count if unread_count < 100 else "99+" }}</span>{% endif %}
-        </a>
-        <a class="user-chip" href="{{ url_for('auth.profile') }}" title="{{ t('Profile') }}">
-          <span class="avatar">{{ g.user.name[:1] | upper }}</span>
-          <span class="user-name">{{ g.user.name }}<small>{{ g.user.role }}</small></span>
-        </a>
-        <a class="top-icon" href="{{ url_for('auth.logout') }}" title="{{ t('Log out') }}">{{ icon("logout") }}</a>
-      </div>
-    </header>
-
     <main>
       {% if update_pending %}
       <div class="flash flash-update no-print">

@@ -4,7 +4,7 @@ from datetime import datetime
 
 from flask import Flask, g, redirect, request, session, url_for
 
-APP_VERSION = "2026.08.06.2"  # bumped on each release so users can confirm their build
+APP_VERSION = "2026.08.06.3"  # bumped on each release so users can confirm their build
 
 from .i18n import LANGS, t, translate_html
 from .models import (DEFAULT_ROLE_PERMS, PERMISSIONS, ROLES, Notification,
@@ -128,6 +128,7 @@ def create_app(test_config=None, instance_path=None):
             ) or 0
         short, full = app_name_parts()
         return dict(t=t, has_perm=has_perm, app_name=get_setting("app_name"),
+                    rail_counts=_rail_counts() if g.get("user") else {},
                     app_short=short, app_full=full,
                     label_org=get_setting("label_org"),
                     update_pending=get_setting("update_pending"),
@@ -190,6 +191,43 @@ def _start_update_check(app):
             pass          # an update check must never disturb the app
 
     threading.Thread(target=run, daemon=True).start()
+
+
+_rail_cache = {"at": 0.0, "counts": {}}
+
+
+def _rail_counts():
+    """Record counts for the navigation rail, refreshed at most once a minute.
+
+    Eight COUNT queries are cheap, but not per page load for every user, so
+    the numbers may lag by up to sixty seconds. They are wayfinding, not data.
+    """
+    import time
+
+    from .models import (Asset, Assignment, Employee, License, Location,
+                         Maintenance, User, Vendor)
+    now = time.time()
+    if now - _rail_cache["at"] > 60:
+        try:
+            _rail_cache["counts"] = {
+                "assets": db.session.scalar(db.select(db.func.count(Asset.id))) or 0,
+                "loans": db.session.scalar(
+                    db.select(db.func.count(Assignment.id))
+                    .where(Assignment.returned_at.is_(None))) or 0,
+                "maintenance": db.session.scalar(
+                    db.select(db.func.count(Maintenance.id))
+                    .where(Maintenance.status != "Completed")) or 0,
+                "licenses": db.session.scalar(db.select(db.func.count(License.id))) or 0,
+                "locations": db.session.scalar(db.select(db.func.count(Location.id))) or 0,
+                "vendors": db.session.scalar(db.select(db.func.count(Vendor.id))) or 0,
+                "employees": db.session.scalar(
+                    db.select(db.func.count(Employee.id)).where(Employee.active)) or 0,
+                "users": db.session.scalar(db.select(db.func.count(User.id))) or 0,
+            }
+            _rail_cache["at"] = now
+        except Exception:
+            return _rail_cache["counts"]   # mid-migration; stale is fine
+    return _rail_cache["counts"]
 
 
 _last_backup_check = [0.0]
