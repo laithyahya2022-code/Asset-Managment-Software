@@ -12,12 +12,25 @@
     <button class="btn" id="scan-start" type="button">Start camera</button>
   </div>
   <div class="card">
-    <p class="eyebrow">Manual entry</p>
+    <p class="eyebrow">{{ t("Handheld scanner / manual entry") }}</p>
+    <p class="muted">{{ t("Plug in a USB barcode scanner (Datalogic, Zebra, …), leave the cursor in the box, and scan the label's barcode — the asset opens by itself. Typing the tag works the same way.") }}</p>
     <form method="get" action="{{ url_for('main.scan_go') }}">
-      <label for="code">Asset tag or serial number</label>
-      <input id="code" name="code" required placeholder="LT-0001" autofocus>
-      <div class="form-actions"><button class="btn" type="submit">Open asset</button></div>
+      <label for="code">{{ t("Asset tag or serial number") }}</label>
+      <input id="code" name="code" required placeholder="LT-0001" autofocus
+             autocomplete="off">
+      <div class="form-actions"><button class="btn" type="submit">{{ t("Open asset") }}</button></div>
     </form>
   </div>
 </div>
+<script>
+  // A USB scanner "types" wherever the cursor is: keep it in the scan box.
+  (function () {
+    var box = document.getElementById("code");
+    if (!box) return;
+    window.addEventListener("focus", function () { box.focus(); });
+    document.addEventListener("click", function (e) {
+      if (!e.target.closest("input, select, textarea, button, a")) box.focus();
+    });
+  })();
+</script>
 {% endblock %}

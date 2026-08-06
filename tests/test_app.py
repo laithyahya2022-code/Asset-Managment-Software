@@ -498,6 +498,47 @@ def test_label_layout_fits_every_offered_size(w, h):
     assert L["fs_label"] >= 1.0 and L["fs_value"] > 0
 
 
+def test_code128_table_and_encoding_are_sound():
+    """Bar widths must sum to 11 modules (13 for stop) and be unique, and a
+    known tag must produce the documented checksum — catches table typos."""
+    from itam.utils import _C128, _code128_values, code128_svg
+
+    assert len(_C128) == 107
+    assert all(sum(int(d) for d in p) == 11 for p in _C128[:-1])
+    assert sum(int(d) for d in _C128[-1]) == 13
+    assert len(set(_C128)) == 107
+
+    # "AP-000001": start B, the nine characters, checksum 81, stop.
+    assert _code128_values("AP-000001") == [
+        104, 33, 48, 13, 16, 16, 16, 16, 16, 17, 81, 106]
+
+    svg = code128_svg("AP-000001")
+    assert svg.startswith("<svg") and "rect" in svg
+
+
+def test_labels_carry_a_laser_readable_barcode(client, app):
+    """Laser scanners can't read QR; big-enough labels get Code 128 too."""
+    from itam.models import Asset, Category
+    from itam.utils import label_layout, set_setting
+
+    assert label_layout(55, 38, org_name="Mada AMS")["bc_h"] > 0
+    assert label_layout(40, 20, org_name="Mada AMS")["bc_h"] == 0
+
+    with app.app_context():
+        asset = Asset(tag="BC-0001", name="Scanner test", status="Available",
+                      condition="Good",
+                      category=db.session.scalar(db.select(Category)))
+        db.session.add(asset)
+        set_setting("label_width_mm", "55")
+        set_setting("label_height_mm", "38")
+        db.session.commit()
+        asset_id = asset.id
+
+    login(client)
+    page = client.get(f"/assets/{asset_id}/label").data.decode()
+    assert 'class="bc"' in page and "preserveAspectRatio" in page
+
+
 def test_tiny_labels_drop_detail_fields():
     from itam.utils import label_layout
 

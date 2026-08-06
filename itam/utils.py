@@ -110,6 +110,11 @@ def label_layout(width_mm=None, height_mm=None, org_name=None):
     pad = max(1.2, short * 0.06)
     gap = pad * 0.8
 
+    # A Code 128 strip along the bottom lets laser scanners (which cannot
+    # read QR) pick up the tag. Below ~28mm there is no room for both codes.
+    bc_h = min(max(short * 0.16, 5.0), 9.0) if short >= 28 else 0.0
+    bc_total = (bc_h + pad * 0.4) if bc_h else 0.0
+
     # The asset tag prints under the QR, so it has to come out of the height
     # budget before the QR is sized, or the column overflows the sticker.
     fs_tag = max(short * 0.062, 2.6)
@@ -117,7 +122,7 @@ def label_layout(width_mm=None, height_mm=None, org_name=None):
     if portrait:
         qr = min(width_mm - 2 * pad, height_mm * 0.42)
     else:
-        qr = min(height_mm - 2 * pad - tag_line, width_mm * 0.33)
+        qr = min(height_mm - 2 * pad - tag_line - bc_total, width_mm * 0.33)
     qr = max(qr, 8.0)
 
     show_org = short >= 24
@@ -144,10 +149,10 @@ def label_layout(width_mm=None, height_mm=None, org_name=None):
     org_len = len(org_name or "")
     if portrait:
         info_w = width_mm - 2 * pad
-        avail = height_mm - 2 * pad - qr - tag_line - gap
+        avail = height_mm - 2 * pad - qr - tag_line - gap - bc_total
     else:
         info_w = width_mm - 2 * pad - qr - gap
-        avail = height_mm - 2 * pad
+        avail = height_mm - 2 * pad - bc_total
     per_line = max(1, int(info_w / (fs_org * 0.52)))
     org_lines = 1 if org_len <= per_line else 2
     if show_org and org_len > per_line * 2:
@@ -166,6 +171,7 @@ def label_layout(width_mm=None, height_mm=None, org_name=None):
     return {
         "width": round(width_mm, 2), "height": round(height_mm, 2),
         "portrait": portrait, "pad": round(pad, 2), "qr": round(qr, 2),
+        "bc_h": round(bc_h, 2),
         "gap": round(gap, 2), "show_org": show_org, "fields": fields,
         "full_fields": full_fields,
         "org_lines": org_lines, "columns": columns,
@@ -287,6 +293,49 @@ def read_table(file_storage):
     return headers, rows
 
 # ------------------------------------------------------------------ QR / barcode
+
+
+#: Code 128 bar/space widths, indexed by symbol value 0-106 (106 = stop).
+#: Every entry sums to 11 modules except the 13-module stop pattern; the
+#: test suite checks those invariants so a typo here cannot slip through.
+_C128 = (
+    "212222 222122 222221 121223 121322 131222 122213 122312 132212 221213 "
+    "221312 231212 112232 122132 122231 113222 123122 123221 223211 221132 "
+    "221231 213212 223112 312131 311222 321122 321221 312212 322112 322211 "
+    "212123 212321 232121 111323 131123 131321 112313 132113 132311 211313 "
+    "231113 231311 112133 112331 132131 113123 113321 133121 313121 211331 "
+    "231131 213113 213311 213131 311123 311321 331121 312113 312311 332111 "
+    "314111 221411 431111 111224 111422 121124 121421 141122 141221 112214 "
+    "112412 122114 122411 142112 142211 241211 221114 413111 241112 134111 "
+    "111242 121142 121241 114212 124112 124211 411212 421112 421211 212141 "
+    "214121 412121 111143 111341 131141 114113 114311 411113 411311 113141 "
+    "114131 311141 411131 211412 211214 211232 2331112"
+).split()
+
+
+def _code128_values(data):
+    """Symbol values for `data` in code set B, with start/checksum/stop."""
+    vals = [104]                                     # start B
+    for ch in str(data):
+        v = ord(ch) - 32
+        vals.append(v if 0 <= v <= 95 else 31)       # unencodable -> "?"
+    checksum = (vals[0] + sum(i * v for i, v in enumerate(vals[1:], 1))) % 103
+    return vals + [checksum, 106]
+
+
+def code128_svg(data):
+    """`data` as a Code 128 barcode SVG, for laser scanners that can't
+    read QR codes. Stretches to whatever box the label gives it."""
+    x, rects = 10.0, []                              # 10-module quiet zone
+    for value in _code128_values(data):
+        for i, width in enumerate(_C128[value]):
+            if i % 2 == 0:                           # even positions are bars
+                rects.append(f'<rect x="{x}" y="0" width="{width}" height="10"/>')
+            x += int(width)
+    return Markup(
+        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {x + 10} 10" '
+        f'preserveAspectRatio="none" shape-rendering="crispEdges" fill="#111">'
+        + "".join(rects) + "</svg>")
 
 
 def qr_svg(data):

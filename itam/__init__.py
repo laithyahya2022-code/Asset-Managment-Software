@@ -4,7 +4,7 @@ from datetime import datetime
 
 from flask import Flask, g, redirect, request, session, url_for
 
-APP_VERSION = "2026.08.06.10"  # bumped on each release so users can confirm their build
+APP_VERSION = "2026.08.06.11"  # bumped on each release so users can confirm their build
 
 from .i18n import LANGS, t, translate_html
 from .models import (DEFAULT_ROLE_PERMS, PERMISSIONS, ROLES, Notification,
@@ -119,7 +119,8 @@ def create_app(test_config=None, instance_path=None):
                 db.session.commit()
         return redirect(request.referrer or url_for("main.dashboard"))
 
-    app.jinja_env.globals.update(t=t, has_perm=has_perm)
+    from .utils import code128_svg
+    app.jinja_env.globals.update(t=t, has_perm=has_perm, code128=code128_svg)
 
     @app.context_processor
     def inject():

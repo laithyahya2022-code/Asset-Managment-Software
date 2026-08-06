@@ -1,5 +1,6 @@
 {# One printed label for `asset`. Expects `L` (label_layout) and `app_name`. #}
 <div class="label">
+<div class="label-row">
   <div class="qr-col">
     <div class="box"><img src="{{ url_for('assets.qr', asset_id=asset.id) }}" alt="QR {{ asset.tag }}"></div>
     <div class="tag">{{ asset.tag }}</div>
@@ -28,4 +29,6 @@
     {% endif %}
   </div>
   {% endif %}
+</div>
+{% if L.bc_h %}<div class="bc">{{ code128(asset.tag) }}</div>{% endif %}
 </div>

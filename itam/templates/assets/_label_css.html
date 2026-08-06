@@ -16,9 +16,18 @@
   .label {
     width: {{ L.width }}mm; height: {{ L.height }}mm; margin: 0 auto 10px; background: #fff;
     border: 1px dashed #c9ced6; overflow: hidden;
-    display: flex; align-items: center; gap: {{ L.gap }}mm; padding: {{ L.pad }}mm;
+    display: flex; flex-direction: column; padding: {{ L.pad }}mm;
+  }
+  .label-row {
+    flex: 1; min-height: 0;
+    display: flex; align-items: center; gap: {{ L.gap }}mm;
     {% if L.portrait %}flex-direction: column; justify-content: center;{% endif %}
   }
+  {% if L.bc_h %}
+  .label .bc { flex-shrink: 0; height: {{ L.bc_h }}mm;
+    margin-top: {{ (L.pad * 0.4) | round(2) }}mm; }
+  .label .bc svg { width: 100%; height: 100%; display: block; }
+  {% endif %}
   .qr-col { flex-shrink: 0; text-align: center; }
   .qr-col .box { width: {{ L.qr }}mm; height: {{ L.qr }}mm; background: #fff;
     border: 0.25mm solid #e4e7ec; padding: {{ (L.pad * 0.18) | round(2) }}mm; }
