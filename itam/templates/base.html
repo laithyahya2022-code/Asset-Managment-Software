@@ -99,9 +99,16 @@
   <div class="content">
     <main>
       {% if update_pending %}
-      <div class="flash flash-update no-print">
-        <strong>{{ t("Update ready") }}</strong> —
-        {{ t("version") }} {{ update_pending }} {{ t("has been downloaded. Close and reopen the app to finish updating; your data is not affected.") }}
+      <div class="flash flash-update no-print" style="display:flex;align-items:center;gap:0.8rem;flex-wrap:wrap">
+        <span><strong>{{ t("Update ready") }}</strong> —
+        {{ t("version") }} {{ update_pending }} {{ t("has been downloaded; your data is not affected.") }}</span>
+        {% if has_perm("admin.settings") %}
+        <form method="post" action="{{ url_for('admin.update_now') }}" style="margin:0">
+          <button class="btn sm" type="submit">{{ t("Update now") }}</button>
+        </form>
+        {% else %}
+        <span>{{ t("An administrator can install it from Settings.") }}</span>
+        {% endif %}
       </div>
       {% endif %}
       {% with messages = get_flashed_messages(with_categories=true) %}

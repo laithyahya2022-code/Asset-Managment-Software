@@ -597,6 +597,18 @@ def test_label_org_is_editable_from_settings(client, app):
         assert get_setting("label_org") == "Another School"
 
 
+def test_update_now_from_source_says_so(client):
+    """Only the packaged exe can replace itself; from source it must not 500."""
+    login(client)
+    page = client.post("/admin/update-now", follow_redirects=True).data.decode()
+    assert "Running from source" in page
+
+
+def test_update_now_needs_settings_permission(client):
+    login(client, "viewer", "viewer123")
+    assert client.post("/admin/update-now").status_code in (302, 403)
+
+
 BULK_PAGES = [
     ("/employees", "org.employees_bulk_delete"),
     ("/departments", "org.departments_bulk_delete"),

@@ -175,6 +175,13 @@ def main():
     ip = _local_ip()
     url = f"http://localhost:{port}"
 
+    # Relaunched by "Update now": the old build is still letting go of the
+    # port, so wait for it rather than concluding another server is running.
+    if os.environ.get("AMS_TAKEOVER") == "1":
+        deadline = time.time() + 30
+        while time.time() < deadline and _port_in_use(port):
+            time.sleep(0.3)
+
     # If AMS is already serving on this machine, this launch is just someone
     # double-clicking the program again: reopen the window on the running
     # site instead of fighting over the port (and the database).

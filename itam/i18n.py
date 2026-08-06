@@ -216,6 +216,23 @@ AR.update({
     "Everything the school owns — equipment and software — in one place.":
         "كل ما تملكه المدرسة — معدات وبرمجيات — في مكان واحد.",
     "Menu": "القائمة", "Update ready": "تحديث جاهز", "version": "الإصدار",
+    "has been downloaded; your data is not affected.":
+        "تم تنزيله؛ بياناتك غير متأثرة.",
+    "An administrator can install it from Settings.":
+        "يمكن للمسؤول تثبيته من الإعدادات.",
+    "Update now": "التحديث الآن",
+    "Software update": "تحديث البرنامج",
+    "Current version": "الإصدار الحالي",
+    "is ready to install": "جاهز للتثبيت",
+    "Checks GitHub for a newer build, installs it, and restarts AMS by itself. The database, uploads and backups are never touched.":
+        "يبحث عن إصدار أحدث على GitHub ويثبته ويعيد تشغيل AMS تلقائياً. قاعدة البيانات والمرفقات والنسخ الاحتياطية لا تُمسّ أبداً.",
+    "Updating…": "جارٍ التحديث…",
+    "AMS is updating": "AMS قيد التحديث",
+    "The app restarts by itself with the new version — this takes under a minute, and your data is not affected.":
+        "يعيد التطبيق تشغيل نفسه بالإصدار الجديد — يستغرق ذلك أقل من دقيقة، وبياناتك غير متأثرة.",
+    "Waiting for AMS to come back…": "بانتظار عودة AMS…",
+    "Taking longer than expected — start AMS.exe on the server, then reload this page.":
+        "يستغرق وقتاً أطول من المتوقع — شغّل AMS.exe على الخادم ثم أعد تحميل هذه الصفحة.",
 
     # --- shell rail groups
     "Operations": "العمليات", "Registry": "السجل", "People": "الأشخاص",

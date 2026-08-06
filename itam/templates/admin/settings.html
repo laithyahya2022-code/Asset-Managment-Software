@@ -61,6 +61,20 @@
   {% endfor %}
   <button class="btn" type="submit">Save settings</button>
 </form>
+
+<div class="card" style="margin-top:1rem">
+  <p class="eyebrow">{{ t("Software update") }}</p>
+  <p class="muted" style="font-size:0.9rem">
+    {{ t("Current version") }}: <b dir="ltr">v{{ app_version }}</b>
+    {% if update_pending %} — {{ t("version") }} <b dir="ltr">{{ update_pending }}</b> {{ t("is ready to install") }}{% endif %}
+  </p>
+  <form method="post" action="{{ url_for('admin.update_now') }}">
+    <button class="btn" type="submit">{{ t("Update now") }}</button>
+  </form>
+  <p class="muted" style="font-size:0.82rem;margin-top:0.5rem">
+    {{ t("Checks GitHub for a newer build, installs it, and restarts AMS by itself. The database, uploads and backups are never touched.") }}
+  </p>
+</div>
 <script>
 (function () {
   var w = document.getElementById("s-label_width_mm");

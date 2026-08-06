@@ -4,7 +4,7 @@ from datetime import datetime
 
 from flask import Flask, g, redirect, request, session, url_for
 
-APP_VERSION = "2026.08.06.8"  # bumped on each release so users can confirm their build
+APP_VERSION = "2026.08.06.9"  # bumped on each release so users can confirm their build
 
 from .i18n import LANGS, t, translate_html
 from .models import (DEFAULT_ROLE_PERMS, PERMISSIONS, ROLES, Notification,
@@ -139,6 +139,15 @@ def create_app(test_config=None, instance_path=None):
         db.create_all()
         _sync_schema()
         _ensure_defaults()
+        # An applied update leaves its "ready" note behind; drop it once the
+        # running build is no longer older than the advertised one.
+        pending = get_setting("update_pending")
+        if pending:
+            from . import updater
+            if not updater.is_newer(pending, APP_VERSION):
+                from .utils import set_setting
+                set_setting("update_pending", "")
+                db.session.commit()
         _start_update_check(app)
 
     @app.cli.command("seed")

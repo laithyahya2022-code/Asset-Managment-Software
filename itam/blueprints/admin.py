@@ -163,6 +163,59 @@ def settings():
                            label_presets=LABEL_PRESETS)
 
 
+@bp.route("/update-now", methods=["POST"])
+@perm_required("admin.settings")
+def update_now():
+    """Download the latest build (if needed), swap it in, and restart.
+
+    Only the packaged executable can replace itself; from source this just
+    says so. The restart drops the server for a few seconds — the page shown
+    meanwhile polls until AMS is back and then reloads.
+    """
+    import sys
+    import threading
+    import time
+
+    if not getattr(sys, "frozen", False):
+        flash("Running from source — update with git pull instead.", "error")
+        return redirect(url_for("admin.settings"))
+
+    from .. import APP_VERSION, updater
+    base = os.path.dirname(sys.executable)
+    exe = updater.exe_path(base)
+    token = get_setting("update_token") or None
+
+    if not updater.pending_update(base, exe):
+        status = updater.check_for_update(get_setting("update_repo"),
+                                          APP_VERSION, base, exe, token)
+        if status == "up-to-date":
+            flash(f"Already on the latest version (v{APP_VERSION}).", "success")
+            return redirect(url_for("admin.settings"))
+        if status not in ("downloaded", "pending"):
+            flash("Could not reach the update server. Check the internet "
+                  "connection and try again.", "error")
+            return redirect(url_for("admin.settings"))
+
+    log_activity("update_applied", "setting", None)
+    db.session.commit()
+
+    def restart():
+        time.sleep(1.0)                  # let the response reach the browser
+        if not updater.apply_pending_update(base, exe):
+            return                       # exe locked; keep serving on the old
+        env = dict(os.environ, AMS_TAKEOVER="1")
+        try:
+            import subprocess
+            subprocess.Popen([exe], close_fds=True, env=env,
+                             creationflags=getattr(subprocess, "DETACHED_PROCESS", 0))
+        except OSError:
+            return                       # relaunch failed; keep serving
+        os._exit(0)                      # hand the port to the new build
+
+    threading.Thread(target=restart, daemon=True).start()
+    return render_template("admin/updating.html")
+
+
 # ----------------------------------------------------------------- backups
 
 def _db_path():
