@@ -186,6 +186,8 @@ def main():
         "=" * 62 + "\n"
         f"  On this computer:   {url}\n"
         f"  On the network:     http://{ip}:{port}\n"
+        f"  By name:            http://{socket.gethostname().lower()}:{port}\n"
+        f"      (phones/tablets: http://{socket.gethostname().lower()}.local:{port})\n"
         "  Open the network address on phones/other PCs to share data.\n"
         "  First login: admin / admin123 (change it right away)\n"
         f"  Data is stored in:  {instance_path}\n"
