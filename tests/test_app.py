@@ -2495,3 +2495,28 @@ def test_renamed_repo_is_migrated_in_stored_settings(app):
         db.session.commit()
         _ensure_defaults()
         assert db.session.get(Setting, "update_repo").value == "someone/else"
+
+
+def test_label_links_stay_in_the_app_window(client, app):
+    """Inside the desktop app, target="_blank" opens the system browser --
+    which has no session cookie, so pressing Print landed staff on a sign-in
+    page instead of the label."""
+    from itam.models import Category
+
+    with app.app_context():
+        db.session.add(Asset(tag="WIN-1", name="Window test", status="Available",
+                             condition="Good",
+                             category=db.session.scalar(db.select(Category))))
+        db.session.commit()
+        aid = db.session.scalar(db.select(Asset.id).where(Asset.tag == "WIN-1"))
+
+    login(client)
+    for page in (f"/assets/{aid}", f"/assets/{aid}/edit"):
+        body = client.get(page).data.decode()
+        for line in body.splitlines():
+            if "assets.label" in line or f"/assets/{aid}/label" in line:
+                assert 'target="_blank"' not in line, \
+                    f"{page} still opens the label in a new window"
+
+    # The label page itself carries a way back, so same-window is not a trap.
+    assert b"Back to asset" in client.get(f"/assets/{aid}/label").data
