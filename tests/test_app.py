@@ -2466,3 +2466,32 @@ def test_a_viewer_cannot_change_levels(client, app):
     with app.app_context():
         assert not db.session.scalar(
             db.select(Location).where(Location.name == "Sneaky Branch"))
+
+
+def test_renamed_repo_is_migrated_in_stored_settings(app):
+    """The GitHub repo was renamed; installs that saved the old path follow.
+
+    GitHub redirects renamed repos, but only until something else claims the
+    old name -- so stored settings move to the new path. A repo the school
+    pointed elsewhere themselves is left alone.
+    """
+    from itam import DEFAULT_SETTINGS, _ensure_defaults
+    from itam.models import Setting
+
+    with app.app_context():
+        row = db.session.get(Setting, "update_repo")
+        old = "laithyahya2022-code/IT-Asset-Management-System-"
+        if row is None:
+            db.session.add(Setting(key="update_repo", value=old))
+        else:
+            row.value = old
+        db.session.commit()
+        _ensure_defaults()
+        assert db.session.get(Setting, "update_repo").value == \
+            DEFAULT_SETTINGS["update_repo"]
+
+        # A custom value must survive.
+        db.session.get(Setting, "update_repo").value = "someone/else"
+        db.session.commit()
+        _ensure_defaults()
+        assert db.session.get(Setting, "update_repo").value == "someone/else"

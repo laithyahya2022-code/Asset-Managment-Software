@@ -4,7 +4,7 @@ from datetime import datetime
 
 from flask import Flask, g, redirect, request, session, url_for
 
-APP_VERSION = "2026.08.03.7"  # bumped on each release so users can confirm their build
+APP_VERSION = "2026.08.06.1"  # bumped on each release so users can confirm their build
 
 from .i18n import LANGS, t, translate_html
 from .models import (DEFAULT_ROLE_PERMS, PERMISSIONS, ROLES, Notification,
@@ -290,6 +290,13 @@ def _ensure_defaults():
     row = db.session.get(Setting, "app_name")
     if row is not None and row.value in ("ITAM Enterprise", "ITAM"):
         row.value = DEFAULT_SETTINGS["app_name"]
+    # The GitHub repository was renamed. Installs that saved the old path keep
+    # asking for it; GitHub redirects renamed repos, but that stops the moment
+    # anything else claims the old name, so move them to the new one. A repo
+    # the school pointed elsewhere themselves is left alone.
+    row = db.session.get(Setting, "update_repo")
+    if row is not None and row.value == "laithyahya2022-code/IT-Asset-Management-System-":
+        row.value = DEFAULT_SETTINGS["update_repo"]
     # first-run admin account
     if not db.session.scalar(db.select(User).limit(1)):
         admin = User(username="admin", name="Administrator",

@@ -31,7 +31,7 @@ DEFAULT_SETTINGS = {
     # Self-update. Only ever contacts the GitHub Releases API; a failed check
     # is silent. update_token is only needed while the repository is private.
     "update_auto": "1",
-    "update_repo": "laithyahya2022-code/IT-Asset-Management-System-",
+    "update_repo": "laithyahya2022-code/Asset-Managment-Software",
     "update_token": "",
     # Set by the updater, not by hand: the version waiting to be applied.
     "update_pending": "",

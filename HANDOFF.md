@@ -13,9 +13,9 @@ It runs on the school's own server (on-prem), with one shared database, opened i
 a browser. Goal scale: 3,000+ assets and 500+ employees.
 
 ## Where everything lives
-- **Repo:** `laithyahya2022-code/IT-Asset-Management-System-`
+- **Repo:** `laithyahya2022-code/Asset-Managment-Software`
 - **Main working branch:** `claude/itam-m4nmpb` (has ALL the latest work — see log below)
-- **Permanent download:** https://github.com/laithyahya2022-code/IT-Asset-Management-System-/releases/latest  (asset: `ITAM.exe`)
+- **Permanent download:** https://github.com/laithyahya2022-code/Asset-Managment-Software/releases/latest  (assets: `AMS.exe`, `AMS-Server-Setup.zip`)
 - **Live interactive demo:** https://claude.ai/code/artifact/2a2d6312-74b4-4d86-bf85-0e2ad9380dc5
 - **User's data:** the `instance/` folder next to `ITAM.exe` on the server (SQLite). Never part of git.
 
