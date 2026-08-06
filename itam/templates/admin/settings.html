@@ -27,6 +27,7 @@
     {% if group == "Printed labels" %}
     <p class="muted" style="margin:-0.2rem 0 0.6rem;font-size:0.86rem">
       {{ t("Set this to match the label stock loaded in your printer. The asset label scales to fit, and prints at exactly this size.") }}
+      {{ t("Sizes can be typed in inches or cm too — e.g. 6.4 in or 3.5 cm — and are converted to mm on save.") }}
     </p>
     <label for="label-preset">{{ t("Common sizes") }}</label>
     <select id="label-preset">

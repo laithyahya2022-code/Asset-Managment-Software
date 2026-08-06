@@ -126,6 +126,22 @@ SETTING_GROUPS = {
 }
 
 
+def _label_mm(text):
+    """Label sizes typed in inches or cm ("6.4 in", '2"', "3.5 cm") -> mm.
+
+    Sticker packaging states sizes in all three units, so the size fields
+    accept any of them; plain numbers are already millimetres.
+    """
+    t = text.strip().lower().replace('"', " in").replace("inches", "in").replace("inch", "in")
+    for suffix, factor in (("in", 25.4), ("cm", 10.0), ("mm", 1.0)):
+        if t.endswith(suffix):
+            try:
+                return str(round(float(t[: -len(suffix)].strip()) * factor, 1))
+            except ValueError:
+                return text.strip()
+    return text.strip()
+
+
 @bp.route("/settings", methods=["GET", "POST"])
 @perm_required("admin.settings")
 def settings():
@@ -134,6 +150,8 @@ def settings():
         for key in keys:
             if key in ("email_enabled", "backup_auto", "update_auto"):
                 set_setting(key, "1" if request.form.get(key) else "0")
+            elif key in ("label_width_mm", "label_height_mm"):
+                set_setting(key, _label_mm(request.form.get(key, "")))
             else:
                 set_setting(key, request.form.get(key, "").strip())
         log_activity("settings_updated", "setting", None)

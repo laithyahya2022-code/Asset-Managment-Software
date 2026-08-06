@@ -526,6 +526,19 @@ def test_label_size_setting_drives_the_printed_page(client, app):
     assert "width: 50.0mm; height: 30.0mm" in page
 
 
+def test_label_size_accepts_inches_and_cm():
+    """Sticker packaging quotes sizes in in/cm; the fields convert to mm."""
+    from itam.blueprints.admin import _label_mm
+
+    assert _label_mm("6.4 in") == "162.6"
+    assert _label_mm('2"') == "50.8"
+    assert _label_mm("6.4 inch") == "162.6"
+    assert _label_mm("3.5 cm") == "35.0"
+    assert _label_mm("40 mm") == "40.0"
+    assert _label_mm("76.2") == "76.2"          # plain numbers stay as-is
+    assert _label_mm("garbage in") == "garbage in"
+
+
 def test_label_size_is_clamped_to_something_printable(app):
     from itam.utils import label_size_mm, set_setting
 

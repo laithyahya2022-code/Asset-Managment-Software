@@ -40,6 +40,7 @@ DEFAULT_SETTINGS = {
 # Ready-made sizes offered on the Settings screen. Roll printers such as the
 # Xprinter XP-series take the smaller ones.
 LABEL_PRESETS = [
+    ("162.6x76.2", "6.4 × 3 in  (163 × 76 mm)"),
     ("152.4x76.2", "6 × 3 in  (152 × 76 mm)"),
     ("101.6x152.4", "4 × 6 in  (102 × 152 mm) shipping roll"),
     ("101.6x50.8", "4 × 2 in  (102 × 51 mm)"),
