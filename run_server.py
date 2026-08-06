@@ -9,7 +9,10 @@ survives restarts and updates.
 
 When run as the packaged Windows app it opens in its own desktop window
 (no console window, no browser tab). It still serves on the network so
-other devices can open the same shared database in their browser.
+other devices can open the same shared database in their browser — and
+closing the window does not stop the website: the server keeps running
+in the background so other devices stay connected. Launching AMS.exe
+again while the server is up just reopens the window on the running site.
 """
 import os
 import socket
@@ -34,6 +37,13 @@ def _local_ip():
         return "127.0.0.1"
     finally:
         s.close()
+
+
+def _port_in_use(port):
+    """True when something is already serving on this port locally."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.settimeout(0.5)
+        return s.connect_ex(("127.0.0.1", port)) == 0
 
 
 def _wait_until_up(port, timeout=15):
@@ -161,12 +171,14 @@ def main():
     instance_path = os.path.join(base, "instance")
     os.makedirs(instance_path, exist_ok=True)
 
-    from itam import create_app
-    app = create_app(instance_path=instance_path)
-
     port = int(os.environ.get("PORT", "8080"))
     ip = _local_ip()
     url = f"http://localhost:{port}"
+
+    # If AMS is already serving on this machine, this launch is just someone
+    # double-clicking the program again: reopen the window on the running
+    # site instead of fighting over the port (and the database).
+    serving = not _port_in_use(port)
 
     banner = (
         "=" * 62 + "\n"
@@ -177,6 +189,11 @@ def main():
         "  Open the network address on phones/other PCs to share data.\n"
         "  First login: admin / admin123 (change it right away)\n"
         f"  Data is stored in:  {instance_path}\n"
+        "\n"
+        "  Closing the AMS window does NOT stop the website - it keeps\n"
+        "  running in the background for other devices. Double-click\n"
+        "  AMS.exe to reopen the window. To stop the website completely,\n"
+        "  end AMS.exe in Task Manager or restart the computer.\n"
     )
     print(banner)
     # In windowed mode there is no console, so leave the access details in a
@@ -189,24 +206,27 @@ def main():
         pass
 
     # Serve in a background thread so the main thread can own the app window.
-    from waitress import serve
-    server = threading.Thread(
-        target=lambda: serve(app, host="0.0.0.0", port=port), daemon=True)
-    server.start()
-    _wait_until_up(port)
+    server = None
+    if serving:
+        from itam import create_app
+        app = create_app(instance_path=instance_path)
+        from waitress import serve
+        server = threading.Thread(
+            target=lambda: serve(app, host="0.0.0.0", port=port), daemon=True)
+        server.start()
+        _wait_until_up(port)
 
     # ITAM_NO_BROWSER is the pre-rename spelling, still honoured so existing
     # server installs and scheduled tasks keep running headless.
     if "1" in (os.environ.get("AMS_NO_BROWSER"), os.environ.get("ITAM_NO_BROWSER")):
-        server.join()        # headless (e.g. CI smoke test / server install)
-        return
+        if server is not None:
+            server.join()    # headless (e.g. CI smoke test / server install)
+        return               # already running elsewhere: nothing to do
 
     # The window title is visible to everyone; the network address stays in
     # the console banner and the access-info text file instead.
     title = "Mada Asset Management System"
     outcome = _open_app_window(url, title)
-    if outcome == WINDOW_CLOSED:
-        return               # the app window was closed -> quit
     if outcome == WINDOW_NONE:
         # Last resort: default browser. Only when nothing else opened, so an
         # app-mode window doesn't get a duplicate tab piled on top of it.
@@ -214,7 +234,11 @@ def main():
             webbrowser.open(url)
         except Exception:
             pass
-    server.join()
+    # The website must survive its window: other devices are using it. When
+    # this process owns the server, keep serving after the window closes;
+    # when another AMS.exe owns it, this launch was only a viewer and exits.
+    if server is not None:
+        server.join()
 
 
 if __name__ == "__main__":
