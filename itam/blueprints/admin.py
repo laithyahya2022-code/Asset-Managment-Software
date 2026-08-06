@@ -201,16 +201,7 @@ def update_now():
 
     def restart():
         time.sleep(1.0)                  # let the response reach the browser
-        if not updater.apply_pending_update(base, exe):
-            return                       # exe locked; keep serving on the old
-        env = dict(os.environ, AMS_TAKEOVER="1")
-        try:
-            import subprocess
-            subprocess.Popen([exe], close_fds=True, env=env,
-                             creationflags=getattr(subprocess, "DETACHED_PROCESS", 0))
-        except OSError:
-            return                       # relaunch failed; keep serving
-        os._exit(0)                      # hand the port to the new build
+        updater.restart_into_update(base, exe)   # no return on success
 
     threading.Thread(target=restart, daemon=True).start()
     return render_template("admin/updating.html")

@@ -227,6 +227,26 @@ def relaunch(exe):
         return False
 
 
+def restart_into_update(base_dir, exe=None):
+    """Swap in the pending update and hand this process over to the new build.
+
+    On success this call DOES NOT RETURN: the freshly installed executable is
+    started (with AMS_TAKEOVER so it waits for our port) and this process
+    exits. Returns False when there is nothing to apply or the swap failed,
+    in which case the caller keeps serving on the old build.
+    """
+    exe = exe or exe_path(base_dir)
+    if not apply_pending_update(base_dir, exe):
+        return False
+    env = dict(os.environ, AMS_TAKEOVER="1")
+    try:
+        subprocess.Popen([exe], close_fds=True, env=env,
+                         creationflags=getattr(subprocess, "DETACHED_PROCESS", 0))
+    except OSError:
+        return False        # swap already happened; the next start runs it
+    os._exit(0)
+
+
 def cleanup_retired(base_dir, exe=None):
     """Remove the previous executable once the new one is running."""
     exe = exe or exe_path(base_dir)

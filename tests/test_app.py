@@ -597,6 +597,15 @@ def test_label_org_is_editable_from_settings(client, app):
         assert get_setting("label_org") == "Another School"
 
 
+def test_restart_into_update_without_pending_is_a_noop(tmp_path):
+    """Nothing staged (or running from source) must never kill the process."""
+    from itam import updater
+
+    assert updater.restart_into_update(str(tmp_path)) is False
+    assert updater.restart_into_update(str(tmp_path),
+                                       str(tmp_path / "AMS.exe")) is False
+
+
 def test_update_now_from_source_says_so(client):
     """Only the packaged exe can replace itself; from source it must not 500."""
     login(client)
@@ -1001,7 +1010,7 @@ def test_update_settings_expose_an_on_off_toggle(client, app):
 
     login(client)
     page = client.get("/admin/settings").data.decode()
-    assert "Check for updates automatically" in page
+    assert "Update automatically" in page
     assert 'name="update_auto"' in page
 
     form = {"app_name": "Mada Asset Management System (AMS)", "qr_prefix": "",

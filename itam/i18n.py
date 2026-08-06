@@ -221,6 +221,8 @@ AR.update({
     "An administrator can install it from Settings.":
         "يمكن للمسؤول تثبيته من الإعدادات.",
     "Update now": "التحديث الآن",
+    "Update automatically (downloads new versions and installs them at a quiet moment)":
+        "التحديث تلقائياً (ينزّل الإصدارات الجديدة ويثبتها في وقت هادئ)",
     "Software update": "تحديث البرنامج",
     "Current version": "الإصدار الحالي",
     "is ready to install": "جاهز للتثبيت",
