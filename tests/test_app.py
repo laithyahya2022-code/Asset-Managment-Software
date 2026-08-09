@@ -1,4 +1,5 @@
 import io
+import os
 
 import pytest
 
@@ -677,6 +678,45 @@ def test_restart_into_update_without_pending_is_a_noop(tmp_path):
     assert updater.restart_into_update(str(tmp_path)) is False
     assert updater.restart_into_update(str(tmp_path),
                                        str(tmp_path / "AMS.exe")) is False
+
+
+def _mini_db(path, assets):
+    import sqlite3
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    con = sqlite3.connect(path)
+    con.execute("CREATE TABLE asset (id INTEGER PRIMARY KEY)")
+    con.executemany("INSERT INTO asset VALUES (?)", [(i,) for i in range(assets)])
+    con.commit()
+    con.close()
+
+
+def test_data_adoption_picks_the_database_with_the_most_assets(tmp_path):
+    """A new fixed data folder pulls in the fullest old database — and never
+    overwrites a database that is already there."""
+    import run_server
+
+    old_full = tmp_path / "Downloads" / "AMS-Server-Setup (1)" / "instance"
+    old_empty = tmp_path / "base" / "instance"
+    _mini_db(str(old_full / "itam.sqlite"), assets=240)
+    _mini_db(str(old_empty / "itam.sqlite"), assets=1)
+    (old_full / "secret_key").write_text("the-real-key")
+
+    assert run_server._best_existing_instance(
+        [str(old_empty), str(old_full)]) == str(old_full)
+
+    fixed = tmp_path / "ProgramData" / "AMS" / "instance"
+    fixed.mkdir(parents=True)
+    src = run_server._adopt_existing_data(str(tmp_path / "nowhere"), str(fixed))
+    # no candidates found from that base and no Downloads: nothing adopted
+    assert src is None
+
+    # copy directly via the chooser + copytree path
+    import shutil
+    shutil.copytree(str(old_full), str(fixed), dirs_exist_ok=True)
+    assert (fixed / "secret_key").read_text() == "the-real-key"
+    # a folder that already holds a database is never adopted over
+    assert run_server._adopt_existing_data(str(tmp_path / "base"), str(fixed)) is None
+    assert run_server._count_assets(str(fixed / "itam.sqlite")) == 240
 
 
 def test_update_now_from_source_says_so(client):

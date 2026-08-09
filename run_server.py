@@ -15,6 +15,7 @@ in the background so other devices stay connected. Launching AMS.exe
 again while the server is up just reopens the window on the running site.
 """
 import os
+import shutil
 import socket
 import sys
 import threading
@@ -164,11 +165,92 @@ def _apply_update_if_ready(base):
     return updater.relaunch(exe)
 
 
+def _count_assets(db_path):
+    """Assets in a candidate database, read-only; -1 when unreadable."""
+    import sqlite3
+    try:
+        con = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=1)
+        try:
+            return int(con.execute("SELECT COUNT(*) FROM asset").fetchone()[0])
+        finally:
+            con.close()
+    except Exception:
+        return -1
+
+
+def _best_existing_instance(candidates):
+    """The candidate instance folder holding the most assets (newest wins
+    ties) — i.e. the database with the most work in it."""
+    best, key = None, None
+    for inst in candidates:
+        db = os.path.join(inst, "itam.sqlite")
+        if not os.path.isfile(db):
+            continue
+        k = (_count_assets(db), os.path.getmtime(db))
+        if key is None or k > key:
+            best, key = inst, k
+    return best
+
+
+def _adopt_existing_data(base, inst):
+    """One-time rescue into the fixed data folder.
+
+    People end up with several AMS folders (Downloads, "AMS (1)", C:\\AMS …),
+    each with its own database, and whichever exe they double-click looks like
+    it "lost" the data. On the first run with an empty fixed folder, find the
+    database with the most assets among the known past locations and copy that
+    whole instance (database, uploads, backups, secret key) in. Originals are
+    never modified or deleted. Once a database exists here, never adopt again.
+    """
+    if os.path.exists(os.path.join(inst, "itam.sqlite")):
+        return None
+    candidates = [os.path.join(base, "instance")]
+    downloads = os.path.join(os.path.expanduser("~"), "Downloads")
+    candidates.append(os.path.join(downloads, "instance"))
+    try:
+        candidates += [os.path.join(downloads, d, "instance")
+                       for d in sorted(os.listdir(downloads))
+                       if os.path.isdir(os.path.join(downloads, d))]
+    except OSError:
+        pass
+    candidates.append(r"C:\AMS\instance")
+    src = _best_existing_instance(dict.fromkeys(candidates))
+    if not src or os.path.abspath(src) == os.path.abspath(inst):
+        return None
+    try:
+        shutil.copytree(src, inst, dirs_exist_ok=True)
+    except OSError:
+        return None
+    return src
+
+
+def _data_root(base):
+    """Where the data lives: one fixed folder for the whole machine.
+
+    Data used to sit next to the exe, so every re-downloaded or moved copy
+    of AMS.exe started a fresh, empty database. The packaged app now keeps
+    everything in ProgramData\\AMS\\instance — the same data no matter where
+    AMS.exe is run from. Running from source keeps the old repo-local path.
+    """
+    if not getattr(sys, "frozen", False):
+        return os.path.join(base, "instance"), None
+    root = os.path.join(os.environ.get("ProgramData", r"C:\ProgramData"), "AMS")
+    inst = os.path.join(root, "instance")
+    try:
+        os.makedirs(inst, exist_ok=True)
+        probe = os.path.join(inst, ".write-test")
+        open(probe, "w").close()
+        os.remove(probe)
+    except OSError:
+        return os.path.join(base, "instance"), None   # locked down: stay local
+    return inst, _adopt_existing_data(base, inst)
+
+
 def main():
     base = _base_dir()
     if _apply_update_if_ready(base):
         return                                   # the new build takes over
-    instance_path = os.path.join(base, "instance")
+    instance_path, adopted_from = _data_root(base)
     os.makedirs(instance_path, exist_ok=True)
 
     port = int(os.environ.get("PORT", "8080"))
@@ -198,6 +280,9 @@ def main():
         "  Open the network address on phones/other PCs to share data.\n"
         "  First login: admin / admin123 (change it right away)\n"
         f"  Data is stored in:  {instance_path}\n"
+        + (f"  (your data was found in {adopted_from} and moved here"
+           " automatically; the old folder was left untouched)\n"
+           if adopted_from else "") +
         "\n"
         "  Closing the AMS window does NOT stop the website - it keeps\n"
         "  running in the background for other devices. Double-click\n"
