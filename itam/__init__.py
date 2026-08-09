@@ -4,7 +4,7 @@ from datetime import datetime
 
 from flask import Flask, g, redirect, request, session, url_for
 
-APP_VERSION = "2026.08.06.17"  # bumped on each release so users can confirm their build
+APP_VERSION = "2026.08.06.18"  # bumped on each release so users can confirm their build
 
 from .i18n import LANGS, t, translate_html
 from .models import (DEFAULT_ROLE_PERMS, PERMISSIONS, ROLES, Notification,
@@ -209,31 +209,36 @@ def _start_update_check(app):
 
         from . import updater
         base = os.path.dirname(sys.executable)
-        try:
-            status = updater.check_for_update(
-                get_setting("update_repo"), APP_VERSION, base,
-                token=get_setting("update_token") or None)
-            if status not in ("downloaded", "pending"):
-                return
-            if status == "downloaded":
-                release = updater.latest_release(get_setting("update_repo"),
-                                                 get_setting("update_token") or None)
-                version = updater.remote_version(
-                    release, get_setting("update_token") or None) or "newer"
-                with app.app_context():
-                    from .utils import set_setting
-                    set_setting("update_pending", version)
-                    db.session.commit()
-            # Install like a real app: wait until nobody has used the site
-            # for ten minutes, then swap the executable and restart. On
-            # success restart_into_update never returns; a failed swap just
-            # tries again at the next quiet moment.
-            while True:
-                time.sleep(60)
-                if time.time() - _last_request[0] > 600:
-                    updater.restart_into_update(base)
-        except Exception:
-            pass          # an update check must never disturb the app
+        # Check on startup and then every 30 minutes: a server that runs for
+        # weeks would otherwise only ever see the releases that existed the
+        # moment it started.
+        while True:
+            try:
+                status = updater.check_for_update(
+                    get_setting("update_repo"), APP_VERSION, base,
+                    token=get_setting("update_token") or None)
+                if status in ("downloaded", "pending"):
+                    if status == "downloaded":
+                        release = updater.latest_release(
+                            get_setting("update_repo"),
+                            get_setting("update_token") or None)
+                        version = updater.remote_version(
+                            release, get_setting("update_token") or None) or "newer"
+                        with app.app_context():
+                            from .utils import set_setting
+                            set_setting("update_pending", version)
+                            db.session.commit()
+                    # Install like a real app: wait until nobody has used the
+                    # site for ten minutes, then swap the executable and
+                    # restart. On success restart_into_update never returns;
+                    # a failed swap just tries again at the next quiet moment.
+                    while True:
+                        time.sleep(60)
+                        if time.time() - _last_request[0] > 600:
+                            updater.restart_into_update(base)
+            except Exception:
+                pass      # an update check must never disturb the app
+            time.sleep(1800)
 
     threading.Thread(target=run, daemon=True).start()
 
