@@ -4,7 +4,7 @@ from datetime import datetime
 
 from flask import Flask, g, redirect, request, session, url_for
 
-APP_VERSION = "2026.08.06.16"  # bumped on each release so users can confirm their build
+APP_VERSION = "2026.08.06.17"  # bumped on each release so users can confirm their build
 
 from .i18n import LANGS, t, translate_html
 from .models import (DEFAULT_ROLE_PERMS, PERMISSIONS, ROLES, Notification,
@@ -78,6 +78,24 @@ def create_app(test_config=None, instance_path=None):
 
     for d in (app.instance_path, app.config["UPLOAD_FOLDER"], app.config["BACKUP_FOLDER"]):
         os.makedirs(d, exist_ok=True)
+
+    # Every unhandled exception lands in instance/error.log with a full
+    # traceback. The packaged app has no console, so without this a crash
+    # is just a blank "Internal Server Error" with nothing to diagnose.
+    if not app.testing:
+        import logging
+        from logging.handlers import RotatingFileHandler
+        try:
+            handler = RotatingFileHandler(
+                os.path.join(app.instance_path, "error.log"),
+                maxBytes=512_000, backupCount=2, encoding="utf-8")
+            handler.setLevel(logging.ERROR)
+            handler.setFormatter(logging.Formatter(
+                "%(asctime)s %(levelname)s %(name)s: %(message)s"))
+            app.logger.addHandler(handler)
+            logging.getLogger("waitress").addHandler(handler)
+        except OSError:
+            pass
 
     db.init_app(app)
 

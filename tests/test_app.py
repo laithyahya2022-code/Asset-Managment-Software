@@ -745,9 +745,31 @@ def test_data_adoption_picks_the_database_with_the_most_assets(tmp_path):
     import shutil
     shutil.copytree(str(old_full), str(fixed), dirs_exist_ok=True)
     assert (fixed / "secret_key").read_text() == "the-real-key"
-    # a folder that already holds a database is never adopted over
+    # a folder that already holds a healthy database is never adopted over
     assert run_server._adopt_existing_data(str(tmp_path / "base"), str(fixed)) is None
     assert run_server._count_assets(str(fixed / "itam.sqlite")) == 240
+
+
+def test_data_adoption_replaces_a_corrupt_database(tmp_path):
+    """A broken fixed database is moved aside (kept) and re-adopted from the
+    best healthy source, using the SQLite backup API."""
+    import run_server
+
+    good = tmp_path / "base" / "instance"
+    _mini_db(str(good / "itam.sqlite"), assets=7)
+    assert run_server._db_healthy(str(good / "itam.sqlite"))
+
+    fixed = tmp_path / "fixed"
+    fixed.mkdir()
+    (fixed / "itam.sqlite").write_bytes(b"this is not a database at all")
+    assert not run_server._db_healthy(str(fixed / "itam.sqlite"))
+
+    src = run_server._adopt_existing_data(str(tmp_path / "base"), str(fixed))
+    assert src == str(good)
+    assert run_server._db_healthy(str(fixed / "itam.sqlite"))
+    assert run_server._count_assets(str(fixed / "itam.sqlite")) == 7
+    # the broken file was kept, not deleted
+    assert list(fixed.glob("itam.sqlite.corrupt-*"))
 
 
 def test_update_now_from_source_says_so(client):

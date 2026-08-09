@@ -178,6 +178,38 @@ def _count_assets(db_path):
         return -1
 
 
+def _db_healthy(db_path):
+    """True when SQLite's own quick_check passes on the file."""
+    import sqlite3
+    try:
+        con = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=2)
+        try:
+            return con.execute("PRAGMA quick_check(1)").fetchone()[0] == "ok"
+        finally:
+            con.close()
+    except Exception:
+        return False
+
+
+def _copy_database(src_db, dst_db):
+    """Copy a SQLite database with the backup API.
+
+    A plain file copy of a database another process is writing to can produce
+    a corrupt copy; the backup API takes a consistent snapshot even then.
+    """
+    import sqlite3
+    src = sqlite3.connect(f"file:{src_db}?mode=ro", uri=True, timeout=5)
+    try:
+        dst = sqlite3.connect(dst_db)
+        try:
+            with dst:
+                src.backup(dst)
+        finally:
+            dst.close()
+    finally:
+        src.close()
+
+
 def _best_existing_instance(candidates):
     """The candidate instance folder holding the most assets (newest wins
     ties) — i.e. the database with the most work in it."""
@@ -202,8 +234,20 @@ def _adopt_existing_data(base, inst):
     whole instance (database, uploads, backups, secret key) in. Originals are
     never modified or deleted. Once a database exists here, never adopt again.
     """
-    if os.path.exists(os.path.join(inst, "itam.sqlite")):
-        return None
+    target = os.path.join(inst, "itam.sqlite")
+    if os.path.exists(target):
+        if _db_healthy(target):
+            return None
+        # A broken copy (e.g. adopted from a live database with a plain file
+        # copy) would 500 on every page forever. Move it aside — kept, never
+        # deleted — and adopt again properly.
+        stamp = time.strftime("%Y%m%d-%H%M%S")
+        for suffix in ("", "-wal", "-shm"):
+            try:
+                os.replace(target + suffix,
+                           target + suffix + f".corrupt-{stamp}")
+            except OSError:
+                pass
     candidates = [os.path.join(base, "instance")]
     downloads = os.path.join(os.path.expanduser("~"), "Downloads")
     candidates.append(os.path.join(downloads, "instance"))
@@ -218,8 +262,16 @@ def _adopt_existing_data(base, inst):
     if not src or os.path.abspath(src) == os.path.abspath(inst):
         return None
     try:
-        shutil.copytree(src, inst, dirs_exist_ok=True)
-    except OSError:
+        # Files first (uploads, backups, secret key), then a consistent
+        # snapshot of the database itself via SQLite's backup API.
+        shutil.copytree(src, inst, dirs_exist_ok=True,
+                        ignore=shutil.ignore_patterns("itam.sqlite*"))
+        _copy_database(os.path.join(src, "itam.sqlite"), target)
+    except Exception:
+        try:
+            os.remove(target)          # half-written copy: retry next start
+        except OSError:
+            pass
         return None
     return src
 
