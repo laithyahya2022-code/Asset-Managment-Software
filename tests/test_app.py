@@ -261,6 +261,37 @@ def test_import_assign_to_and_room_land_in_real_fields(client, app):
         assert len(emps) == 1 and emps[0].emp_code
 
 
+def test_transfer_changes_branch_building_floor_room_department(client, app):
+    """'Change location' on the asset page moves the asset with the same
+    Branch/Building/Floor/Room/Department fields the asset form has."""
+    from itam.models import Department, Transfer
+    login(client)
+    with app.app_context():
+        dep = Department(name="Science")
+        db.session.add(dep)
+        a = Asset(tag="TR-0001", name="Cart", status="Available",
+                  condition="Good", branch="Mada 3", building="Building 1",
+                  floor="GF", location_name="Reg",
+                  category=db.session.scalar(db.select(Category)))
+        db.session.add(a)
+        db.session.commit()
+        aid, depid = a.id, dep.id
+
+    client.post(f"/assets/{aid}/transfer", data={
+        "branch": "Mada 1", "building": "Building 2", "floor": "F1",
+        "location_name": "Lab 3", "department_id": str(depid),
+        "notes": "term move"}, follow_redirects=True)
+    with app.app_context():
+        a = db.session.get(Asset, aid)
+        assert (a.branch, a.building, a.floor, a.location_name) == \
+            ("Mada 1", "Building 2", "F1", "Lab 3")
+        assert a.department_id == depid
+        tr = db.session.scalars(db.select(Transfer)).all()[-1]
+        assert "Mada 3 / Building 1 / GF / Reg" in tr.notes
+        assert "Mada 1 / Building 2 / F1 / Lab 3" in tr.notes
+        assert "term move" in tr.notes
+
+
 def test_search_page(client, app):
     login(client)
     client.post("/assets/new", data={

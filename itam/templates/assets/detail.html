@@ -103,15 +103,39 @@
 
     {% if has_perm("checkout.manage") %}
     <div class="card no-print">
-      <p class="eyebrow">Transfer & Reservation</p>
-      <form method="post" action="{{ url_for('assets.transfer', asset_id=asset.id) }}" class="filters">
-        <select name="location_id" required>
-          <option value="">Transfer to location…</option>
-          {% for l in locations %}<option value="{{ l.id }}" {{ 'disabled' if asset.location_id == l.id }}>{{ l.path }}</option>{% endfor %}
-        </select>
-        <input name="notes" placeholder="Notes (optional)" style="max-width:200px">
-        <button class="btn secondary" type="submit">Transfer</button>
+      <p class="eyebrow">{{ t("Change location") }}</p>
+      <form method="post" action="{{ url_for('assets.transfer', asset_id=asset.id) }}">
+        <div class="form-grid">
+          <div><label for="tr-branch">Branch</label>
+            <select id="tr-branch" name="branch"><option value="">—</option>
+              {% for b in branches %}<option {{ 'selected' if asset.branch == b }}>{{ b }}</option>{% endfor %}
+            </select></div>
+          <div><label for="tr-building">Building</label>
+            <select id="tr-building" name="building"><option value="">—</option>
+              {% for b in buildings %}<option {{ 'selected' if asset.building == b }}>{{ b }}</option>{% endfor %}
+            </select></div>
+          <div><label for="tr-floor">Floor</label>
+            <select id="tr-floor" name="floor"><option value="">—</option>
+              {% for fl in floors %}<option {{ 'selected' if asset.floor == fl }}>{{ fl }}</option>{% endfor %}
+            </select></div>
+          <div><label for="tr-room">Room</label>
+            <select id="tr-room" name="location_name"><option value="">—</option>
+              {% for pl in rooms %}<option {{ 'selected' if asset.location_name == pl }}>{{ pl }}</option>{% endfor %}
+              {% if asset.location_name and asset.location_name not in rooms %}
+              <option selected>{{ asset.location_name }}</option>{% endif %}
+            </select></div>
+          <div><label for="tr-dept">{{ t("Department") }}</label>
+            <select id="tr-dept" name="department_id"><option value="">—</option>
+              {% for d in departments %}<option value="{{ d.id }}" {{ 'selected' if asset.department_id == d.id }}>{{ d.name }}</option>{% endfor %}
+            </select></div>
+          <div><label for="tr-notes">{{ t("Notes") }}</label>
+            <input id="tr-notes" name="notes" placeholder="{{ t('Notes (optional)') }}"></div>
+        </div>
+        <div class="form-actions" style="margin-top:0.5rem">
+          <button class="btn secondary" type="submit">{{ t("Transfer") }}</button>
+        </div>
       </form>
+      <p class="eyebrow" style="margin-top:1rem">{{ t("Reservation") }}</p>
       <form method="post" action="{{ url_for('assets.reserve', asset_id=asset.id) }}" class="filters" style="margin-bottom:0">
         <select name="employee_id" required>
           <option value="">Reserve for…</option>

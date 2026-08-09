@@ -221,6 +221,9 @@ AR.update({
     "An administrator can install it from Settings.":
         "يمكن للمسؤول تثبيته من الإعدادات.",
     "Update now": "التحديث الآن",
+    "Change location": "تغيير الموقع",
+    "Reservation": "الحجز",
+    "Notes (optional)": "ملاحظات (اختياري)",
     "Handheld scanner / manual entry": "ماسح يدوي / إدخال يدوي",
     "Plug in a USB barcode scanner (Datalogic, Zebra, …), leave the cursor in the box, and scan the label's barcode — the asset opens by itself. Typing the tag works the same way.":
         "وصّل ماسح باركود USB ‏(Datalogic، Zebra، …)، واترك المؤشر في الحقل، وامسح باركود الملصق — يُفتح الأصل تلقائياً. كتابة الرقم تعمل بالطريقة نفسها.",

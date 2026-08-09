@@ -516,12 +516,39 @@ def checkin(asset_id):
 @bp.post("/<int:asset_id>/transfer")
 @perm_required("checkout.manage")
 def transfer(asset_id):
+    """Change where the asset lives, with the same Branch / Building / Floor /
+    Room / Department choices the asset form offers. The old single
+    "location_id" form is still honoured for the bulk action."""
     a = db.get_or_404(Asset, asset_id)
-    to_id = int(request.form["location_id"])
-    db.session.add(Transfer(asset=a, from_location_id=a.location_id,
-                            to_location_id=to_id, by_user=g.user.id,
-                            notes=request.form.get("notes", "").strip() or None))
-    a.location_id = to_id
+    note = request.form.get("notes", "").strip()
+
+    if request.form.get("location_id"):              # legacy single-picker form
+        to_id = int(request.form["location_id"])
+        db.session.add(Transfer(asset=a, from_location_id=a.location_id,
+                                to_location_id=to_id, by_user=g.user.id,
+                                notes=note or None))
+        a.location_id = to_id
+    else:
+        def where(asset):
+            return " / ".join(p for p in (asset.branch, asset.building,
+                                          asset.floor, asset.location_name)
+                              if p) or "—"
+
+        before = where(a)
+        a.branch = request.form.get("branch", "").strip() or None
+        a.building = request.form.get("building", "").strip() or None
+        a.floor = request.form.get("floor", "").strip() or None
+        a.location_name = request.form.get("location_name", "").strip() or None
+        dep = request.form.get("department_id", "").strip()
+        a.department_id = int(dep) if dep.isdigit() else None
+        after = where(a)
+        if before == after and not note:
+            flash("Nothing changed.", "error")
+            return redirect(url_for("assets.detail", asset_id=a.id))
+        db.session.add(Transfer(
+            asset=a, by_user=g.user.id,
+            notes=f"{before} → {after}" + (f" — {note}" if note else "")))
+        _refresh_locations()
     log_activity("transferred", "asset", a.id, a.tag)
     db.session.commit()
     flash("Asset transferred.", "success")
