@@ -7,7 +7,6 @@
   {% if has_perm("org.manage") %}
   <div class="actions-row no-print">
     <button class="btn" type="button" id="loc-new">+ {{ t("New location") }}</button>
-    {% if rows %}{{ bulk_button(t("Delete selected"), danger=True) }}{% endif %}
   </div>
   {% endif %}
 </div>
@@ -163,58 +162,9 @@
   {% else %}<p class="empty">No departments yet.</p>{% endif %}
 </div>
 
-{% if rows %}
-<form class="filters no-print" method="get">
-  <input name="q" value="{{ q }}" placeholder="{{ t('Search locations') }}…">
-  <button class="btn secondary" type="submit">{{ t("Search") }}</button>
-  {% if q %}<a class="btn secondary" href="{{ url_for('org.locations') }}">{{ t("Clear") }}</a>{% endif %}
-</form>
-{% if page_rows %}
-<form id="bulk" method="post" action="{{ url_for('org.locations_bulk_delete') }}" class="bulk-form">
-<div class="card table-wrap"><table>
-  <tr>
-    {% if has_perm("org.manage") %}{{ select_all_th() }}{% endif %}
-    <th>Path</th><th>Kind</th><th>{{ t("Assets") }}</th><th></th>
-  </tr>
-  {% for l in page_rows %}
-  <tr>
-    {% if has_perm("org.manage") %}{{ row_check(l.id) }}{% endif %}
-    <td>{{ paths[l.id] }}</td>
-    <td><span class="chip">{{ l.kind }}</span></td>
-    <td><a href="{{ url_for('assets.list_', location=l.id) }}">{{ counts.get(l.id, 0) }}</a></td>
-    <td class="no-print">
-      {% if has_perm("org.manage") %}
-      <button class="btn secondary sm loc-edit" type="button" data-id="{{ l.id }}"
-              data-name="{{ l.name }}" data-kind="{{ l.kind }}"
-              data-parent="{{ l.parent_id or '' }}">{{ t("Edit") }}</button>
-      <button class="btn secondary sm" type="submit" form="del-{{ l.id }}"
-              data-confirm="Delete “{{ paths[l.id] }}”?">{{ t("Delete") }}</button>
-      {% endif %}
-    </td>
-  </tr>
-  {% endfor %}
-</table></div>
-</form>
-{% if has_perm("org.manage") %}
-{% for l in page_rows %}
-<form id="del-{{ l.id }}" method="post" hidden
-      action="{{ url_for('org.location_delete', loc_id=l.id) }}"></form>
-{% endfor %}
-{% endif %}
-{% if paging.pages > 1 %}
-<div class="pager no-print">
-  <span class="muted">{{ paging.first }}–{{ paging.last }} {{ t("of") }} {{ paging.total }}</span>
-  {% if paging.page > 1 %}
-  <a class="btn secondary sm" href="{{ url_for('org.locations', page=paging.page - 1, q=q or None) }}">← {{ t("Previous") }}</a>
-  {% endif %}
-  <span class="muted">{{ t("Page") }} {{ paging.page }} / {{ paging.pages }}</span>
-  {% if paging.page < paging.pages %}
-  <a class="btn secondary sm" href="{{ url_for('org.locations', page=paging.page + 1, q=q or None) }}">{{ t("Next") }} →</a>
-  {% endif %}
-</div>
-{% endif %}
-{% else %}<p class="empty">No location matches “{{ q }}”.</p>{% endif %}
-{% else %}<p class="empty">No locations yet.</p>{% endif %}
+{# The 600-row path table that used to sit here is gone on request: the level
+   manager above and the departments card are the whole page now. Individual
+   full paths still exist behind the scenes for filters and transfers. #}
 
 {% if has_perm("org.manage") %}
 <script>

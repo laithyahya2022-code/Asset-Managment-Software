@@ -787,7 +787,8 @@ def test_update_now_needs_settings_permission(client):
 BULK_PAGES = [
     ("/employees", "org.employees_bulk_delete"),
     ("/departments", "org.departments_bulk_delete"),
-    ("/locations", "org.locations_bulk_delete"),
+    # /locations no longer shows the row table (removed on request); its
+    # bulk-delete endpoint still exists for API use.
     ("/vendors", "org.vendors_bulk_delete"),
     ("/licenses", "ops.licenses_bulk_delete"),
     ("/maintenance", "ops.maintenance_bulk_delete"),
@@ -2384,7 +2385,7 @@ def test_select_all_appears_on_every_list_that_has_rows(client, app):
     login(client)
     missing = []
     for path in ("/assets/", "/checkouts", "/licenses", "/maintenance", "/inventory",
-                 "/locations", "/employees", "/departments", "/vendors"):
+                 "/employees", "/departments", "/vendors"):
         body = client.get(path).data.decode()
         if not ("bulk-toggle" in body and 'class="bulk-all"' in body
                 and 'class="bulk-pick"' in body):
