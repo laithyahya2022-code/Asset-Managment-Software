@@ -261,6 +261,38 @@ def test_import_assign_to_and_room_land_in_real_fields(client, app):
         assert len(emps) == 1 and emps[0].emp_code
 
 
+def test_import_does_not_turn_rooms_and_classes_into_employees(client, app):
+    """School sheets put the room a shared device lives in into 'Assign to'
+    ('Copy Room', 'صف', 'Grade.3.A'…). Those are places, not people."""
+    import re
+    from itam.models import Employee
+    login(client)
+    csv = (
+        "Name,Category,Serial No.,Room,Assign to\n"
+        "PC-A,Desktop,S-1,Reg,مس الاء\n"           # a person -> employee
+        "PC-B,Desktop,S-2,Copy Room,Copy Room\n"    # same as its room -> place
+        "PC-C,Desktop,S-3,KG1,صف\n"                 # 'classroom' -> place
+        "PC-D,Desktop,S-4,Lab,جهاز مختبر الحاسوب\n"  # 'computer lab device'
+        "PC-E,Desktop,S-5,10A,Grade.10.A\n"         # a class -> place
+        "PC-F,Desktop,S-6,IT,Mr. Saleh\n"           # a person -> employee
+    )
+    resp = client.post("/assets/import",
+                       data={"file": (io.BytesIO(csv.encode()), "mix.csv")},
+                       content_type="multipart/form-data")
+    token = re.search(rb'name="token" value="([^"]+)"', resp.data).group(1).decode()
+    client.post("/assets/import", data={"token": token}, follow_redirects=True)
+    with app.app_context():
+        names = {e.name for e in db.session.scalars(db.select(Employee))}
+        assert "مس الاء" in names and "Mr. Saleh" in names
+        for not_a_person in ("Copy Room", "صف", "جهاز مختبر الحاسوب", "Grade.10.A"):
+            assert not_a_person not in names
+        for tag_name, assigned in (("PC-A", True), ("PC-B", False),
+                                   ("PC-C", False), ("PC-E", False),
+                                   ("PC-F", True)):
+            a = db.session.scalar(db.select(Asset).where(Asset.name == tag_name))
+            assert bool(a.current_assignment) is assigned, tag_name
+
+
 def test_transfer_changes_branch_building_floor_room_department(client, app):
     """'Change location' on the asset page moves the asset with the same
     Branch/Building/Floor/Room/Department fields the asset form has."""

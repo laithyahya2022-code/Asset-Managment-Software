@@ -901,6 +901,32 @@ def import_():
                            token=token, cols=IMPORT_COLS)
 
 
+#: Words that mark an "Assign to" value as a PLACE (a room, lab, class,
+#: office, …) rather than a person. School sheets routinely put the room a
+#: shared device lives in into the Assign-to column; creating an "employee"
+#: called "Copy Room" or "Grade.3.A" for those is wrong.
+PLACE_WORDS = {
+    "room", "rooms", "lab", "labs", "office", "offices", "class", "classes",
+    "classroom", "grade", "dept", "department", "library", "clinic",
+    "reception", "storage", "store", "hall", "kg",
+    "صف", "غرفة", "مختبر", "مكتب", "قسم", "مكتبة", "عيادة", "استقبال",
+    "مخزن", "قاعة", "جهاز",
+}
+
+
+def _looks_like_place(value, row, known_places):
+    """True when an "Assign to" value names a place, not a person."""
+    v = value.strip().lower()
+    if not v:
+        return False
+    if v in known_places:
+        return True
+    for key in ("room", "location", "department", "building", "branch", "floor"):
+        if v == row[key].strip().lower():
+            return True
+    return bool(set(_norm_header(value).split()) & PLACE_WORDS)
+
+
 def _apply_asset_import(rows):
     """Create assets from validated rows, auto-creating categories, departments
     and employees, assigning assets to their holders, and auto-generating a
@@ -932,6 +958,13 @@ def _apply_asset_import(rows):
     # seen, continuing the existing Employee ID sequence.
     emps = {e.name.strip().lower(): e
             for e in db.session.scalars(db.select(Employee))}
+    known_places = {loc.name.strip().lower()
+                    for loc in db.session.scalars(db.select(Location))}
+    for r in rows:
+        if not r["_error"]:
+            for key in ("room", "location", "department", "building"):
+                if r[key].strip():
+                    known_places.add(r[key].strip().lower())
     seed_code = next_employee_code()
     code_match = re.match(r"^(.*?)(\d+)$", seed_code)
 
@@ -1030,7 +1063,7 @@ def _apply_asset_import(rows):
         )
         db.session.add(a)
         holder = r["assigned_to"].strip()
-        if holder:
+        if holder and not _looks_like_place(holder, r, known_places):
             db.session.add(Assignment(
                 asset=a, employee=employee_for(holder, dep),
                 assigned_by=g.user.id if g.get("user") else None))
