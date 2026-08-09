@@ -217,10 +217,27 @@ def apply_pending_update(base_dir, exe=None):
     return True
 
 
+def _child_env(**extra):
+    """Environment for relaunching ourselves.
+
+    A PyInstaller one-file app extracts itself to a _MEI… temp folder and
+    records that in the environment. A child launched with the parent's
+    environment latches onto the dying parent's folder, which then can't be
+    removed — the "Failed to remove temporary directory" popup. Strip those
+    markers and tell the bootloader to start clean.
+    """
+    env = {k: v for k, v in os.environ.items()
+           if not k.startswith(("_MEI", "_PYI"))}
+    env["PYINSTALLER_RESET_ENVIRONMENT"] = "1"
+    env.update(extra)
+    return env
+
+
 def relaunch(exe):
     """Start the freshly installed executable and let this process finish."""
     try:
-        subprocess.Popen([exe], close_fds=True,
+        subprocess.Popen([exe], close_fds=True, env=_child_env(),
+                         cwd=os.path.dirname(exe) or None,
                          creationflags=getattr(subprocess, "DETACHED_PROCESS", 0))
         return True
     except OSError:
@@ -238,9 +255,9 @@ def restart_into_update(base_dir, exe=None):
     exe = exe or exe_path(base_dir)
     if not apply_pending_update(base_dir, exe):
         return False
-    env = dict(os.environ, AMS_TAKEOVER="1")
     try:
-        subprocess.Popen([exe], close_fds=True, env=env,
+        subprocess.Popen([exe], close_fds=True, env=_child_env(AMS_TAKEOVER="1"),
+                         cwd=os.path.dirname(exe) or None,
                          creationflags=getattr(subprocess, "DETACHED_PROCESS", 0))
     except OSError:
         return False        # swap already happened; the next start runs it
