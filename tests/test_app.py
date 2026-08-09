@@ -225,7 +225,39 @@ def test_import_flexible_headers_and_autotag(client, app):
         assert pc.branch == "Mada 3" and pc.floor == "GF"
         assert pc.serial == "SN-1"
         assert str(pc.purchase_date) == "2026-07-16"  # DD/MM/YYYY parsed
-        assert "Ms A" in (pc.notes or "")             # "Assigned to" kept
+        # "Assigned to" creates a real employee + assignment, not a note
+        assert pc.current_assignment.employee.name == "Ms A"
+
+
+def test_import_assign_to_and_room_land_in_real_fields(client, app):
+    """The school's own sheet: 'Assign to ' (trailing space) holds Arabic
+    names, 'Room' is the only location column. The holder must become a real
+    assigned employee and the room must not be duplicated into notes."""
+    import re
+    from itam.models import Employee
+    login(client)
+    csv = (
+        "Name,Category ,Serial No.,Branch,Building,Floor,Room,Department,"
+        "Assign to ,Updated By\n"
+        "M3-RECP01,Desktop,BQL6C14,Mada 3,Building 1,GF,Reg,Reception,"
+        "مس الاء,Ayham\n"
+        "M3-RECP02,Desktop,9QG6C14,Mada 3,Building 1,GF,Reg,Reception,"
+        "مس الاء,Ayham\n"
+    )
+    resp = client.post("/assets/import",
+                       data={"file": (io.BytesIO(csv.encode()), "inv.csv")},
+                       content_type="multipart/form-data")
+    token = re.search(rb'name="token" value="([^"]+)"', resp.data).group(1).decode()
+    client.post("/assets/import", data={"token": token}, follow_redirects=True)
+    with app.app_context():
+        a = db.session.scalar(db.select(Asset).where(Asset.name == "M3-RECP01"))
+        assert a.location_name == "Reg"               # room used as location
+        assert "Room" not in (a.notes or "")          # ...and not echoed in notes
+        assert a.current_assignment.employee.name == "مس الاء"
+        # the same name on two rows is one employee, and it got an ID
+        emps = db.session.scalars(
+            db.select(Employee).where(Employee.name == "مس الاء")).all()
+        assert len(emps) == 1 and emps[0].emp_code
 
 
 def test_search_page(client, app):

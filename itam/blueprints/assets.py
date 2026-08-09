@@ -748,6 +748,7 @@ HEADER_ALIASES = {
     "location": "location", "location name": "location", "place": "location",
     "room": "room",
     "assigned to": "assigned_to", "assigned": "assigned_to", "assignee": "assigned_to",
+    "assign to": "assigned_to", "assign": "assigned_to",
     "user": "assigned_to", "owner": "assigned_to", "holder": "assigned_to",
     "department": "department", "dept": "department",
     "ip address": "ip_address", "ip": "ip_address", "ipaddress": "ip_address",
@@ -874,9 +875,13 @@ def import_():
 
 
 def _apply_asset_import(rows):
-    """Create assets from validated rows, auto-creating categories & departments
-    and auto-generating a unique Asset ID whenever the file's tag is missing or
-    duplicated."""
+    """Create assets from validated rows, auto-creating categories, departments
+    and employees, assigning assets to their holders, and auto-generating a
+    unique Asset ID whenever the file's tag is missing or duplicated."""
+    import re
+
+    from .org import next_employee_code
+
     # 1) auto-create categories and departments referenced in the file
     cats = {c.name.lower(): c for c in db.session.scalars(db.select(Category))}
     deps = {d.name.lower(): d for d in db.session.scalars(db.select(Department))}
@@ -894,6 +899,32 @@ def _apply_asset_import(rows):
             db.session.add(d)
             deps[dn.lower()] = d
     db.session.flush()  # assign ids to the new categories/departments
+
+    # "Assign to" names become real employees with real assignments — not a
+    # line of text in the notes. Match by name; create the ones we've never
+    # seen, continuing the existing Employee ID sequence.
+    emps = {e.name.strip().lower(): e
+            for e in db.session.scalars(db.select(Employee))}
+    seed_code = next_employee_code()
+    code_match = re.match(r"^(.*?)(\d+)$", seed_code)
+
+    def gen_emp_code():
+        nonlocal code_match
+        if not code_match:
+            return None
+        stem, num = code_match.group(1), code_match.group(2)
+        code_match = re.match(r"^(.*?)(\d+)$",
+                              f"{stem}{int(num) + 1:0{len(num)}d}")
+        return f"{stem}{num}"
+
+    def employee_for(name, dep):
+        emp = emps.get(name.lower())
+        if emp is None:
+            emp = Employee(name=name, emp_code=gen_emp_code(),
+                           department_id=dep.id if dep else None)
+            db.session.add(emp)
+            emps[name.lower()] = emp
+        return emp
 
     # 2) seed per-prefix counters and the set of tags already in use
     used = {t.lower() for (t,) in db.session.execute(db.select(Asset.tag)).all()}
@@ -928,11 +959,12 @@ def _apply_asset_import(rows):
             tag = gen_tag(cat)
         else:
             used.add(tag.lower())
-        # fold "assigned to" and any secondary room into notes
+        # A second room only goes into notes when the location column already
+        # holds something else — when the room IS the location, noting it
+        # again would just duplicate what the Location field shows.
         extra = []
-        if r["assigned_to"].strip():
-            extra.append(f"Assigned to: {r['assigned_to'].strip()}")
-        if r["room"].strip() and r["room"].strip().lower() != r["location"].strip().lower():
+        if (r["room"].strip() and r["location"].strip()
+                and r["room"].strip().lower() != r["location"].strip().lower()):
             extra.append(f"Room: {r['room'].strip()}")
         notes = "\n".join([p for p in [r["notes"].strip(), *extra] if p]) or None
         try:
@@ -970,6 +1002,11 @@ def _apply_asset_import(rows):
             notes=notes,
         )
         db.session.add(a)
+        holder = r["assigned_to"].strip()
+        if holder:
+            db.session.add(Assignment(
+                asset=a, employee=employee_for(holder, dep),
+                assigned_by=g.user.id if g.get("user") else None))
         created += 1
     return created
 
