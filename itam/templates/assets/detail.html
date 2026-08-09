@@ -43,6 +43,9 @@
         <dt>Building</dt><dd>{{ asset.building or "—" }}</dd>
         <dt>Floor</dt><dd>{{ asset.floor or "—" }}</dd>
         <dt>{{ t("Location") }}</dt><dd>{{ asset.location_name or "—" }}</dd>
+        <dt>{{ t("Department") }}</dt><dd>{{ asset.department.name if asset.department else "—" }}</dd>
+        <dt>{{ t("Assigned to") }}</dt>
+        <dd>{% if asset.current_assignment %}<a href="{{ url_for('org.employee_detail', emp_id=asset.current_assignment.employee_id) }}">{{ asset.current_assignment.employee.name }}</a>{% else %}—{% endif %}</dd>
         <dt>Vendor</dt><dd>{% if asset.vendor %}<a href="{{ url_for('org.vendor_detail', vendor_id=asset.vendor_id) }}">{{ asset.vendor.name }}</a>{% else %}—{% endif %}</dd>
         <dt>Purchase date</dt><dd>{{ asset.purchase_date or "—" }}</dd>
         <dt>Purchase cost</dt><dd>{{ "$%.2f" | format(asset.purchase_cost) if asset.purchase_cost else "—" }}</dd>
