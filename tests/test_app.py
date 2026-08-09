@@ -2501,8 +2501,9 @@ def test_every_location_level_offers_other_and_creates_it(client, app):
         assert name in body, f"{name} is not offered after being created"
 
 
-def test_a_location_can_be_deleted_from_its_own_row(client, app):
-    """Bulk delete existed; removing one row needed its own button."""
+def test_a_location_can_be_deleted(client, app):
+    """The row table is gone from the page, but the delete endpoint stays
+    (the level manager and integrations still use it)."""
     from itam.models import Location
 
     login(client)
@@ -2511,10 +2512,6 @@ def test_a_location_can_be_deleted_from_its_own_row(client, app):
     with app.app_context():
         room = db.session.scalar(db.select(Location).where(Location.name == "Temp Room"))
         room_id = room.id
-
-    body = client.get("/locations?q=Temp Room").data.decode()
-    assert f'id="del-{room_id}"' in body, "no per-row delete form"
-    assert f"form=\"del-{room_id}\"" in body, "no per-row delete button"
 
     client.post(f"/locations/{room_id}/delete", follow_redirects=True)
     with app.app_context():
