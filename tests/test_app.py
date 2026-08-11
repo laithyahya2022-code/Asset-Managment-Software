@@ -908,6 +908,24 @@ def test_employees_bulk_edit_actions(client, app):
         assert db.session.get(Employee, ids[0]) is None
 
 
+def test_delete_all_assets_clears_every_page(client, app):
+    """Bulk delete works 50 rows at a time; Delete all wipes the register."""
+    with app.app_context():
+        cat = db.session.scalar(db.select(Category))
+        for i in range(3):
+            db.session.add(Asset(tag=f"WIPE-{i}", name=f"Thing {i}",
+                                 status="Available", condition="Good",
+                                 category=cat))
+        db.session.commit()
+
+    login(client)
+    body = client.get("/assets/").data.decode()
+    assert "Delete all" in body
+    client.post("/assets/delete-all", follow_redirects=True)
+    with app.app_context():
+        assert db.session.scalar(db.select(db.func.count(Asset.id))) == 0
+
+
 def test_assets_bulk_set_department_and_condition(client, app):
     from itam.models import Department
 

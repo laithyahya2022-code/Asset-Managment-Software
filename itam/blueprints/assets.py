@@ -759,6 +759,26 @@ def bulk():
     return redirect(url_for("assets.list_"))
 
 
+@bp.post("/delete-all")
+@perm_required("assets.manage")
+def delete_all():
+    """Wipe the whole register in one click, e.g. before a clean re-import.
+
+    Page-by-page bulk delete meant doing 50 rows at a time; the button that
+    posts here deletes every asset (and, via cascades and explicit deletes,
+    their assignments, transfers and history) after an explicit confirm.
+    """
+    assets = db.session.scalars(db.select(Asset)).all()
+    for a in assets:
+        db.session.delete(a)
+    log_activity("deleted", "asset", None, f"all assets ({len(assets)})")
+    db.session.commit()
+    _refresh_locations()
+    db.session.commit()
+    flash(f"All {len(assets)} assets deleted.", "success")
+    return redirect(url_for("assets.list_"))
+
+
 # ------------------------------------------------------- import (Excel/CSV)
 
 IMPORT_COLS = ["tag", "name", "category / asset", "type", "serial / serial no.",

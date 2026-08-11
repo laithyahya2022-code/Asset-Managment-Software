@@ -222,6 +222,10 @@ AR.update({
         "يمكن للمسؤول تثبيته من الإعدادات.",
     "Update now": "التحديث الآن",
     "Change location": "تغيير الموقع",
+    "Delete all": "حذف الكل",
+    "Delete ALL": "حذف كل",
+    "assets and their history? This cannot be undone.":
+        "أصلاً مع كامل سجلها؟ لا يمكن التراجع عن هذا.",
     "Set department": "تعيين القسم",
     "Set type": "تعيين النوع",
     "Set condition": "تعيين الحالة الفنية",

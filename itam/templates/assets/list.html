@@ -13,6 +13,13 @@
                    url_for('assets.export_csv', **request.args)) }}
     <a class="btn secondary" href="{{ url_for('assets.labels') }}">Labels</a>
     <a class="btn secondary" href="{{ url_for('assets.categories') }}">Categories</a>
+    {% if has_perm("assets.manage") and paging and paging.total %}
+    <form class="inline" method="post" action="{{ url_for('assets.delete_all') }}">
+      <button class="btn danger" type="submit"
+              data-confirm="{{ t('Delete ALL') }} {{ paging.total }} {{ t('assets and their history? This cannot be undone.') }}">
+        {{ t("Delete all") }} ({{ paging.total }})</button>
+    </form>
+    {% endif %}
   </div>
 </div>
 
