@@ -928,17 +928,34 @@ PLACE_WORDS = {
 }
 
 
+#: Words that mark an "Assign to" value as a PERSON even when the rest of it
+#: looks odd — titles in English and Arabic. "أستاذ إبراهيم 2" is a person
+#: despite the digit; "Kg1.A" is not.
+PERSON_WORDS = {
+    "mr", "mrs", "ms", "miss", "dr", "eng", "coach", "sir", "madam",
+    "مس", "مستر", "أستاذ", "استاذ", "دكتور", "دكتورة", "مدير", "مديرة",
+    "مشرف", "مشرفة", "معلم", "معلمة", "آنسة", "انسة", "أبلة", "ابلة", "مربية",
+}
+
+
 def _looks_like_place(value, row, known_places):
-    """True when an "Assign to" value names a place, not a person."""
+    """True when an "Assign to" value names a place or a class, not a person."""
     v = value.strip().lower()
     if not v:
         return False
+    tokens = set(_norm_header(value).split())
+    if tokens & PERSON_WORDS:
+        return False                        # a title always means a person
     if v in known_places:
         return True
     for key in ("room", "location", "department", "building", "branch", "floor"):
         if v == row[key].strip().lower():
             return True
-    return bool(set(_norm_header(value).split()) & PLACE_WORDS)
+    if tokens & PLACE_WORDS:
+        return True
+    # Class and room codes carry digits ("Kg1.A", "Grade.10.B", "10A");
+    # people's names don't.
+    return any(ch.isdigit() for ch in v)
 
 
 def _apply_asset_import(rows):
@@ -1040,6 +1057,16 @@ def _apply_asset_import(rows):
         if (r["room"].strip() and r["location"].strip()
                 and r["room"].strip().lower() != r["location"].strip().lower()):
             extra.append(f"Room: {r['room'].strip()}")
+        # An "Assign to" that names a class or room can't become an employee,
+        # but it mustn't vanish either: keep it in the notes unless it just
+        # repeats one of the row's own location fields.
+        holder = r["assigned_to"].strip()
+        holder_is_place = bool(holder) and _looks_like_place(holder, r, known_places)
+        if holder_is_place and holder.lower() not in {
+                r[k].strip().lower()
+                for k in ("room", "location", "department", "building",
+                          "branch", "floor")}:
+            extra.append(f"Assigned to: {holder}")
         notes = "\n".join([p for p in [r["notes"].strip(), *extra] if p]) or None
         try:
             cost = float(r["purchase_cost"]) if r["purchase_cost"].strip() else None
@@ -1076,8 +1103,7 @@ def _apply_asset_import(rows):
             notes=notes,
         )
         db.session.add(a)
-        holder = r["assigned_to"].strip()
-        if holder and not _looks_like_place(holder, r, known_places):
+        if holder and not holder_is_place:
             db.session.add(Assignment(
                 asset=a, employee=employee_for(holder, dep),
                 assigned_by=g.user.id if g.get("user") else None))

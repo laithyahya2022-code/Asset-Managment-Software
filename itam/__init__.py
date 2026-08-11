@@ -4,7 +4,7 @@ from datetime import datetime
 
 from flask import Flask, g, redirect, request, session, url_for
 
-APP_VERSION = "2026.08.06.24"  # bumped on each release so users can confirm their build
+APP_VERSION = "2026.08.06.25"  # bumped on each release so users can confirm their build
 
 from .i18n import LANGS, t, translate_html
 from .models import (DEFAULT_ROLE_PERMS, PERMISSIONS, ROLES, Notification,
@@ -268,7 +268,11 @@ def _rail_counts():
                     db.select(db.func.count(Maintenance.id))
                     .where(Maintenance.status != "Completed")) or 0,
                 "licenses": db.session.scalar(db.select(db.func.count(License.id))) or 0,
-                "locations": db.session.scalar(db.select(db.func.count(Location.id))) or 0,
+                # Distinct place names, not tree nodes: the same room under
+                # every floor of every building would otherwise count once
+                # per combination and read as "600 locations".
+                "locations": db.session.scalar(
+                    db.select(db.func.count(db.func.distinct(Location.name)))) or 0,
                 "vendors": db.session.scalar(db.select(db.func.count(Vendor.id))) or 0,
                 "employees": db.session.scalar(
                     db.select(db.func.count(Employee.id)).where(Employee.active)) or 0,

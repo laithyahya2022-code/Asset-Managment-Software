@@ -275,6 +275,8 @@ def test_import_does_not_turn_rooms_and_classes_into_employees(client, app):
         "PC-D,Desktop,S-4,Lab,جهاز مختبر الحاسوب\n"  # 'computer lab device'
         "PC-E,Desktop,S-5,10A,Grade.10.A\n"         # a class -> place
         "PC-F,Desktop,S-6,IT,Mr. Saleh\n"           # a person -> employee
+        "PC-G,Desktop,S-7,KG,Kg1.A\n"               # class code with digit
+        "PC-H,Desktop,S-8,IT,أستاذ إبراهيم 2\n"     # titled person with digit
     )
     resp = client.post("/assets/import",
                        data={"file": (io.BytesIO(csv.encode()), "mix.csv")},
@@ -284,13 +286,22 @@ def test_import_does_not_turn_rooms_and_classes_into_employees(client, app):
     with app.app_context():
         names = {e.name for e in db.session.scalars(db.select(Employee))}
         assert "مس الاء" in names and "Mr. Saleh" in names
-        for not_a_person in ("Copy Room", "صف", "جهاز مختبر الحاسوب", "Grade.10.A"):
+        assert "أستاذ إبراهيم 2" in names       # a title outweighs the digit
+        for not_a_person in ("Copy Room", "صف", "جهاز مختبر الحاسوب",
+                             "Grade.10.A", "Kg1.A"):
             assert not_a_person not in names
         for tag_name, assigned in (("PC-A", True), ("PC-B", False),
                                    ("PC-C", False), ("PC-E", False),
-                                   ("PC-F", True)):
+                                   ("PC-F", True), ("PC-G", False),
+                                   ("PC-H", True)):
             a = db.session.scalar(db.select(Asset).where(Asset.name == tag_name))
             assert bool(a.current_assignment) is assigned, tag_name
+        # a skipped class still shows up in the notes, so nothing is lost
+        e_asset = db.session.scalar(db.select(Asset).where(Asset.name == "PC-E"))
+        assert "Grade.10.A" in (e_asset.notes or "")
+        # ...unless it only repeats the row's own room
+        b_asset = db.session.scalar(db.select(Asset).where(Asset.name == "PC-B"))
+        assert "Assigned to" not in (b_asset.notes or "")
 
 
 def test_transfer_changes_branch_building_floor_room_department(client, app):
