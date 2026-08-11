@@ -331,23 +331,43 @@ def search_delete(search_id):
     return redirect(url_for("assets.list_"))
 
 
+# The export mirrors the school's own inventory sheet, column for column, so
+# a file that went in comes back out arranged the same way (and can be
+# re-imported as-is). Two register-only columns ride along at the end.
+EXPORT_HEADERS = [
+    "Name", "Category", "Asset ID", "Condition", "Status", "Serial No.",
+    "Manufacturer", "Model", "Branch", "Building", "Floor", "Room",
+    "Department", "Assign to", "Updated By", "Vendor", "Purchase Date",
+    "Purchase Cost", "Depreciation (Years)", "Warranty Expiry",
+    "Invoice Number", "Operating system", "CPU", "RAM", "Storage",
+    "Graphic cards", "MAC Address", "IP address", "Notes",
+    "Type", "Hostname"]
+
+
+def _export_row(a, blank=""):
+    cur = a.current_assignment
+    return [a.name, a.category.name if a.category else blank, a.tag,
+            a.condition, a.status, a.serial or blank, a.manufacturer or blank,
+            a.model or blank, a.branch or blank, a.building or blank,
+            a.floor or blank,
+            a.location_name or (a.location.path if a.location else blank),
+            a.department.name if a.department else blank,
+            cur.employee.name if cur else blank,
+            a.updated_by or blank, a.vendor.name if a.vendor else blank,
+            a.purchase_date or blank,
+            float(a.purchase_cost) if a.purchase_cost else blank,
+            a.depreciation_years or blank, a.warranty_expiry or blank,
+            a.invoice_number or blank, a.os_name or blank, a.cpu or blank,
+            a.ram or blank, a.storage or blank, a.gpu or blank,
+            a.mac_address or blank, a.ip_address or blank, a.notes or blank,
+            a.asset_type or blank, a.hostname or blank]
+
+
 @bp.route("/export.csv")
 @perm_required("assets.view")
 def export_csv():
-    rows = [(a.tag, a.name, a.category.name if a.category else "", a.asset_type or "",
-             a.serial or "", a.manufacturer or "", a.model or "", a.status, a.condition,
-             a.os_name or "", a.cpu or "", a.ram or "", a.storage or "",
-             a.hostname or "", a.mac_address or "", a.ip_address or "",
-             a.location.path if a.location else "", a.department.name if a.department else "",
-             a.vendor.name if a.vendor else "", a.purchase_date or "", a.purchase_cost or "",
-             a.invoice_number or "", a.warranty_expiry or "", a.current_value or "",
-             a.notes or "")
-            for a in _filtered_assets(request.args)]
-    return csv_response(
-        ["Tag", "Name", "Category", "Type", "Serial", "Manufacturer", "Model", "Status",
-         "Condition", "OS", "CPU", "RAM", "Storage", "Hostname", "MAC", "IP",
-         "Location", "Department", "Vendor", "Purchase Date", "Purchase Cost",
-         "Invoice", "Warranty Expiry", "Current Value", "Notes"], rows, "assets.csv")
+    rows = [_export_row(a) for a in _filtered_assets(request.args)]
+    return csv_response(EXPORT_HEADERS, rows, "assets.csv")
 
 
 @bp.route("/new", methods=["GET", "POST"])
@@ -818,6 +838,10 @@ HEADER_ALIASES = {
     "ram": "ram", "memory": "ram",
     "storage": "storage", "disk": "storage", "hdd": "storage", "ssd": "storage",
     "mac": "mac_address", "mac address": "mac_address",
+    "gpu": "gpu", "graphic cards": "gpu", "graphics card": "gpu",
+    "graphic card": "gpu", "graphics": "gpu",
+    "depreciation years": "depreciation", "depreciation": "depreciation",
+    "invoice number": "invoice", "invoice": "invoice", "invoice no": "invoice",
     "purchase date": "purchase_date", "purchased": "purchase_date", "buy date": "purchase_date",
     "warranty expiry": "warranty_expiry", "warranty": "warranty_expiry",
     "warranty expiration": "warranty_expiry", "warranty end": "warranty_expiry",
@@ -872,19 +896,9 @@ def export_xlsx():
     wb = Workbook()
     ws = wb.active
     ws.title = "Assets"
-    ws.append(["Tag", "Name", "Category", "Type", "Serial", "Manufacturer", "Model",
-               "Status", "Condition", "Location", "Department", "Vendor",
-               "Purchase Date", "Purchase Cost", "Warranty Expiry", "Current Value",
-               "Notes"])
+    ws.append(EXPORT_HEADERS)
     for a in _filtered_assets(request.args):
-        ws.append([a.tag, a.name, a.category.name if a.category else "",
-                   a.asset_type or "", a.serial or "", a.manufacturer or "",
-                   a.model or "", a.status, a.condition,
-                   a.location.path if a.location else "",
-                   a.department.name if a.department else "",
-                   a.vendor.name if a.vendor else "",
-                   a.purchase_date, float(a.purchase_cost) if a.purchase_cost else None,
-                   a.warranty_expiry, a.current_value, a.notes or ""])
+        ws.append(_export_row(a, blank=None))
     buf = io.BytesIO()
     wb.save(buf)
     buf.seek(0)
@@ -1092,6 +1106,10 @@ def _apply_asset_import(rows):
             cost = float(r["purchase_cost"]) if r["purchase_cost"].strip() else None
         except ValueError:
             cost = None
+        try:
+            dep_years = int(float(r["depreciation"])) if r["depreciation"].strip() else None
+        except ValueError:
+            dep_years = None
         a = Asset(
             tag=tag,
             name=r["name"].strip(),
@@ -1117,11 +1135,15 @@ def _apply_asset_import(rows):
             storage=r["storage"].strip() or None,
             hostname=(r["hostname"].strip() or r["name"].strip()) or None,
             mac_address=r["mac_address"].strip() or None,
+            gpu=r["gpu"].strip() or None,
+            invoice_number=r["invoice"].strip() or None,
             purchase_date=_flex_date(r["purchase_date"]),
             warranty_expiry=_flex_date(r["warranty_expiry"]),
             purchase_cost=cost,
             notes=notes,
         )
+        if dep_years:
+            a.depreciation_years = dep_years
         db.session.add(a)
         if holder and not holder_is_place:
             db.session.add(Assignment(
@@ -1136,7 +1158,8 @@ _CANON = ["tag", "name", "category", "type", "serial", "manufacturer", "model",
           "status", "condition", "branch", "building", "floor", "location", "room",
           "assigned_to", "department", "ip_address", "os", "cpu", "ram", "storage",
           "hostname", "mac_address", "purchase_date", "warranty_expiry",
-          "purchase_cost", "updated_by", "notes"]
+          "purchase_cost", "updated_by", "notes", "gpu", "depreciation",
+          "invoice"]
 
 
 def _validate_import(raw):

@@ -195,7 +195,11 @@ def test_excel_import_and_export(client, app):
     resp = client.get("/assets/export.xlsx")
     assert resp.status_code == 200
     out = load_workbook(io.BytesIO(resp.data))
-    tags = [row[0].value for row in out.active.iter_rows(min_row=2)]
+    headers = [c.value for c in next(out.active.iter_rows(min_row=1, max_row=1))]
+    # arranged exactly like the school's own inventory sheet
+    assert headers[:6] == ["Name", "Category", "Asset ID", "Condition",
+                           "Status", "Serial No."]
+    tags = [row[2].value for row in out.active.iter_rows(min_row=2)]
     assert "XL-0001" in tags
 
 
@@ -906,6 +910,38 @@ def test_employees_bulk_edit_actions(client, app):
         "action": "delete", "ids": [str(i) for i in ids]}, follow_redirects=True)
     with app.app_context():
         assert db.session.get(Employee, ids[0]) is None
+
+
+def test_export_matches_the_school_sheet_and_round_trips(client, app):
+    """Export mirrors the inventory sheet's column order (Asset ID included)
+    and an exported file can be re-imported without losing gpu/invoice/
+    depreciation."""
+    import re
+    login(client)
+    csv_in = (
+        "Name,Asset ID,Category,Serial No.,Graphic cards ,Invoice Number,"
+        "Depreciation (Years),Assign to \n"
+        "RT-PC,RT-0001,Desktop,SN-RT,RTX 3060,INV-77,7,مس روان\n"
+    )
+    resp = client.post("/assets/import",
+                       data={"file": (io.BytesIO(csv_in.encode()), "rt.csv")},
+                       content_type="multipart/form-data")
+    token = re.search(rb'name="token" value="([^"]+)"', resp.data).group(1).decode()
+    client.post("/assets/import", data={"token": token}, follow_redirects=True)
+
+    with app.app_context():
+        a = db.session.scalar(db.select(Asset).where(Asset.name == "RT-PC"))
+        assert a.gpu == "RTX 3060"
+        assert a.invoice_number == "INV-77"
+        assert a.depreciation_years == 7
+
+    out = client.get("/assets/export.csv").data.decode()
+    header, row = out.strip().splitlines()[0], [
+        line for line in out.strip().splitlines() if "RT-PC" in line][0]
+    assert header.lstrip("﻿").startswith(
+        "Name,Category,Asset ID,Condition,Status,Serial No.")
+    for value in ("RT-0001", "RTX 3060", "INV-77", "مس روان"):
+        assert value in row
 
 
 def test_delete_all_assets_clears_every_page(client, app):
