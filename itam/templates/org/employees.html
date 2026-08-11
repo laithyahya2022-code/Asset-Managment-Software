@@ -11,11 +11,10 @@
     {% endif %}
     {{ export_menu(url_for('org.employees_export_xlsx'),
                    url_for('org.employees_export_csv')) }}
-    {% if has_perm("people.manage") and rows %}{{ bulk_button(t("Delete selected"), danger=True) }}{% endif %}
   </div>
 </div>
 {% if rows %}
-<form id="bulk" method="post" action="{{ url_for('org.employees_bulk_delete') }}" class="bulk-form">
+<form id="bulk" method="post" action="{{ url_for('org.employees_bulk') }}" class="bulk-form">
 <div class="card table-wrap"><table>
   <tr>{% if has_perm("people.manage") %}{{ select_all_th() }}{% endif %}<th>{{ t("Name") }}</th><th>Employee ID</th><th>Type</th><th>Email</th><th>{{ t("Department") }}</th><th>Assets held</th><th>Active</th><th></th></tr>
   {% for e in rows %}
@@ -32,6 +31,27 @@
   </tr>
   {% endfor %}
 </table></div>
+{% if has_perm("people.manage") %}
+<div class="actions-row no-print">
+  <button class="btn secondary bulk-toggle" type="button" form="bulk" data-form="bulk"
+          data-on="{{ t('Select all') }}" data-off="{{ t('Clear selection') }}">{{ t("Select all") }}</button>
+  <span class="muted">{{ t("Bulk action for selected:") }}</span>
+  <select name="action" style="width:auto">
+    <option value="delete">{{ t("Delete") }}</option>
+    <option value="department">{{ t("Set department") }} →</option>
+    <option value="type">{{ t("Set type") }} →</option>
+    <option value="activate">{{ t("Mark active") }}</option>
+    <option value="deactivate">{{ t("Mark inactive") }}</option>
+  </select>
+  <select name="department_id" style="width:auto">
+    <option value="">({{ t("department") }}…)</option>
+    {% for d in departments %}<option value="{{ d.id }}">{{ d.name }}</option>{% endfor %}
+  </select>
+  <input name="emp_type" placeholder="({{ t('type') }}… e.g. Teacher)" style="width:auto">
+  <button class="btn secondary bulk-go" type="submit" form="bulk" disabled
+          data-label="{{ t('Apply') }}">{{ t("Apply") }}</button>
+</div>
+{% endif %}
 </form>
 {% else %}<p class="empty">No employees yet.</p>{% endif %}
 {% endblock %}

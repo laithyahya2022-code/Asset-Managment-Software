@@ -859,6 +859,67 @@ def test_list_pages_offer_select_all(client, app, url, endpoint):
     assert 'form="bulk"' in body, f"{url} action button must point at the form"
 
 
+def test_employees_bulk_edit_actions(client, app):
+    """Select-all offers more than delete: set department/type, active flag."""
+    from itam.models import Department, Employee
+
+    with app.app_context():
+        dep = Department(name="Science Wing")
+        e1 = Employee(name="Bulk One")
+        e2 = Employee(name="Bulk Two")
+        db.session.add_all([dep, e1, e2])
+        db.session.commit()
+        dep_id, ids = dep.id, [e1.id, e2.id]
+
+    login(client)
+    body = client.get("/employees").data.decode()
+    for value in ("department", "type", "activate", "deactivate"):
+        assert f'value="{value}"' in body, f"no bulk {value} option"
+
+    client.post("/employees/bulk", data={
+        "action": "department", "department_id": str(dep_id),
+        "ids": [str(i) for i in ids]}, follow_redirects=True)
+    client.post("/employees/bulk", data={
+        "action": "type", "emp_type": "Teacher",
+        "ids": [str(i) for i in ids]}, follow_redirects=True)
+    client.post("/employees/bulk", data={
+        "action": "deactivate", "ids": [str(ids[0])]}, follow_redirects=True)
+    with app.app_context():
+        one, two = (db.session.get(Employee, i) for i in ids)
+        assert one.department_id == dep_id and two.department_id == dep_id
+        assert one.emp_type == "Teacher" and two.emp_type == "Teacher"
+        assert one.active is False and two.active is True
+
+    # delete still works through the same form
+    client.post("/employees/bulk", data={
+        "action": "delete", "ids": [str(i) for i in ids]}, follow_redirects=True)
+    with app.app_context():
+        assert db.session.get(Employee, ids[0]) is None
+
+
+def test_assets_bulk_set_department_and_condition(client, app):
+    from itam.models import Department
+
+    with app.app_context():
+        dep = Department(name="Media Lab")
+        a = Asset(tag="BLK-1", name="Cam", status="Available", condition="Good",
+                  category=db.session.scalar(db.select(Category)))
+        db.session.add_all([dep, a])
+        db.session.commit()
+        dep_id, aid = dep.id, a.id
+
+    login(client)
+    client.post("/assets/bulk", data={"action": "department",
+                                      "department_id": str(dep_id),
+                                      "id": [str(aid)]}, follow_redirects=True)
+    client.post("/assets/bulk", data={"action": "condition:Damaged",
+                                      "id": [str(aid)]}, follow_redirects=True)
+    with app.app_context():
+        a = db.session.get(Asset, aid)
+        assert a.department_id == dep_id
+        assert a.condition == "Damaged"
+
+
 def test_bulk_delete_skips_rows_still_in_use(client, app):
     """A department with people in it must survive a bulk delete."""
     from itam.models import Department, Employee

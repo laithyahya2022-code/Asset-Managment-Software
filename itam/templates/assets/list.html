@@ -104,12 +104,18 @@
     <option value="labels">Print labels</option>
     <option value="assign">Assign to employee →</option>
     <option value="transfer">Transfer to location →</option>
+    <option value="department">{{ t("Set department") }} →</option>
     {% for s in statuses %}<option value="status:{{ s }}">Set status: {{ s }}</option>{% endfor %}
+    {% for c in conditions %}<option value="condition:{{ c }}">{{ t("Set condition") }}: {{ c }}</option>{% endfor %}
     <option value="delete">Delete</option>
   </select>
   <select name="employee_id" style="width:auto">
     <option value="">(employee…)</option>
     {% for e in employees %}<option value="{{ e.id }}">{{ e.name }}</option>{% endfor %}
+  </select>
+  <select name="department_id" style="width:auto">
+    <option value="">({{ t("department") }}…)</option>
+    {% for d in departments %}<option value="{{ d.id }}">{{ d.name }}</option>{% endfor %}
   </select>
   {# Transfer can target any location, empty ones included, so the list is
      fetched on demand rather than printing the whole tree on every page. #}

@@ -18,7 +18,10 @@ bp = Blueprint("org", __name__)
 @perm_required("assets.view")
 def employees():
     rows = db.session.scalars(db.select(Employee).order_by(Employee.name)).all()
-    return render_template("org/employees.html", rows=rows)
+    departments = db.session.scalars(
+        db.select(Department).order_by(Department.name)).all()
+    return render_template("org/employees.html", rows=rows,
+                           departments=departments)
 
 
 def _employee_rows():
@@ -509,6 +512,51 @@ def employees_bulk_delete():
         Employee, ids,
         lambda e: (f"{e.name} still has assets checked out." if e.current_assets else None),
         "org.employees", "employee")
+
+
+@bp.post("/employees/bulk")
+@perm_required("people.manage")
+def employees_bulk():
+    """One menu for the selected employees: delete, or edit shared fields."""
+    action = request.form.get("action", "delete")
+    if action == "delete":
+        return employees_bulk_delete()
+    ids = request.form.getlist("ids", type=int)
+    emps = db.session.scalars(
+        db.select(Employee).where(Employee.id.in_(ids))).all()
+    if not emps:
+        flash("Select at least one employee.", "error")
+        return redirect(url_for("org.employees"))
+    if action == "department":
+        dep_id = request.form.get("department_id", type=int)
+        dep = db.session.get(Department, dep_id) if dep_id else None
+        if not dep:
+            flash("Pick a department first.", "error")
+            return redirect(url_for("org.employees"))
+        for e in emps:
+            e.department_id = dep.id
+        message = f"{len(emps)} employees moved to {dep.name}."
+    elif action == "type":
+        emp_type = request.form.get("emp_type", "").strip()
+        if not emp_type:
+            flash("Type the employee type first.", "error")
+            return redirect(url_for("org.employees"))
+        for e in emps:
+            e.emp_type = emp_type
+        message = f"{len(emps)} employees set to {emp_type}."
+    elif action in ("activate", "deactivate"):
+        for e in emps:
+            e.active = action == "activate"
+        state = "active" if action == "activate" else "inactive"
+        message = f"{len(emps)} employees marked {state}."
+    else:
+        flash("Unknown action.", "error")
+        return redirect(url_for("org.employees"))
+    for e in emps:
+        log_activity("employee_updated", "employee", e.id, e.name)
+    db.session.commit()
+    flash(message, "success")
+    return redirect(url_for("org.employees"))
 
 
 @bp.post("/departments/bulk-delete")

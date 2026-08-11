@@ -741,6 +741,20 @@ def bulk():
             a.location_id = loc_id
             log_activity("transferred", "asset", a.id, f"{a.tag} (bulk)")
         flash(f"{len(assets)} assets transferred.", "success")
+    elif action == "department" and request.form.get("department_id"):
+        dep = db.get_or_404(Department, int(request.form["department_id"]))
+        for a in assets:
+            a.department_id = dep.id
+            log_activity("updated", "asset", a.id, f"{a.tag} department → {dep.name}")
+        flash(f"{len(assets)} assets moved to {dep.name}.", "success")
+    elif action and action.startswith("condition:"):
+        condition = action.split(":", 1)[1]
+        if condition in ASSET_CONDITIONS:
+            for a in assets:
+                a.condition = condition
+                log_activity("updated", "asset", a.id,
+                             f"{a.tag} condition → {condition}")
+            flash(f"{len(assets)} assets set to {condition}.", "success")
     db.session.commit()
     return redirect(url_for("assets.list_"))
 
