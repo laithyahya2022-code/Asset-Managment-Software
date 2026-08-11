@@ -244,6 +244,27 @@ def relaunch(exe):
         return False
 
 
+def _close_app_windows():
+    """Destroy any pywebview window before the hard exit.
+
+    The window's embedded browser engine (WebView2) runs as child processes
+    holding files inside the PyInstaller _MEI temp folder. Exiting without
+    closing the window leaves them alive for a moment, the folder can't be
+    removed, and Windows pops up "Failed to remove temporary directory".
+    """
+    try:
+        import webview
+        for w in list(getattr(webview, "windows", [])):
+            try:
+                w.destroy()
+            except Exception:
+                pass
+        import time
+        time.sleep(1.0)          # let the browser children shut down
+    except Exception:
+        pass                     # headless server: nothing to close
+
+
 def restart_into_update(base_dir, exe=None):
     """Swap in the pending update and hand this process over to the new build.
 
@@ -255,6 +276,7 @@ def restart_into_update(base_dir, exe=None):
     exe = exe or exe_path(base_dir)
     if not apply_pending_update(base_dir, exe):
         return False
+    _close_app_windows()
     try:
         subprocess.Popen([exe], close_fds=True, env=_child_env(AMS_TAKEOVER="1"),
                          cwd=os.path.dirname(exe) or None,
