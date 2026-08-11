@@ -300,18 +300,22 @@ def _data_root(base):
 
 def main():
     base = _base_dir()
-    if _apply_update_if_ready(base):
+    port = int(os.environ.get("PORT", "8080"))
+    # Apply a downloaded update only when no server is running: the running
+    # server installs its own updates at a quiet moment, and a double-click
+    # while one is waiting must open a window, not eat the click on a swap.
+    if not _port_in_use(port) and _apply_update_if_ready(base):
         return                                   # the new build takes over
     instance_path, adopted_from = _data_root(base)
     os.makedirs(instance_path, exist_ok=True)
 
-    port = int(os.environ.get("PORT", "8080"))
     ip = _local_ip()
     url = f"http://localhost:{port}"
 
     # Relaunched by "Update now": the old build is still letting go of the
     # port, so wait for it rather than concluding another server is running.
-    if os.environ.get("AMS_TAKEOVER") == "1":
+    takeover = os.environ.get("AMS_TAKEOVER") == "1"
+    if takeover:
         deadline = time.time() + 30
         while time.time() < deadline and _port_in_use(port):
             time.sleep(0.3)
@@ -367,9 +371,11 @@ def main():
     # An update restart (AMS_TAKEOVER) is headless too: popping a fresh window
     # and grabbing focus after every self-update reads as lag and clutter —
     # the site just comes back quietly, and the next double-click of AMS.exe
-    # opens a window on it.
+    # opens a window on it. Only when this process actually took the port
+    # over, though: a takeover launch that found another server already up
+    # is effectively a viewer and should still show a window.
     if ("1" in (os.environ.get("AMS_NO_BROWSER"), os.environ.get("ITAM_NO_BROWSER"))
-            or os.environ.get("AMS_TAKEOVER") == "1"):
+            or (takeover and serving)):
         if server is not None:
             server.join()    # headless (e.g. CI smoke test / server install)
         return               # already running elsewhere: nothing to do
