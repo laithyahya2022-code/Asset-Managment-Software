@@ -364,7 +364,12 @@ def main():
 
     # ITAM_NO_BROWSER is the pre-rename spelling, still honoured so existing
     # server installs and scheduled tasks keep running headless.
-    if "1" in (os.environ.get("AMS_NO_BROWSER"), os.environ.get("ITAM_NO_BROWSER")):
+    # An update restart (AMS_TAKEOVER) is headless too: popping a fresh window
+    # and grabbing focus after every self-update reads as lag and clutter —
+    # the site just comes back quietly, and the next double-click of AMS.exe
+    # opens a window on it.
+    if ("1" in (os.environ.get("AMS_NO_BROWSER"), os.environ.get("ITAM_NO_BROWSER"))
+            or os.environ.get("AMS_TAKEOVER") == "1"):
         if server is not None:
             server.join()    # headless (e.g. CI smoke test / server install)
         return               # already running elsewhere: nothing to do
