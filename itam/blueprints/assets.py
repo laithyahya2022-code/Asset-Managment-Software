@@ -994,7 +994,11 @@ def _looks_like_place(value, row, known_places):
     for key in ("room", "location", "department", "building", "branch", "floor"):
         if v == row[key].strip().lower():
             return True
-    if tokens & PLACE_WORDS:
+    # "المكتبة" is "مكتبة" wearing the definite article — strip a leading
+    # "ال" before looking a token up.
+    if any(tok in PLACE_WORDS
+           or (tok.startswith("ال") and tok[2:] in PLACE_WORDS)
+           for tok in tokens):
         return True
     # Class and room codes carry digits ("Kg1.A", "Grade.10.B", "10A");
     # people's names don't.
@@ -1103,7 +1107,8 @@ def _apply_asset_import(rows):
         # An "Assign to" that names a class or room can't become an employee,
         # but it mustn't vanish either: keep it in the notes unless it just
         # repeats one of the row's own location fields.
-        holder = r["assigned_to"].strip()
+        # Collapse doubled spaces so "Ms.  Safa" and "Ms. Safa" are one person.
+        holder = " ".join(r["assigned_to"].split())
         holder_is_place = bool(holder) and _looks_like_place(holder, r, known_places)
         if holder and not holder_is_place:
             holder = _clean_person(holder)
