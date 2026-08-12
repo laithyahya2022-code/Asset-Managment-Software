@@ -96,7 +96,7 @@
       <td>{{ a.branch or "—" }}</td>
       <td>{{ a.floor or "—" }}</td>
       <td>{{ a.location_name or (a.location.path if a.location else "—") }}</td>
-      <td>{% if a.current_assignment %}<a href="{{ url_for('org.employee_detail', emp_id=a.current_assignment.employee_id) }}">{{ a.current_assignment.employee.name }}</a>{% else %}—{% endif %}</td>
+      <td>{% if a.current_assignment %}<a href="{{ url_for('org.employee_detail', emp_id=a.current_assignment.employee_id) }}">{{ a.current_assignment.employee.name }}</a>{% elif a.assigned_label %}{{ a.assigned_label }}{% else %}—{% endif %}</td>
       <td>{{ a.department.name if a.department else "—" }}</td>
     </tr>
     {% endfor %}

@@ -345,14 +345,13 @@ EXPORT_HEADERS = [
 
 
 def _export_row(a, blank=""):
-    cur = a.current_assignment
     return [a.name, a.category.name if a.category else blank, a.tag,
             a.condition, a.status, a.serial or blank, a.manufacturer or blank,
             a.model or blank, a.branch or blank, a.building or blank,
             a.floor or blank,
             a.location_name or (a.location.path if a.location else blank),
             a.department.name if a.department else blank,
-            cur.employee.name if cur else blank,
+            a.assigned_label or blank,
             a.updated_by or blank, a.vendor.name if a.vendor else blank,
             a.purchase_date or blank,
             float(a.purchase_cost) if a.purchase_cost else blank,
@@ -972,6 +971,16 @@ PERSON_WORDS = {
 }
 
 
+def _clean_person(name):
+    """Strip a leading room/desk code from a person: 'REG-03/ Mr. Saleh' ->
+    'Mr. Saleh', 'Recp-01 Ms. Alaa' -> 'Ms. Alaa'. Without this the same
+    person imports once per desk they sit at, each with a dirty name."""
+    import re
+    m = re.match(r"^\s*[A-Za-z؀-ۿ]{1,10}[-_. ]?\d+\s*[/\-–:]?\s+(.+)$",
+                 name)
+    return m.group(1).strip() if m and m.group(1).strip() else name
+
+
 def _looks_like_place(value, row, known_places):
     """True when an "Assign to" value names a place or a class, not a person."""
     v = value.strip().lower()
@@ -1096,6 +1105,8 @@ def _apply_asset_import(rows):
         # repeats one of the row's own location fields.
         holder = r["assigned_to"].strip()
         holder_is_place = bool(holder) and _looks_like_place(holder, r, known_places)
+        if holder and not holder_is_place:
+            holder = _clean_person(holder)
         if holder_is_place and holder.lower() not in {
                 r[k].strip().lower()
                 for k in ("room", "location", "department", "building",

@@ -281,6 +281,8 @@ def test_import_does_not_turn_rooms_and_classes_into_employees(client, app):
         "PC-F,Desktop,S-6,IT,Mr. Saleh\n"           # a person -> employee
         "PC-G,Desktop,S-7,KG,Kg1.A\n"               # class code with digit
         "PC-H,Desktop,S-8,IT,أستاذ إبراهيم 2\n"     # titled person with digit
+        "PC-I,Desktop,S-9,Reg,REG-03/ Mr. Saleh\n"  # desk code + person
+        "PC-J,Desktop,S-10,IT,Mr. Saleh\n"          # ...same person, plain
     )
     resp = client.post("/assets/import",
                        data={"file": (io.BytesIO(csv.encode()), "mix.csv")},
@@ -303,9 +305,22 @@ def test_import_does_not_turn_rooms_and_classes_into_employees(client, app):
         # a skipped class still shows up in the notes, so nothing is lost
         e_asset = db.session.scalar(db.select(Asset).where(Asset.name == "PC-E"))
         assert "Grade.10.A" in (e_asset.notes or "")
+        assert e_asset.assigned_label == "Grade.10.A"   # ...and on screen
         # ...unless it only repeats the row's own room
         b_asset = db.session.scalar(db.select(Asset).where(Asset.name == "PC-B"))
         assert "Assigned to" not in (b_asset.notes or "")
+        # a desk code in front of a person is stripped, and the person merges
+        # with their plain-named self instead of duplicating
+        assert "REG-03/ Mr. Saleh" not in names
+        saleh = [e for e in db.session.scalars(db.select(Employee))
+                 if e.name == "Mr. Saleh"]
+        assert len(saleh) == 1
+        i_asset = db.session.scalar(db.select(Asset).where(Asset.name == "PC-I"))
+        assert i_asset.current_assignment.employee.name == "Mr. Saleh"
+
+    # the class shows in the Assigned-to column of the asset list too
+    body = client.get("/assets/?q=PC-E").data.decode()
+    assert "Grade.10.A" in body
 
 
 def test_transfer_changes_branch_building_floor_room_department(client, app):

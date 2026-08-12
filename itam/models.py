@@ -267,6 +267,22 @@ class Asset(db.Model):
     files = db.relationship("AssetFile", back_populates="asset", cascade="all, delete-orphan")
     transfers = db.relationship("Transfer", back_populates="asset",
                                 order_by="Transfer.at.desc()", cascade="all, delete-orphan")
+
+    @property
+    def assigned_label(self):
+        """Who (or what) holds this asset, for display.
+
+        A person gives the current assignment's employee name. A shared
+        device "assigned" to a class or room in the inventory sheet keeps
+        that in the notes ('Assigned to: Grade3.B'); surface it here so the
+        Assigned-to column isn't a dash for half the school."""
+        current = self.current_assignment
+        if current:
+            return current.employee.name
+        for line in (self.notes or "").splitlines():
+            if line.startswith("Assigned to: "):
+                return line[len("Assigned to: "):].strip()
+        return None
     reservations = db.relationship("Reservation", back_populates="asset",
                                    cascade="all, delete-orphan")
 
