@@ -204,16 +204,16 @@ def test_excel_import_and_export(client, app):
 
 
 def test_import_flexible_headers_and_autotag(client, app):
-    """Real-world sheet: odd headers, no usable tags, DD/MM/YYYY dates,
-    duplicated tag column -> every row still imports with a generated ID."""
+    """Real-world sheet: odd headers, missing tags, DD/MM/YYYY dates. Rows
+    without an Asset ID get a generated one; a repeated ID is refused."""
     import re
     login(client)
     csv = (
         "No,Asset,TAG,Branch,Floor,Assigned to,Name,Asset Status,Condition,"
         "Purchase Date,Serial No.,Dept\n"
-        "1,Desktop,eff,Mada 3,GF,Ms A,M3-PC01,In Use,Good,16/07/2026,SN-1,Reg\n"
-        "2,Desktop,eff,Mada 3,GF,Ms B,M3-PC02,In Use,Good,16/07/2026,SN-2,Reg\n"
-        "3,Printer,eff,Mada 3,F1,Copy Room,M3-PR01,In Use,Good,16/07/2026,SN-3,IT\n"
+        "1,Desktop,,Mada 3,GF,Ms A,M3-PC01,In Use,Good,16/07/2026,SN-1,Reg\n"
+        "2,Desktop,,Mada 3,GF,Ms B,M3-PC02,In Use,Good,16/07/2026,SN-2,Reg\n"
+        "3,Printer,,Mada 3,F1,Copy Room,M3-PR01,In Use,Good,16/07/2026,SN-3,IT\n"
     )
     resp = client.post("/assets/import",
                        data={"file": (io.BytesIO(csv.encode()), "db.csv")},
@@ -232,6 +232,43 @@ def test_import_flexible_headers_and_autotag(client, app):
         assert str(pc.purchase_date) == "2026-07-16"  # DD/MM/YYYY parsed
         # "Assigned to" creates a real employee + assignment, not a note
         assert pc.current_assignment.employee.name == "Ms A"
+
+
+def test_import_refuses_duplicated_asset_ids(client, app):
+    """A new Asset ID imports; a known or repeated one is refused with
+    'Duplicated Records'; a missing one is generated (last ID + 1)."""
+    import re
+    login(client)
+    with app.app_context():
+        db.session.add(Asset(tag="DES-000001", name="Already here",
+                             status="Available", condition="Good",
+                             category=db.session.scalar(db.select(Category))))
+        db.session.commit()
+
+    csv = (
+        "Name,Category,Asset ID,Serial No.\n"
+        "New PC,Desktop,DES-000002,SN-A\n"       # new ID -> imported
+        "Clash PC,Desktop,DES-000001,SN-B\n"     # exists in register -> refused
+        "Twin 1,Desktop,DES-000003,SN-C\n"       # new -> imported
+        "Twin 2,Desktop,DES-000003,SN-D\n"       # repeats in file -> refused
+        "No ID PC,Desktop,,SN-E\n"               # missing -> generated
+    )
+    resp = client.post("/assets/import",
+                       data={"file": (io.BytesIO(csv.encode()), "dups.csv")},
+                       content_type="multipart/form-data")
+    assert b"Duplicated Records" in resp.data     # shown in the preview
+    token = re.search(rb'name="token" value="([^"]+)"', resp.data).group(1).decode()
+    done = client.post("/assets/import", data={"token": token},
+                       follow_redirects=True)
+    assert b"Duplicated Records" in done.data
+    with app.app_context():
+        names = {a.name for a in db.session.scalars(db.select(Asset))}
+        assert {"Already here", "New PC", "Twin 1", "No ID PC"} <= names
+        assert "Clash PC" not in names and "Twin 2" not in names
+        generated = db.session.scalar(
+            db.select(Asset).where(Asset.name == "No ID PC"))
+        # system ID continues the DES sequence: last ID + 1
+        assert generated.tag == "DES-000004"
 
 
 def test_import_assign_to_and_room_land_in_real_fields(client, app):
