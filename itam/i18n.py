@@ -222,6 +222,10 @@ AR.update({
         "يمكن للمسؤول تثبيته من الإعدادات.",
     "Update now": "التحديث الآن",
     "Change location": "تغيير الموقع",
+    "Held by classes & rooms": "بحوزة الصفوف والغرف",
+    "Shared devices assigned to a class or room in the inventory sheet — not borrowed by a person.":
+        "أجهزة مشتركة مخصصة لصف أو غرفة في ملف الجرد — ليست معارة لشخص.",
+    "Release": "تحرير",
     "Delete all": "حذف الكل",
     "Delete ALL": "حذف كل",
     "assets and their history? This cannot be undone.":

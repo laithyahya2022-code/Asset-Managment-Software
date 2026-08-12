@@ -48,6 +48,35 @@
 {% endif %}
 {% else %}<p class="empty">No checkouts.</p>{% endif %}
 
+{% if place_rows %}
+<div class="card">
+  <p class="eyebrow">{{ t("Held by classes & rooms") }} ({{ place_rows | length }})</p>
+  <p class="muted" style="margin:-0.3rem 0 0.7rem;font-size:0.86rem">
+    {{ t("Shared devices assigned to a class or room in the inventory sheet — not borrowed by a person.") }}
+  </p>
+  <div class="table-wrap"><table>
+    <tr><th>Asset</th><th>{{ t("Assigned to") }}</th><th>{{ t("Location") }}</th><th></th></tr>
+    {% for a in place_rows %}
+    <tr>
+      <td><a href="{{ url_for('assets.detail', asset_id=a.id) }}">{{ a.tag }}</a> — {{ a.name }}</td>
+      <td>{{ a.assigned_label }}</td>
+      <td>{{ a.location_name or "—" }}</td>
+      <td>{% if has_perm("checkout.manage") %}
+        <button class="btn secondary sm" type="submit" form="rel-{{ a.id }}"
+                data-confirm="Release {{ a.tag }} from {{ a.assigned_label }}?">{{ t("Release") }}</button>
+      {% endif %}</td>
+    </tr>
+    {% endfor %}
+  </table></div>
+</div>
+{% if has_perm("checkout.manage") %}
+{% for a in place_rows %}
+<form id="rel-{{ a.id }}" method="post" hidden
+      action="{{ url_for('ops.checkout_release_place', asset_id=a.id) }}"></form>
+{% endfor %}
+{% endif %}
+{% endif %}
+
 <div class="card">
   <p class="eyebrow">Active reservations</p>
   {% if reservations %}

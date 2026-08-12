@@ -110,6 +110,20 @@ def inventory_export_csv():
 
 # ---------------------------------------------------------------- checkouts
 
+def _place_held_assets():
+    """Assets held by a class or room rather than a person.
+
+    The inventory sheet assigns shared devices to places ('Grade3.B', copy
+    room …). Those can't be loans to an employee, but they belong on the
+    Lending screen all the same — otherwise 180 devices look unaccounted for.
+    """
+    return db.session.scalars(
+        db.select(Asset)
+        .where(Asset.notes.contains("Assigned to: "),
+               ~Asset.assignments.any(Assignment.returned_at.is_(None)))
+        .order_by(Asset.tag)).all()
+
+
 @bp.route("/checkouts")
 @perm_required("assets.view")
 def checkouts():
@@ -130,6 +144,7 @@ def checkouts():
         .where(Reservation.status == "Active")
         .order_by(Reservation.start_date)).all()
     return render_template("checkouts.html", rows=rows, show=show,
+                           place_rows=_place_held_assets() if show != "overdue" else [],
                            reservations=reservations, today=date.today(),
                            available=_lendable_assets(),
                            available_total=_lendable_count(),
@@ -619,6 +634,21 @@ def maintenance_bulk_delete():
     flash(f"{count} task{'' if count == 1 else 's'} deleted." if count
           else "Nothing selected.", "success" if count else "error")
     return redirect(url_for("ops.maintenance_list"))
+
+
+@bp.post("/checkouts/release/<int:asset_id>")
+@perm_required("checkout.manage")
+def checkout_release_place(asset_id):
+    """Take back a device held by a class/room: drop the note that binds it."""
+    a = db.get_or_404(Asset, asset_id)
+    label = a.assigned_label or "its room"
+    lines = [line for line in (a.notes or "").splitlines()
+             if not line.startswith("Assigned to: ")]
+    a.notes = "\n".join(lines).strip() or None
+    log_activity("checked_in", "asset", a.id, f"{a.tag} ← {label}")
+    db.session.commit()
+    flash(f"{a.tag} released from {label}.", "success")
+    return redirect(url_for("ops.checkouts"))
 
 
 @bp.post("/checkouts/bulk-checkin")

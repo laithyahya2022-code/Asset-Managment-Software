@@ -4,7 +4,7 @@ from datetime import datetime
 
 from flask import Flask, g, redirect, request, session, url_for
 
-APP_VERSION = "2026.08.06.30"  # bumped on each release so users can confirm their build
+APP_VERSION = "2026.08.06.31"  # bumped on each release so users can confirm their build
 
 from .i18n import LANGS, t, translate_html
 from .models import (DEFAULT_ROLE_PERMS, PERMISSIONS, ROLES, Notification,
@@ -261,9 +261,16 @@ def _rail_counts():
         try:
             _rail_cache["counts"] = {
                 "assets": db.session.scalar(db.select(db.func.count(Asset.id))) or 0,
-                "loans": db.session.scalar(
+                # People holding devices plus shared devices held by a
+                # class/room — everything the Lending screen lists.
+                "loans": (db.session.scalar(
                     db.select(db.func.count(Assignment.id))
-                    .where(Assignment.returned_at.is_(None))) or 0,
+                    .where(Assignment.returned_at.is_(None))) or 0) +
+                (db.session.scalar(
+                    db.select(db.func.count(Asset.id))
+                    .where(Asset.notes.contains("Assigned to: "),
+                           ~Asset.assignments.any(
+                               Assignment.returned_at.is_(None)))) or 0),
                 "maintenance": db.session.scalar(
                     db.select(db.func.count(Maintenance.id))
                     .where(Maintenance.status != "Completed")) or 0,

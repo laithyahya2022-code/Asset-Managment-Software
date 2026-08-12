@@ -359,6 +359,18 @@ def test_import_does_not_turn_rooms_and_classes_into_employees(client, app):
     body = client.get("/assets/?q=PC-E").data.decode()
     assert "Grade.10.A" in body
 
+    # ...and on the Lending screen under "Held by classes & rooms",
+    # where it can be released
+    lending = client.get("/checkouts").data.decode()
+    assert "Held by classes" in lending and "Grade.10.A" in lending
+    with app.app_context():
+        e_id = db.session.scalar(db.select(Asset.id).where(Asset.name == "PC-E"))
+    client.post(f"/checkouts/release/{e_id}", follow_redirects=True)
+    with app.app_context():
+        released = db.session.get(Asset, e_id)
+        assert released.assigned_label is None
+        assert "Assigned to" not in (released.notes or "")
+
 
 def test_transfer_changes_branch_building_floor_room_department(client, app):
     """'Change location' on the asset page moves the asset with the same
