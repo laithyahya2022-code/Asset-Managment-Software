@@ -44,6 +44,7 @@ LABEL_PRESETS = [
     ("152.4x76.2", "6 × 3 in  (152 × 76 mm)"),
     ("101.6x152.4", "4 × 6 in  (102 × 152 mm) shipping roll"),
     ("101.6x50.8", "4 × 2 in  (102 × 51 mm)"),
+    ("76.2x152.4", "3 × 6 in  (76 × 152 mm) portrait"),
     ("70x38", "70 × 38 mm"),
     ("55x38", "55 × 38 mm  thermal sticker"),
     ("50x30", "50 × 30 mm  asset tag"),

@@ -158,10 +158,15 @@ def settings():
         # applies it even if no script ran (the script clears it when the
         # width/height boxes are edited by hand, so typed values still win).
         preset = request.form.get("label_preset", "").strip()
-        if preset and "x" in preset:
+        if preset and "x" in preset:              # "" and "__other__" pass through
             preset_w, preset_h = preset.split("x", 1)
-            set_setting("label_width_mm", _label_mm(preset_w))
-            set_setting("label_height_mm", _label_mm(preset_h))
+            try:
+                float(_label_mm(preset_w)), float(_label_mm(preset_h))
+            except ValueError:
+                pass                              # not a size: keep typed values
+            else:
+                set_setting("label_width_mm", _label_mm(preset_w))
+                set_setting("label_height_mm", _label_mm(preset_h))
         log_activity("settings_updated", "setting", None)
         db.session.commit()
         flash(f"Settings saved. Label size: {get_setting('label_width_mm')} × "
