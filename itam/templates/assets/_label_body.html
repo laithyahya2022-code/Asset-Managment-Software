@@ -1,34 +1,26 @@
-{# One printed label for `asset`. Expects `L` (label_layout) and `app_name`. #}
+{# One printed label for `asset`. Expects `L` (label_layout) and `app_name`.
+   Design: blue header band (organisation + tag chip), detail rows, then a
+   full-width Code 128 barcode with the tag beneath it. #}
 <div class="label">
-<div class="label-row">
-  <div class="qr-col">
-    <div class="box"><img src="{{ url_for('assets.qr', asset_id=asset.id) }}" alt="QR {{ asset.tag }}"></div>
-    <div class="tag">{{ asset.tag }}</div>
-  </div>
-  {% if L.show_org or L.fields %}
-  <div class="info">
+  <div class="lhead">
     {% if L.show_org %}<div class="org">{{ app_name }}</div>{% endif %}
-    {% if L.fields %}
-    {% set values = {
-      "name": asset.name, "branch": asset.branch, "serial": asset.serial,
-      "floor": asset.floor, "location": asset.location_name,
-      "department": asset.department.name if asset.department else None
-    } %}
-    {% set titles = {
-      "name": "Name", "branch": "Branch", "serial": "Serial",
-      "floor": "Floor", "location": "Location", "department": "Department"
-    } %}
-    <div class="grid">
-      {% for key in L.fields %}
-      <div class="field {{ 'full' if key in L.full_fields }}">
-        <div class="lbl">{{ titles[key] }}</div>
-        <div class="val">{{ values[key] or "—" }}</div>
-      </div>
-      {% endfor %}
+    <div class="chip">{{ asset.tag }}</div>
+  </div>
+  {% if L.fields %}
+  {% set values = {
+    "branch": asset.branch, "serial": asset.serial,
+    "department": asset.department.name if asset.department else None
+  } %}
+  {% set titles = {"branch": "Branch", "department": "Dept", "serial": "S/N"} %}
+  <div class="lrows">
+    {% for key in L.fields %}
+    <div class="lrow">
+      <span class="lk">{{ titles[key] }}</span>
+      <span class="lv {{ 'mono' if key == 'serial' }}">{{ values[key] or "—" }}</span>
     </div>
-    {% endif %}
+    {% endfor %}
   </div>
   {% endif %}
-</div>
-{% if L.bc_h %}<div class="bc">{{ code128(asset.tag) }}</div>{% endif %}
+  <div class="bc">{{ code128(asset.tag) }}</div>
+  <div class="bctag">{{ asset.tag }}</div>
 </div>

@@ -93,37 +93,32 @@ def app_name_parts():
 def label_layout(width_mm=None, height_mm=None, org_name=None):
     """Geometry for the printed asset label, in millimetres.
 
-    One design has to cover everything from a 40x20mm equipment tag to a
-    152x76mm sheet, so nothing is fixed: sizes derive from the short edge, and
-    the text block is then measured against the space actually left over and
-    scaled down until it fits. Without that last step a long organisation name
-    or a tall field list simply overflows the sticker.
+    The design is a header band (organisation name + asset-tag chip), then
+    the detail rows (branch / dept / serial), then a full-width Code 128
+    barcode with the tag beneath it. One layout has to cover everything from
+    a 40x20mm equipment tag to a 152x76mm sheet, so nothing is fixed: sizes
+    derive from the sticker and are squeezed until they fit.
     """
-    import math
-
     if width_mm is None or height_mm is None:
         width_mm, height_mm = label_size_mm()
     if org_name is None:
         org_name = get_setting("label_org")
     short = min(width_mm, height_mm)
     portrait = height_mm > width_mm
-    pad = max(1.2, short * 0.06)
-    gap = pad * 0.8
+    pad = max(1.2, short * 0.055)
 
-    # A Code 128 strip along the bottom lets laser scanners (which cannot
-    # read QR) pick up the tag. Below ~28mm there is no room for both codes.
-    bc_h = min(max(short * 0.16, 5.0), 9.0) if short >= 28 else 0.0
-    bc_total = (bc_h + pad * 0.4) if bc_h else 0.0
+    header_h = min(max(height_mm * 0.18, 5.5), 13.0)
+    fs_org = max(header_h * 0.38, 2.2)
+    fs_tag = max(header_h * 0.32, 2.0)
+    # The organisation name must survive on one line: shrink it when the
+    # header is too narrow for its length (the chip takes ~30% of the width).
+    per_line = max(1, int((width_mm * 0.62 - 2 * pad) / (fs_org * 0.52)))
+    org_len = len(org_name or "")
+    if org_len > per_line:
+        fs_org *= max(0.6, per_line / org_len)
 
-    # The asset tag prints under the QR, so it has to come out of the height
-    # budget before the QR is sized, or the column overflows the sticker.
-    fs_tag = max(short * 0.062, 2.6)
-    tag_line = fs_tag * 1.4 + pad * 0.4
-    if portrait:
-        qr = min(width_mm - 2 * pad, height_mm * 0.42)
-    else:
-        qr = min(height_mm - 2 * pad - tag_line - bc_total, width_mm * 0.33)
-    qr = max(qr, 8.0)
+    bc_h = min(max(height_mm * 0.20, 4.5), 16.0)
+    fs_bctag = max(short * 0.05, 2.0)
 
     show_org = short >= 24
     if short < 24:
@@ -134,47 +129,24 @@ def label_layout(width_mm=None, height_mm=None, org_name=None):
         fields = ["branch", "serial"]
     else:
         fields = ["branch", "department", "serial"]
-    columns = 2 if (not portrait and short >= 45) else 1
-    # Serial is long, so it gets a row to itself rather than a cramped column.
-    full_fields = ["serial"] if columns > 1 else []
 
-    # Restrained type: the QR and the asset tag carry the label, the rest is
-    # supporting detail. Floors keep it legible on small thermal stock.
-    fs_org = max(short * 0.058, 2.6)
     fs_label = max(short * 0.042, 1.8)
-    fs_value = max(short * 0.052, 2.2)
-
-    # How much of the organisation name fits on one line, from the width the
-    # text column actually has rather than a guess at character count.
-    org_len = len(org_name or "")
-    if portrait:
-        info_w = width_mm - 2 * pad
-        avail = height_mm - 2 * pad - qr - tag_line - gap - bc_total
-    else:
-        info_w = width_mm - 2 * pad - qr - gap
-        avail = height_mm - 2 * pad - bc_total
-    per_line = max(1, int(info_w / (fs_org * 0.52)))
-    org_lines = 1 if org_len <= per_line else 2
-    if show_org and org_len > per_line * 2:
-        # Longer than two lines would hold, so step the size down instead.
-        fs_org *= max(0.6, (per_line * 2) / org_len)
-    needed = (fs_org * 1.25 * org_lines + pad * 0.5) if show_org else 0.0
-    rows = math.ceil(len(fields) / columns) if fields else 0
-    if rows:
-        needed += rows * (fs_label * 1.25 + fs_value * 1.25) + (rows - 1) * (pad * 0.45)
+    fs_value = max(short * 0.055, 2.2)
+    avail = height_mm - header_h - bc_h - fs_bctag * 1.5 - 2 * pad
+    needed = len(fields) * fs_value * 1.6
     if needed > avail > 0:
         squeeze = avail / needed
-        fs_org *= squeeze
         fs_label = max(fs_label * squeeze, 1.1)
-        fs_value *= squeeze
+        fs_value = max(fs_value * squeeze, 1.6)
 
     return {
         "width": round(width_mm, 2), "height": round(height_mm, 2),
-        "portrait": portrait, "pad": round(pad, 2), "qr": round(qr, 2),
-        "bc_h": round(bc_h, 2),
-        "gap": round(gap, 2), "show_org": show_org, "fields": fields,
-        "full_fields": full_fields,
-        "org_lines": org_lines, "columns": columns,
+        "portrait": portrait, "pad": round(pad, 2),
+        "header_h": round(header_h, 2), "bc_h": round(bc_h, 2),
+        "fs_bctag": round(fs_bctag, 2),
+        "qr": 0, "gap": round(pad * 0.8, 2),
+        "show_org": show_org, "fields": fields, "full_fields": [],
+        "org_lines": 1, "columns": 1,
         "fs_org": round(fs_org, 2), "fs_tag": round(fs_tag, 2),
         "fs_label": round(fs_label, 2), "fs_value": round(fs_value, 2),
     }

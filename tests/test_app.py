@@ -537,9 +537,9 @@ def test_asset_label_6x3(client, app):
     body = resp.data.decode()
     # 6 x 3 in is the default, now expressed in mm so any stock size works
     assert "@page { size: 152.4mm 76.2mm; margin: 0; }" in body
-    assert "LBL-1" in body                   # tag under QR
+    assert "LBL-1" in body                   # tag in the header chip
     assert "Mada 3" in body and "SN-8842-XJ01" in body
-    assert "/qr.svg" in body                 # QR image embedded
+    assert 'class="bc"' in body              # Code 128 across the bottom
 
 
 def test_procurement_removed(client):
@@ -696,8 +696,9 @@ def test_labels_carry_a_laser_readable_barcode(client, app):
     from itam.models import Asset, Category
     from itam.utils import label_layout, set_setting
 
+    # The barcode is the label's machine-readable code, at every size.
     assert label_layout(55, 38, org_name="Mada AMS")["bc_h"] > 0
-    assert label_layout(40, 20, org_name="Mada AMS")["bc_h"] == 0
+    assert label_layout(40, 20, org_name="Mada AMS")["bc_h"] > 0
 
     with app.app_context():
         asset = Asset(tag="BC-0001", name="Scanner test", status="Available",
@@ -792,7 +793,7 @@ def test_label_prints_the_organisation_not_the_software_name(client, app):
     page = client.get(f"/assets/{asset_id}/label").data.decode()
     assert "Mada International Academy" in page
     assert "(AMS)" not in page                 # software name stays off the label
-    for text in ("Branch", "Mada 3", "Department", "IT", "Serial", "SN-8842-XJ01"):
+    for text in ("Branch", "Mada 3", "Dept", "IT", "S/N", "SN-8842-XJ01"):
         assert text in page, f"{text} missing from the label"
 
 

@@ -31,42 +31,46 @@
 
   .label {
     width: {{ L.width }}mm; height: {{ L.height }}mm; margin: 0 auto 12px; background: #fff;
-    border: 1px dashed #55524a; overflow: hidden; color: #1d2530;
+    overflow: hidden; color: #1d2530; border-radius: {{ (L.pad * 0.9) | round(2) }}mm;
     box-shadow: 0 10px 34px rgba(0,0,0,0.55);
-    display: flex; flex-direction: column; padding: {{ L.pad }}mm;
+    display: flex; flex-direction: column;
+    font-family: "Segoe UI", Arial, sans-serif;
   }
-  .label-row {
-    flex: 1; min-height: 0;
-    display: flex; align-items: center; gap: {{ L.gap }}mm;
-    {% if L.portrait %}flex-direction: column; justify-content: center;{% endif %}
+  .mono { font-family: ui-monospace, Menlo, Consolas, monospace; }
+  /* Header band: organisation left, asset-tag chip right. */
+  .lhead {
+    flex-shrink: 0; height: {{ L.header_h }}mm; background: #2b3a8c; color: #fff;
+    display: flex; align-items: center; justify-content: space-between;
+    gap: {{ L.gap }}mm; padding-inline: {{ L.pad }}mm;
   }
-  {% if L.bc_h %}
+  .lhead .org { font-size: {{ L.fs_org }}mm; font-weight: 700; line-height: 1.1;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .lhead .chip {
+    flex-shrink: 0; font-family: ui-monospace, Menlo, Consolas, monospace;
+    font-size: {{ L.fs_tag }}mm; font-weight: 600; letter-spacing: 0.04em;
+    border: 0.45mm solid rgba(255,255,255,0.9);
+    border-radius: {{ (L.header_h * 0.22) | round(2) }}mm;
+    padding: {{ (L.header_h * 0.1) | round(2) }}mm {{ (L.header_h * 0.28) | round(2) }}mm;
+    white-space: nowrap;
+  }
+  /* Detail rows: BRANCH / DEPT / S/N. */
+  .lrows { flex: 1; min-height: 0; overflow: hidden;
+    padding: {{ (L.pad * 0.7) | round(2) }}mm {{ L.pad }}mm 0; }
+  .lrow { display: flex; align-items: baseline; gap: {{ L.gap }}mm;
+    margin-bottom: {{ (L.pad * 0.35) | round(2) }}mm; }
+  .lrow .lk { flex-shrink: 0; width: {{ (L.width * 0.2) | round(2) }}mm;
+    font-size: {{ L.fs_label }}mm; font-weight: 600; letter-spacing: 0.14em;
+    text-transform: uppercase; color: #8a90a5; }
+  .lrow .lv { font-size: {{ L.fs_value }}mm; font-weight: 700; line-height: 1.2;
+    min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* Barcode across the bottom with the tag beneath it. */
   .label .bc { flex-shrink: 0; height: {{ L.bc_h }}mm;
-    margin-top: {{ (L.pad * 0.4) | round(2) }}mm; }
+    margin: {{ (L.pad * 0.4) | round(2) }}mm {{ L.pad }}mm 0; }
   .label .bc svg { width: 100%; height: 100%; display: block; }
-  {% endif %}
-  .qr-col { flex-shrink: 0; text-align: center; }
-  .qr-col .box { width: {{ L.qr }}mm; height: {{ L.qr }}mm; background: #fff;
-    border: 0.25mm solid #e4e7ec; padding: {{ (L.pad * 0.18) | round(2) }}mm; }
-  .qr-col .box img, .qr-col .box svg { width: 100%; height: 100%; display: block; }
-  .qr-col .tag {
-    margin-top: {{ (L.pad * 0.4) | round(2) }}mm; font-size: {{ L.fs_tag }}mm; font-weight: 500;
-    letter-spacing: 0.01em; white-space: nowrap; color: #1d2530;
-  }
-  .info { flex: 1; min-width: 0; overflow: hidden;
-    {% if L.portrait %}width: 100%; text-align: center;{% endif %} }
-  .org { font-size: {{ L.fs_org }}mm; font-weight: 600; line-height: 1.2;
-    margin-bottom: {{ (L.pad * 0.75) | round(2) }}mm;
-    display: -webkit-box; -webkit-box-orient: vertical;
-    -webkit-line-clamp: {{ L.org_lines }}; line-clamp: {{ L.org_lines }};
-    overflow: hidden; overflow-wrap: anywhere; }
-  .grid { display: grid; grid-template-columns: repeat({{ L.columns }}, minmax(0, 1fr));
-    gap: {{ (L.pad * 0.45) | round(2) }}mm {{ (L.pad * 0.7) | round(2) }}mm; }
-  .field { min-width: 0; }
-  .field .lbl { font-size: {{ L.fs_label }}mm; color: #6b7480; line-height: 1.2; }
-  .field .val { font-size: {{ L.fs_value }}mm; font-weight: 700; line-height: 1.2;
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .field.full { grid-column: 1 / -1; }
+  .bctag { flex-shrink: 0; text-align: center;
+    font-family: ui-monospace, Menlo, Consolas, monospace;
+    font-size: {{ L.fs_bctag }}mm; font-weight: 600; letter-spacing: 0.28em;
+    padding-bottom: {{ (L.pad * 0.5) | round(2) }}mm; color: #1d2530; }
 
   @media print {
     html, body { background: #fff; }
