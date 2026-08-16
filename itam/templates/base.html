@@ -25,7 +25,8 @@
 <header class="topbar no-print">
   <label for="nav-toggle" class="nav-btn" aria-label="{{ t('Menu') }}">{{ icon("menu") }}</label>
   <a class="brand" href="{{ url_for('main.dashboard') }}">
-    <span class="brand-mark">A</span>
+    <img class="brand-mark" src="{{ url_for('static', filename='icon.svg') }}" alt="">
+
     <span class="wordmark">AMS</span>
   </a>
   <span class="divider" aria-hidden="true"></span>

@@ -1,5 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect x="1.5" y="1.5" width="61" height="61" rx="15" fill="#0F1826" stroke="#4FD07E" stroke-width="2.4"/>
-  <polyline points="14,41 25,27 32,36 39,27 50,41" fill="none" stroke="#4FD07E"
-            stroke-width="6.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Mada mark: gold M on a dark rounded tile, per the school's logo. -->
+  <rect x="2.6" y="2.6" width="58.8" height="58.8" rx="14" fill="#191811"
+        stroke="#d4c66b" stroke-width="3.4"/>
+  <polyline points="15.5,47.5 26,23.5 33,38 42.5,20.5 49.5,46"
+            fill="none" stroke="#d4c66b" stroke-width="7"
+            stroke-linecap="round" stroke-linejoin="round"/>
 </svg>
