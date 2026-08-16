@@ -412,6 +412,7 @@ def detail(asset_id):
         .order_by(InventoryCheck.checked_at.desc()).limit(1)).first()
     return render_template("assets/detail.html", asset=a, today=date.today(),
                            timeline=timeline, last_check=last_check,
+                           L=label_layout(),
                            default_due=(date.today() + timedelta(
                                days=int(get_setting("checkout_days") or 30))),
                            image_exts=IMAGE_EXTS, **_lookups())
@@ -672,10 +673,13 @@ def barcode(asset_id):
 @perm_required("assets.view")
 def label(asset_id):
     a = db.get_or_404(Asset, asset_id)
+    bare = request.args.get("bare") == "1"       # embedded preview, no chrome
     html = render_template("assets/label.html", asset=a,
                            app_name=get_setting("label_org"),
-                           L=label_layout(),
-                           auto=request.args.get("auto") == "1")
+                           L=label_layout(), bare=bare,
+                           auto=not bare and request.args.get("auto") == "1")
+    if bare:
+        return html
     return _print_or_show(html, f"Label for {a.tag}")
 
 
