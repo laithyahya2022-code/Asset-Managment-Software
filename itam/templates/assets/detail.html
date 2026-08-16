@@ -155,10 +155,27 @@
   <div>
     <div class="card" style="text-align:center">
       <p class="eyebrow">{{ t("Label") }}</p>
-      {# The sticker exactly as it prints, embedded bare (no toolbar). #}
-      <iframe src="{{ url_for('assets.label', asset_id=asset.id, bare=1) }}"
-              title="Label preview for {{ asset.tag }}" scrolling="no"
-              style="border:0;width:calc({{ L.width }}mm + 6px);height:calc({{ L.height }}mm + 6px);max-width:100%"></iframe>
+      {# The sticker exactly as it prints, embedded bare (no toolbar) and
+         scaled down to the card when the physical size is wider than it. #}
+      <div id="label-fit" style="overflow:hidden;margin:0 auto">
+        <iframe id="label-frame" src="{{ url_for('assets.label', asset_id=asset.id, bare=1) }}"
+                title="Label preview for {{ asset.tag }}" scrolling="no"
+                style="border:0;width:calc({{ L.width }}mm + 6px);height:calc({{ L.height }}mm + 10px);transform-origin:top left"></iframe>
+      </div>
+      <script>
+        (function () {
+          var frame = document.getElementById("label-frame");
+          var box = document.getElementById("label-fit");
+          if (!frame || !box) return;
+          function fit() {
+            var scale = Math.min(1, box.clientWidth / frame.offsetWidth);
+            frame.style.transform = "scale(" + scale + ")";
+            box.style.height = Math.ceil(frame.offsetHeight * scale) + "px";
+          }
+          fit();
+          window.addEventListener("resize", fit);
+        })();
+      </script>
       <div class="actions-row no-print" style="justify-content:center">
         <a class="btn sm" href="{{ url_for('assets.label', asset_id=asset.id) }}">{{ t("Print") }} {{ t("label") }} ({{ L.width }}×{{ L.height }} mm)</a>
       </div>
