@@ -1202,6 +1202,13 @@ def _validate_import(raw):
     # Asset IDs already in the register: a row reusing one is a duplicate
     # record and is refused, not silently renumbered.
     existing = {t.lower() for (t,) in db.session.execute(db.select(Asset.tag))}
+    # The school's sheet leaves the Asset ID column empty, so importing the
+    # same file twice used to double the register: every row got a fresh
+    # generated ID. A row without an ID whose name+serial are already in the
+    # register is the same device coming back — refuse it too.
+    existing_pairs = {
+        ((n or "").strip().lower(), (s or "").strip().lower())
+        for n, s in db.session.execute(db.select(Asset.name, Asset.serial))}
 
     seen, rows = set(), []
     for i, rec in enumerate(raw_rows, start=2):
@@ -1226,6 +1233,11 @@ def _validate_import(raw):
                        "appears more than once in the file")
             else:
                 seen.add(tag)
+        elif not err and (row["name"].lower(),
+                          row["serial"].lower()) in existing_pairs:
+            err = (f'Duplicated Records — "{row["name"]}" with this serial is '
+                   "already in the register (give the row a new Asset ID if "
+                   "it really is another device)")
         row["_auto_tag"] = not tag
         row["_line"], row["_error"] = i, err
         if err:

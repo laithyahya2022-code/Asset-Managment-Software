@@ -1008,6 +1008,33 @@ def test_export_matches_the_school_sheet_and_round_trips(client, app):
         assert value in row
 
 
+def test_reimporting_the_same_idless_file_does_not_duplicate(client, app):
+    """The school sheet has an empty Asset ID column; importing it twice used
+    to double the register. Same name+serial with no ID -> refused."""
+    import re
+    login(client)
+    csv = ("Name,Category,Serial No.\n"
+           "RE-PC1,Desktop,SN-R1\n"
+           "RE-PC2,Desktop,SN-R2\n")
+
+    def run():
+        resp = client.post("/assets/import",
+                           data={"file": (io.BytesIO(csv.encode()), "re.csv")},
+                           content_type="multipart/form-data")
+        token = re.search(rb'name="token" value="([^"]+)"',
+                          resp.data).group(1).decode()
+        return client.post("/assets/import", data={"token": token},
+                           follow_redirects=True)
+
+    run()
+    with app.app_context():
+        first = db.session.scalar(db.select(db.func.count(Asset.id)))
+    done = run()
+    assert b"Duplicated Records" in done.data
+    with app.app_context():
+        assert db.session.scalar(db.select(db.func.count(Asset.id))) == first
+
+
 def test_delete_all_assets_clears_every_page(client, app):
     """Bulk delete works 50 rows at a time; Delete all wipes the register."""
     with app.app_context():
