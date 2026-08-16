@@ -130,10 +130,10 @@ def label_layout(width_mm=None, height_mm=None, org_name=None):
     else:
         fields = ["branch", "department", "serial"]
 
-    fs_label = max(short * 0.042, 1.8)
-    fs_value = max(short * 0.055, 2.2)
+    fs_label = max(short * 0.046, 1.9)
+    fs_value = max(short * 0.066, 2.4)
     avail = height_mm - header_h - bc_h - fs_bctag * 1.5 - 2 * pad
-    needed = len(fields) * fs_value * 1.6
+    needed = len(fields) * fs_value * 1.7
     if needed > avail > 0:
         squeeze = avail / needed
         fs_label = max(fs_label * squeeze, 1.1)

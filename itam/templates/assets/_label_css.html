@@ -31,10 +31,10 @@
 
   .label {
     width: {{ L.width }}mm; height: {{ L.height }}mm; margin: 0 auto 12px; background: #fff;
-    overflow: hidden; color: #1d2530; border-radius: {{ (L.pad * 0.9) | round(2) }}mm;
+    overflow: hidden; color: #14203f; border-radius: {{ (L.pad * 1.3) | round(2) }}mm;
     box-shadow: 0 10px 34px rgba(0,0,0,0.55);
     display: flex; flex-direction: column;
-    font-family: "Segoe UI", Arial, sans-serif;
+    font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
   }
   .mono { font-family: ui-monospace, Menlo, Consolas, monospace; }
   /* Header band: organisation left, asset-tag chip right. */
@@ -43,25 +43,27 @@
     display: flex; align-items: center; justify-content: space-between;
     gap: {{ L.gap }}mm; padding-inline: {{ L.pad }}mm;
   }
-  .lhead .org { font-size: {{ L.fs_org }}mm; font-weight: 700; line-height: 1.1;
+  .lhead .org { font-size: {{ L.fs_org }}mm; font-weight: 800; line-height: 1.1;
+    letter-spacing: 0.01em;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .lhead .chip {
     flex-shrink: 0; font-family: ui-monospace, Menlo, Consolas, monospace;
-    font-size: {{ L.fs_tag }}mm; font-weight: 600; letter-spacing: 0.04em;
-    border: 0.45mm solid rgba(255,255,255,0.9);
-    border-radius: {{ (L.header_h * 0.22) | round(2) }}mm;
-    padding: {{ (L.header_h * 0.1) | round(2) }}mm {{ (L.header_h * 0.28) | round(2) }}mm;
+    font-size: {{ L.fs_tag }}mm; font-weight: 700; letter-spacing: 0.05em;
+    border: 0.5mm solid rgba(255,255,255,0.92);
+    border-radius: {{ (L.header_h * 0.3) | round(2) }}mm;
+    padding: {{ (L.header_h * 0.12) | round(2) }}mm {{ (L.header_h * 0.3) | round(2) }}mm;
     white-space: nowrap;
   }
   /* Detail rows: BRANCH / DEPT / S/N. */
   .lrows { flex: 1; min-height: 0; overflow: hidden;
-    padding: {{ (L.pad * 0.7) | round(2) }}mm {{ L.pad }}mm 0; }
+    padding: {{ (L.pad * 0.8) | round(2) }}mm {{ L.pad }}mm 0; }
   .lrow { display: flex; align-items: baseline; gap: {{ L.gap }}mm;
-    margin-bottom: {{ (L.pad * 0.35) | round(2) }}mm; }
+    margin-bottom: {{ (L.pad * 0.45) | round(2) }}mm; }
   .lrow .lk { flex-shrink: 0; width: {{ (L.width * 0.2) | round(2) }}mm;
-    font-size: {{ L.fs_label }}mm; font-weight: 600; letter-spacing: 0.14em;
+    font-size: {{ L.fs_label }}mm; font-weight: 700; letter-spacing: 0.16em;
     text-transform: uppercase; color: #8a90a5; }
-  .lrow .lv { font-size: {{ L.fs_value }}mm; font-weight: 700; line-height: 1.2;
+  .lrow .lv { font-size: {{ L.fs_value }}mm; font-weight: 800; line-height: 1.15;
+    color: #14203f;
     min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   /* Barcode across the bottom with the tag beneath it. */
   .label .bc { flex-shrink: 0; height: {{ L.bc_h }}mm;
