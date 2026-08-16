@@ -154,13 +154,34 @@ def settings():
                 set_setting(key, _label_mm(request.form.get(key, "")))
             else:
                 set_setting(key, request.form.get(key, "").strip())
+        # The Common-sizes dropdown is a real field: picking a size and saving
+        # applies it even if no script ran (the script clears it when the
+        # width/height boxes are edited by hand, so typed values still win).
+        preset = request.form.get("label_preset", "").strip()
+        if preset and "x" in preset:
+            preset_w, preset_h = preset.split("x", 1)
+            set_setting("label_width_mm", _label_mm(preset_w))
+            set_setting("label_height_mm", _label_mm(preset_h))
         log_activity("settings_updated", "setting", None)
         db.session.commit()
-        flash("Settings saved.", "success")
+        flash(f"Settings saved. Label size: {get_setting('label_width_mm')} × "
+              f"{get_setting('label_height_mm')} mm.", "success")
         return redirect(url_for("admin.settings"))
     values = {k: get_setting(k) for k in keys}
+
+    def _f(text):
+        try:
+            return float(text)
+        except (TypeError, ValueError):
+            return None
+
+    current_preset = next(
+        (value for value, _ in LABEL_PRESETS
+         if (_f(value.split("x")[0]), _f(value.split("x")[1]))
+         == (_f(values["label_width_mm"]), _f(values["label_height_mm"]))), "")
     return render_template("admin/settings.html", groups=SETTING_GROUPS, values=values,
-                           label_presets=LABEL_PRESETS)
+                           label_presets=LABEL_PRESETS,
+                           current_preset=current_preset)
 
 
 @bp.route("/update-now", methods=["POST"])

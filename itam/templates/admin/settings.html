@@ -30,10 +30,10 @@
       {{ t("Sizes can be typed in inches or cm too — e.g. 6.4 in or 3.5 cm — and are converted to mm on save.") }}
     </p>
     <label for="label-preset">{{ t("Common sizes") }}</label>
-    <select id="label-preset">
+    <select id="label-preset" name="label_preset">
       <option value="">{{ t("Choose a size…") }}</option>
       {% for value, text in label_presets %}
-      <option value="{{ value }}">{{ text }}</option>
+      <option value="{{ value }}" {{ 'selected' if value == current_preset }}>{{ text }}</option>
       {% endfor %}
     </select>
     {% endif %}
@@ -101,8 +101,14 @@
       draw();
     });
   }
-  w.addEventListener("input", draw);
-  h.addEventListener("input", draw);
+  // Typing a size by hand overrides the dropdown: clear it so the saved
+  // values are the typed ones, not the stale preset.
+  function manual() {
+    if (preset) { preset.selectedIndex = 0; }
+    draw();
+  }
+  w.addEventListener("input", manual);
+  h.addEventListener("input", manual);
   draw();
 })();
 </script>

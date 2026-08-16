@@ -758,6 +758,31 @@ def test_label_size_accepts_inches_and_cm():
     assert _label_mm("garbage in") == "garbage in"
 
 
+def test_common_size_dropdown_saves_without_javascript(client, app):
+    """Picking a size and pressing Save must work as a plain form post."""
+    from itam.utils import get_setting
+
+    login(client)
+    form = {"app_name": "Mada Asset Management System (AMS)", "qr_prefix": "",
+            "custom_asset_fields": "", "checkout_days": "30",
+            "warranty_alert_days": "90", "license_alert_days": "90",
+            "smtp_host": "", "smtp_port": "587", "smtp_user": "",
+            "smtp_password": "", "smtp_from": "", "audit_retention_days": "365",
+            "label_org": "Mada International Academy", "label_printer": "",
+            "update_repo": "", "update_token": "",
+            "label_width_mm": "152.4", "label_height_mm": "76.2"}
+    # dropdown picked, width/height boxes untouched -> the preset wins
+    resp = client.post("/admin/settings",
+                       data={**form, "label_preset": "55x38"},
+                       follow_redirects=True)
+    with app.app_context():
+        assert get_setting("label_width_mm") == "55"
+        assert get_setting("label_height_mm") == "38"
+    assert b"55" in resp.data and b"38" in resp.data   # confirmed in the flash
+    # the dropdown shows the active size on the next visit
+    assert b'value="55x38" selected' in client.get("/admin/settings").data
+
+
 def test_label_size_is_clamped_to_something_printable(app):
     from itam.utils import label_size_mm, set_setting
 
