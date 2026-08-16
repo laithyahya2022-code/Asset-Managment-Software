@@ -3,19 +3,36 @@
 <style>
   @page { size: {{ L.width }}mm {{ L.height }}mm; margin: 0; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  html, body { background: #f4f5f7; font-family: -apple-system, BlinkMacSystemFont,
-    "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: #1d2530; }
-  .toolbar { text-align: center; padding: 16px; }
-  .btn { display: inline-block; padding: 10px 22px; border-radius: 8px; border: none;
-    background: #1e9e4e; color: #fff; font-size: 15px; font-weight: 700; cursor: pointer;
-    text-decoration: none; }
-  .btn.secondary { background: #fff; color: #1d2530; border: 1px solid #d1d5db; margin-left: 8px; }
-  .hint { text-align: center; color: #6b7480; font-size: 13px; padding: 0 16px 14px; }
-  .hint code { font-family: ui-monospace, Menlo, Consolas, monospace; }
+  /* The page chrome follows the app's dark theme; the label itself stays a
+     white sticker, exactly as it prints. */
+  html, body { background: #171613; font-family: -apple-system, BlinkMacSystemFont,
+    "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: #e8e6db; }
+  .toolbar { text-align: center; padding: 20px 16px 6px; }
+  .btn { display: inline-block; padding: 11px 26px; border-radius: 8px; border: none;
+    background: #b8c95e; color: #171613; font-size: 15px; font-weight: 700;
+    cursor: pointer; text-decoration: none; }
+  .btn:hover { background: #cbd97b; }
+  .btn.secondary { background: transparent; color: #e8e6db;
+    border: 1px solid #3a382f; margin-left: 8px; font-weight: 500; }
+  .btn.secondary:hover { border-color: #b8c95e; color: #d3e07c; }
+  .size-tag { display: block; margin-top: 8px; font-size: 12.5px; color: #98958a; }
+  .size-tag b { color: #d3e07c; font-weight: 600; }
+
+  .guide { max-width: 620px; margin: 14px auto 20px; background: #201f1a;
+    border: 1px solid #2c2a22; border-radius: 10px; padding: 14px 18px;
+    font-size: 13px; line-height: 1.55; color: #b5b2a4; }
+  .guide .step { display: flex; gap: 10px; align-items: baseline; margin: 4px 0; }
+  .guide .n { flex-shrink: 0; width: 18px; height: 18px; border-radius: 50%;
+    background: #2c2a22; color: #d3e07c; font-size: 11px; font-weight: 700;
+    display: inline-grid; place-items: center; transform: translateY(2px); }
+  .guide b { color: #e8e6db; font-weight: 600; }
+  .guide code { font-family: ui-monospace, Menlo, Consolas, monospace;
+    background: #171613; color: #d3e07c; padding: 1px 6px; border-radius: 5px; }
 
   .label {
-    width: {{ L.width }}mm; height: {{ L.height }}mm; margin: 0 auto 10px; background: #fff;
-    border: 1px dashed #c9ced6; overflow: hidden;
+    width: {{ L.width }}mm; height: {{ L.height }}mm; margin: 0 auto 12px; background: #fff;
+    border: 1px dashed #55524a; overflow: hidden; color: #1d2530;
+    box-shadow: 0 10px 34px rgba(0,0,0,0.55);
     display: flex; flex-direction: column; padding: {{ L.pad }}mm;
   }
   .label-row {
@@ -53,9 +70,10 @@
 
   @media print {
     html, body { background: #fff; }
-    .toolbar, .hint { display: none !important; }
+    .toolbar, .hint, .guide { display: none !important; }
     /* One sticker per label on the roll. */
-    .label { border: none; margin: 0; page-break-inside: avoid; break-inside: avoid;
+    .label { border: none; margin: 0; box-shadow: none;
+      page-break-inside: avoid; break-inside: avoid;
       page-break-after: always; break-after: page; }
     .label:last-of-type { page-break-after: auto; break-after: auto; }
   }

@@ -8,20 +8,18 @@
 <body>
   <div class="toolbar">
     <button class="btn" onclick="window.print()">
-      Print {{ assets | length }} label{{ "" if assets | length == 1 else "s" }}
-      ({{ L.width }} × {{ L.height }} mm)</button>
-    <a class="btn secondary" href="{{ url_for('assets.list_') }}">Back to assets</a>
+      🖨 Print {{ assets | length }} label{{ "" if assets | length == 1 else "s" }}</button>
+    <a class="btn secondary" href="{{ url_for('assets.list_') }}">← Back to assets</a>
+    <span class="size-tag">Sticker size: <b>{{ L.width }} × {{ L.height }} mm</b> · one asset per sticker — change it in Settings → Printed labels</span>
   </div>
-  <p class="hint">
-    Each asset prints on its own label. Pick the label printer, set paper size to
-    <code>{{ L.width }} × {{ L.height }} mm</code> and scale to <code>100%</code> /
-    “Actual size”.
-  </p>
-  <p class="hint">
-    Sideways, or spread over several stickers? The size above doesn’t match the
-    sticker in your printer — measure the sticker and set it in
-    Settings → Printed labels (common sizes are one click there).
-  </p>
+
+  <div class="guide">
+    <div class="step"><span class="n">1</span><span>Press <b>Print</b> above — each asset comes out on its own sticker.</span></div>
+    <div class="step"><span class="n">2</span><span>In the print dialog: pick the <b>label printer</b>, paper size
+      <code>{{ L.width }} × {{ L.height }} mm</code>, scale <b>100% / Actual size</b>.</span></div>
+    <div class="step"><span class="n">3</span><span>Comes out sideways or split over several stickers?
+      Measure one sticker and set its size in <b>Settings → Printed labels</b>.</span></div>
+  </div>
 
   {% for asset in assets %}
     {% include "assets/_label_body.html" %}
