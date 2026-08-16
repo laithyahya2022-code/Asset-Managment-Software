@@ -655,6 +655,15 @@ def qr_preview():
     return Response(qr_svg(get_setting("qr_prefix") + data), mimetype="image/svg+xml")
 
 
+@bp.get("/barcode-preview")
+@perm_required("assets.view")
+def barcode_preview():
+    """Live Code 128 for the label preview on the asset form."""
+    from ..utils import code128_svg
+    data = request.args.get("data", "").strip() or "PREVIEW"
+    return Response(code128_svg(data), mimetype="image/svg+xml")
+
+
 @bp.route("/<int:asset_id>/qr.svg")
 @perm_required("assets.view")
 def qr(asset_id):
