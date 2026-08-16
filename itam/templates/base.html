@@ -26,8 +26,9 @@
   <label for="nav-toggle" class="nav-btn" aria-label="{{ t('Menu') }}">{{ icon("menu") }}</label>
   <a class="brand" href="{{ url_for('main.dashboard') }}">
     <img class="brand-mark" src="{{ url_for('static', filename='icon.svg') }}" alt="">
-
-    <span class="wordmark">AMS</span>
+    {# The logged-in person's name next to the mark, per request; the app
+       name still lives in the tab title and the user menu. #}
+    <span class="wordmark">{{ g.user.name or g.user.username if g.user else "AMS" }}</span>
   </a>
   <span class="divider" aria-hidden="true"></span>
   <form class="global-search" action="{{ url_for('main.search') }}" method="get">
