@@ -112,15 +112,15 @@ def label_layout(width_mm=None, height_mm=None, org_name=None):
     portrait = height_mm > width_mm
     pad = max(1.2, short * 0.055)
 
-    header_h = min(max(height_mm * 0.18, 5.5), 13.0)
-    fs_org = max(header_h * 0.38, 2.2)
-    fs_tag = max(header_h * 0.32, 2.0)
-    # The organisation name must survive on one line: shrink it when the
-    # header is too narrow for its length (the chip takes ~30% of the width).
+    # The header is taller in this design: the organisation name may wrap to
+    # two lines, with an "ASSET TAG" caption underneath.
+    header_h = min(max(height_mm * 0.24, 7.0), 18.0)
+    fs_org = max(header_h * 0.26, 2.0)
+    fs_tag = max(header_h * 0.20, 1.8)
     per_line = max(1, int((width_mm * 0.62 - 2 * pad) / (fs_org * 0.52)))
     org_len = len(org_name or "")
-    if org_len > per_line:
-        fs_org *= max(0.6, per_line / org_len)
+    if org_len > per_line * 2:
+        fs_org *= max(0.6, (per_line * 2) / org_len)
 
     bc_h = min(max(height_mm * 0.20, 4.5), 16.0)
     fs_bctag = max(short * 0.05, 2.0)

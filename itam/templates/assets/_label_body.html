@@ -3,7 +3,12 @@
    full-width Code 128 barcode with the tag beneath it. #}
 <div class="label">
   <div class="lhead">
-    {% if L.show_org %}<div class="org">{{ app_name }}</div>{% endif %}
+    {% if L.show_org %}
+    <div class="org-wrap">
+      <div class="org">{{ app_name }}</div>
+      <div class="sub">Asset Tag</div>
+    </div>
+    {% endif %}
     <div class="chip">{{ asset.tag }}</div>
   </div>
   {% if L.fields %}
