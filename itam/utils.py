@@ -144,9 +144,13 @@ def label_layout(width_mm=None, height_mm=None, org_name=None):
         fs_label = max(fs_label * squeeze, 1.1)
         fs_value = max(fs_value * squeeze, 1.6)
 
+    try:
+        rotate = get_setting("label_rotate") == "1"
+    except RuntimeError:
+        rotate = False      # called outside a request (unit tests, tooling)
     return {
         "width": round(width_mm, 2), "height": round(height_mm, 2),
-        "rotate": get_setting("label_rotate") == "1",
+        "rotate": rotate,
         "portrait": portrait, "pad": round(pad, 2),
         "header_h": round(header_h, 2), "bc_h": round(bc_h, 2),
         "fs_bctag": round(fs_bctag, 2),
