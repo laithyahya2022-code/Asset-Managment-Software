@@ -1266,8 +1266,12 @@ def _validate_import(raw):
                        "appears more than once in the file")
             else:
                 seen.add(tag)
-        elif not err and (row["name"].lower(),
-                          row["serial"].lower()) in existing_pairs:
+        elif (not err and row["serial"].strip()
+                and (row["name"].lower(),
+                     row["serial"].lower()) in existing_pairs):
+            # Only the Asset ID is a key; names may repeat freely. This
+            # extra check needs a real serial to fire — the same name WITH
+            # the same serial is the same physical device coming back.
             err = (f'Duplicated Records — "{row["name"]}" with this serial is '
                    "already in the register (give the row a new Asset ID if "
                    "it really is another device)")
