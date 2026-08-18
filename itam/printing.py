@@ -99,6 +99,100 @@ def _browsers():
     ]
 
 
+# ------------------------------------------------- native label printing
+#
+# Browsers print labels through the Windows driver's page pipeline, and some
+# label drivers rotate or scale whatever arrives to fit their stock, no
+# matter what the dialogs say. Thermal label printers (Xprinter, TSC, ...)
+# also speak TSPL, a tiny command language with the sticker size, gap
+# registration and rotation built in - so AMS talks to them directly and the
+# driver never gets a chance to "help".
+
+DOTS_PER_MM = 8          # 203 dpi print head
+
+
+def _ascii(text, limit=None):
+    """TSPL built-in fonts are ASCII; anything else becomes '?'."""
+    s = "".join(ch if 32 <= ord(ch) < 127 else "?" for ch in str(text or ""))
+    s = s.replace('"', "'")
+    return s[:limit] if limit else s
+
+
+def label_tspl(width_mm, height_mm, org, tag, rows, flip=False, gap_mm=3):
+    """One asset label as a TSPL program.
+
+    rows: [(field label, value)] — e.g. [("Branch", "Mada 3"), ...].
+    flip reuses the rotate setting: it turns the print 180° for rolls loaded
+    the other way round.
+    """
+    w = int(width_mm * DOTS_PER_MM)
+    h = int(height_mm * DOTS_PER_MM)
+    pad = max(int(w * 0.03), 8)
+    tag_a = _ascii(tag, 20)
+    out = [
+        f"SIZE {width_mm} mm,{height_mm} mm",
+        f"GAP {gap_mm} mm,0 mm",
+        f"DIRECTION {0 if flip else 1}",
+        "REFERENCE 0,0",
+        "CLS",
+        # Header: organisation left, tag right, rule underneath.
+        f'TEXT {pad},{pad},"2",0,1,1,"{_ascii(org, 30)}"',
+        f'TEXT {max(pad, w - pad - len(tag_a) * 12)},{pad},"2",0,1,1,"{tag_a}"',
+        f"BAR 0,{pad + 26},{w},3",
+    ]
+    y = pad + 40
+    for field, value in rows:
+        out.append(f'TEXT {pad},{y + 5},"1",0,1,1,"{_ascii(field, 8).upper()}"')
+        out.append(f'TEXT {pad + 84},{y},"2",0,1,1,"{_ascii(value, 28)}"')
+        y += 30
+    # Code 128 across the bottom with the tag centred beneath it.
+    bc_h = max(int(h * 0.2), 40)
+    bc_y = h - pad - 14 - bc_h
+    modules = 11 * (len(tag_a) + 3) + 2          # start+check+stop+quiet
+    narrow = 2 if modules * 2 <= w - 2 * pad else 1
+    bc_x = max(pad, (w - modules * narrow) // 2)
+    out.append(f'BARCODE {bc_x},{bc_y},"128",{bc_h},0,0,{narrow},{narrow * 2},"{tag_a}"')
+    out.append(f'TEXT {max(pad, (w - len(tag_a) * 8) // 2)},{bc_y + bc_h + 4},"1",0,1,1,"{tag_a}"')
+    out.append("PRINT 1,1")
+    return "\r\n".join(out) + "\r\n"
+
+
+def print_raw(printer, data):
+    """Send raw bytes (a TSPL program) to a Windows printer's spooler."""
+    if not is_windows() or not printer or not data:
+        return False
+    if isinstance(data, str):
+        data = data.encode("ascii", "replace")
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        winspool = ctypes.WinDLL("winspool.drv")
+
+        class DOC_INFO_1(ctypes.Structure):
+            _fields_ = [("pDocName", wintypes.LPWSTR),
+                        ("pOutputFile", wintypes.LPWSTR),
+                        ("pDatatype", wintypes.LPWSTR)]
+
+        handle = wintypes.HANDLE()
+        if not winspool.OpenPrinterW(printer, ctypes.byref(handle), None):
+            return False
+        try:
+            info = DOC_INFO_1("AMS label", None, "RAW")
+            if winspool.StartDocPrinterW(handle, 1, ctypes.byref(info)) == 0:
+                return False
+            winspool.StartPagePrinter(handle)
+            written = wintypes.DWORD(0)
+            winspool.WritePrinter(handle, data, len(data), ctypes.byref(written))
+            winspool.EndPagePrinter(handle)
+            winspool.EndDocPrinter(handle)
+            return written.value == len(data)
+        finally:
+            winspool.ClosePrinter(handle)
+    except Exception:
+        return False
+
+
 LOCAL_ADDRESSES = {"127.0.0.1", "::1", "localhost"}
 
 

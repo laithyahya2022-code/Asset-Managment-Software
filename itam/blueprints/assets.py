@@ -683,30 +683,50 @@ def barcode(asset_id):
 def label(asset_id):
     a = db.get_or_404(Asset, asset_id)
     bare = request.args.get("bare") == "1"       # embedded preview, no chrome
+    L = label_layout()
     html = render_template("assets/label.html", asset=a,
                            app_name=get_setting("label_org"),
-                           L=label_layout(), bare=bare,
+                           L=L, bare=bare,
                            auto=not bare and request.args.get("auto") == "1")
     if bare:
         return html
-    return _print_or_show(html, f"Label for {a.tag}")
+    return _print_or_show(html, f"Label for {a.tag}", tspl_assets=[a], L=L)
 
 
-def _print_or_show(html, what):
+def _label_rows(a, L):
+    """The (field, value) rows the label design shows for this asset."""
+    values = {"branch": a.branch,
+              "department": a.department.name if a.department else None,
+              "serial": a.serial}
+    titles = {"branch": "Branch", "department": "Dept", "serial": "S/N"}
+    return [(titles[k], values[k] or "-") for k in L["fields"]]
+
+
+def _print_or_show(html, what, tspl_assets=None, L=None):
     """Send the label to the configured printer, or fall back to the browser.
 
     With a printer named in Settings and AMS running as the packaged Windows
-    app, the label goes straight to that printer -- no tab, no print dialog,
-    no chance of picking the wrong one. Anywhere else, or if the print fails
-    for any reason, the page opens as it always did.
+    app, the label is sent to the printer in its native TSPL language --
+    exact sticker size, gap registration and rotation built in, with no
+    browser or driver page pipeline to rotate it. If that fails, the old
+    print-via-browser path runs; failing that, the page just opens.
     """
     from .. import printing
 
     printer = get_setting("label_printer")
-    if (printing.can_print_directly(printer, request.remote_addr)
-            and printing.print_html(html, printer)):
-        flash(f"{what} sent to {printer}.", "success")
-        return redirect(request.referrer or url_for("assets.list_"))
+    if printing.can_print_directly(printer, request.remote_addr):
+        if tspl_assets and L:
+            program = "".join(
+                printing.label_tspl(L["width"], L["height"],
+                                    get_setting("label_org"), a.tag,
+                                    _label_rows(a, L), flip=L["rotate"])
+                for a in tspl_assets)
+            if printing.print_raw(printer, program):
+                flash(f"{what} sent to {printer}.", "success")
+                return redirect(request.referrer or url_for("assets.list_"))
+        if printing.print_html(html, printer):
+            flash(f"{what} sent to {printer}.", "success")
+            return redirect(request.referrer or url_for("assets.list_"))
     return html
 
 
@@ -717,11 +737,11 @@ def labels():
     stmt = db.select(Asset).order_by(Asset.tag)
     if ids:
         stmt = stmt.where(Asset.id.in_(ids))
-    html = render_template("assets/labels.html",
-                           assets=db.session.scalars(stmt).all(),
-                           app_name=get_setting("label_org"),
-                           L=label_layout())
-    return _print_or_show(html, "Label sheet")
+    rows = db.session.scalars(stmt).all()
+    L = label_layout()
+    html = render_template("assets/labels.html", assets=rows,
+                           app_name=get_setting("label_org"), L=L)
+    return _print_or_show(html, f"{len(rows)} labels", tspl_assets=rows, L=L)
 
 
 # ------------------------------------------------------------------ bulk

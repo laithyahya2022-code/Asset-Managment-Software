@@ -758,6 +758,27 @@ def test_label_size_accepts_inches_and_cm():
     assert _label_mm("garbage in") == "garbage in"
 
 
+def test_label_tspl_program_is_well_formed():
+    """The native printer program: exact size, gap registration, header,
+    rows, Code 128 — and ASCII-safe content."""
+    from itam.printing import label_tspl
+
+    tspl = label_tspl(55, 38, "Mada International Academy", "DES-000001",
+                      [("Branch", "Mada 3"), ("Dept", "Reception"),
+                       ("S/N", "BQL6C14")])
+    assert tspl.startswith("SIZE 55 mm,38 mm")
+    assert "GAP 3 mm,0 mm" in tspl
+    assert "DIRECTION 1" in tspl
+    assert '"128"' in tspl and '"DES-000001"' in tspl
+    assert '"BRANCH"' in tspl and '"Reception"' in tspl
+    assert tspl.rstrip().endswith("PRINT 1,1")
+    # flip = roll loaded the other way round
+    assert "DIRECTION 0" in label_tspl(55, 38, "x", "T-1", [], flip=True)
+    # non-ASCII and quotes can't crash the printer
+    dirty = label_tspl(55, 38, 'مدرسة "مدى"', "T-1", [("Dept", "الاستقبال")])
+    assert "مدرسة" not in dirty and '"' + "'" not in dirty
+
+
 def test_rotate_setting_pre_rotates_the_printed_label(client, app):
     """For drivers that turn the page sideways: the page swaps to portrait
     and the label rotates into it, cancelling the driver's rotation."""
