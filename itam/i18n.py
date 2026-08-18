@@ -222,6 +222,8 @@ AR.update({
         "يمكن للمسؤول تثبيته من الإعدادات.",
     "Update now": "التحديث الآن",
     "Change location": "تغيير الموقع",
+    "Rotate printed label 90° (tick this if labels come out sideways)":
+        "تدوير الملصق المطبوع 90 درجة (فعّل هذا إذا خرجت الملصقات جانبية)",
     "Held by classes & rooms": "بحوزة الصفوف والغرف",
     "Shared devices assigned to a class or room in the inventory sheet — not borrowed by a person.":
         "أجهزة مشتركة مخصصة لصف أو غرفة في ملف الجرد — ليست معارة لشخص.",

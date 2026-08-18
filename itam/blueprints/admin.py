@@ -117,7 +117,7 @@ def roles():
 SETTING_GROUPS = {
     "General": ["app_name", "qr_prefix", "custom_asset_fields", "checkout_days"],
     "Printed labels": ["label_org", "label_printer", "label_width_mm",
-                       "label_height_mm"],
+                       "label_height_mm", "label_rotate"],
     "Alerts": ["warranty_alert_days", "license_alert_days"],
     "Email": ["email_enabled", "smtp_host", "smtp_port", "smtp_user",
               "smtp_password", "smtp_from"],
@@ -148,7 +148,7 @@ def settings():
     keys = [k for group in SETTING_GROUPS.values() for k in group]
     if request.method == "POST":
         for key in keys:
-            if key in ("email_enabled", "backup_auto", "update_auto"):
+            if key in ("email_enabled", "backup_auto", "update_auto", "label_rotate"):
                 set_setting(key, "1" if request.form.get(key) else "0")
             elif key in ("label_width_mm", "label_height_mm"):
                 set_setting(key, _label_mm(request.form.get(key, "")))

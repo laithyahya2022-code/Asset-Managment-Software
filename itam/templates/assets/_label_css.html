@@ -1,7 +1,14 @@
 {# Label styling, driven entirely by the size configured in Settings.
    Shared by the single-asset label and the bulk label run. #}
 <style>
+  {% if L.rotate %}
+  {# Pre-rotate for drivers that turn the page sideways on the roll: the
+     page is declared portrait (height x width) and the label is rotated
+     into it at print time, cancelling the driver's rotation. #}
+  @page { size: {{ L.height }}mm {{ L.width }}mm; margin: 0; }
+  {% else %}
   @page { size: {{ L.width }}mm {{ L.height }}mm; margin: 0; }
+  {% endif %}
   * { box-sizing: border-box; margin: 0; padding: 0; }
   /* The page chrome follows the app's dark theme; the label itself stays a
      white sticker, exactly as it prints. */
@@ -78,9 +85,13 @@
     html, body { background: #fff; }
     .toolbar, .hint, .guide { display: none !important; }
     /* One sticker per label on the roll. */
-    .label { border: none; margin: 0; box-shadow: none;
+    .label { border: none; margin: 0; box-shadow: none; border-radius: 0;
       page-break-inside: avoid; break-inside: avoid;
       page-break-after: always; break-after: page; }
     .label:last-of-type { page-break-after: auto; break-after: auto; }
+    {% if L.rotate %}
+    .label { transform: rotate(90deg) translateY(-100%);
+      transform-origin: top left; }
+    {% endif %}
   }
 </style>

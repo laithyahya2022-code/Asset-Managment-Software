@@ -758,6 +758,36 @@ def test_label_size_accepts_inches_and_cm():
     assert _label_mm("garbage in") == "garbage in"
 
 
+def test_rotate_setting_pre_rotates_the_printed_label(client, app):
+    """For drivers that turn the page sideways: the page swaps to portrait
+    and the label rotates into it, cancelling the driver's rotation."""
+    from itam.models import Category
+    from itam.utils import set_setting
+
+    with app.app_context():
+        asset = Asset(tag="ROT-1", name="Rotated", status="Available",
+                      condition="Good",
+                      category=db.session.scalar(db.select(Category)))
+        db.session.add(asset)
+        set_setting("label_width_mm", "55")
+        set_setting("label_height_mm", "38")
+        set_setting("label_rotate", "1")
+        db.session.commit()
+        asset_id = asset.id
+
+    login(client)
+    page = client.get(f"/assets/{asset_id}/label").data.decode()
+    assert "@page { size: 38.0mm 55.0mm; margin: 0; }" in page   # swapped
+    assert "rotate(90deg)" in page
+
+    with app.app_context():
+        set_setting("label_rotate", "0")
+        db.session.commit()
+    page = client.get(f"/assets/{asset_id}/label").data.decode()
+    assert "@page { size: 55.0mm 38.0mm; margin: 0; }" in page
+    assert "rotate(90deg)" not in page
+
+
 def test_common_size_dropdown_saves_without_javascript(client, app):
     """Picking a size and pressing Save must work as a plain form post."""
     from itam.utils import get_setting

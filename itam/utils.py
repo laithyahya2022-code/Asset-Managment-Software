@@ -27,6 +27,9 @@ DEFAULT_SETTINGS = {
     # Printed on every label. This is the organisation that owns the asset,
     # which is not the same thing as the name of this software.
     "label_printer": "",
+    # Print the label pre-rotated 90 degrees for drivers that insist on
+    # turning the page sideways on the roll.
+    "label_rotate": "0",
     "label_org": "Mada International Academy",
     # Self-update. Only ever contacts the GitHub Releases API; a failed check
     # is silent. update_token is only needed while the repository is private.
@@ -143,6 +146,7 @@ def label_layout(width_mm=None, height_mm=None, org_name=None):
 
     return {
         "width": round(width_mm, 2), "height": round(height_mm, 2),
+        "rotate": get_setting("label_rotate") == "1",
         "portrait": portrait, "pad": round(pad, 2),
         "header_h": round(header_h, 2), "bc_h": round(bc_h, 2),
         "fs_bctag": round(fs_bctag, 2),
