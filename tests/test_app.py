@@ -904,7 +904,9 @@ def test_label_prints_the_organisation_not_the_software_name(client, app):
 
     login(client)
     page = client.get(f"/assets/{asset_id}/label").data.decode()
-    assert "Mada International Academy" in page
+    # The name is split onto two fixed lines by the app, so it can never be
+    # re-wrapped or truncated by a printer's own font metrics.
+    assert "Mada International" in page and "Academy" in page
     assert "(AMS)" not in page                 # software name stays off the label
     for text in ("Branch", "Mada 3", "Dept", "IT", "S/N", "SN-8842-XJ01"):
         assert text in page, f"{text} missing from the label"

@@ -120,15 +120,16 @@ def label_layout(width_mm=None, height_mm=None, org_name=None):
     # letterspaced uppercase glyph).
     org_len = max(len(org_name or ""), 8)
     words = (org_name or "").split()
-    org_lines = 1
-    longest = org_len
+    org_line1, org_line2 = (org_name or ""), ""
     if len(words) > 1 and org_len > 14:
         half = org_len / 2
         best = min(range(1, len(words)),
                    key=lambda i: abs(len(" ".join(words[:i])) - half))
-        longest = max(len(" ".join(words[:best])), len(" ".join(words[best:])))
-        org_lines = 2
-    fs_org = (width_mm - 2 * pad) / (max(longest, 6) * 0.78)
+        org_line1 = " ".join(words[:best])
+        org_line2 = " ".join(words[best:])
+    org_lines = 2 if org_line2 else 1
+    longest = max(len(org_line1), len(org_line2))
+    fs_org = (width_mm - 2 * pad) / (max(longest, 6) * 0.80)
     fs_org = min(max(fs_org, 2.0), height_mm * 0.16, 7.0)
     header_h = min(max(fs_org * (1.18 * org_lines + 0.3), 5.0), 18.0)
     fs_tag = max(header_h * 0.20, 1.8)      # header tag size where one is drawn
@@ -174,6 +175,7 @@ def label_layout(width_mm=None, height_mm=None, org_name=None):
         "qr": 0, "gap": round(pad * 0.8, 2),
         "show_org": show_org, "fields": fields, "full_fields": [],
         "org_lines": org_lines, "columns": 1,
+        "org_line1": org_line1, "org_line2": org_line2,
         "fs_org": round(fs_org, 2), "fs_tag": round(fs_tag, 2),
         "fs_label": round(fs_label, 2), "fs_value": round(fs_value, 2),
     }

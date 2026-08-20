@@ -52,15 +52,15 @@
   .lhead {
     flex-shrink: 0; height: {{ L.header_h }}mm; background: #fff; color: #000;
     display: flex; align-items: center; justify-content: center;
-    padding-inline: {{ L.pad }}mm; margin-inline: {{ L.pad }}mm;
-    margin-top: {{ L.top_pad }}mm;
+    margin-inline: {{ L.pad }}mm; margin-top: {{ L.top_pad }}mm;
     border-bottom: 0.55mm solid #000;
   }
-  .lhead .org { font-size: {{ L.fs_org }}mm; font-weight: 800; line-height: 1.18;
-    letter-spacing: 0.05em; text-transform: uppercase; text-align: center;
-    overflow: hidden; max-width: 100%; text-wrap: balance;
-    display: -webkit-box; -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2; line-clamp: 2; }
+  /* The two lines are split by the app, not the browser: a driver whose
+     font metrics run wide would otherwise re-wrap and truncate the name
+     with an ellipsis, as one printed roll proved. */
+  .lhead .org { font-size: {{ L.fs_org }}mm; font-weight: 800; line-height: 1.15;
+    letter-spacing: 0.02em; text-transform: uppercase; text-align: center;
+    white-space: nowrap; overflow: hidden; max-width: 100%; }
   /* Detail rows: BRANCH / DEPT / S/N. */
   .lrows { flex: 1; min-height: 0; overflow: hidden;
     padding: {{ (L.pad * 0.8) | round(2) }}mm {{ L.pad }}mm 0; }

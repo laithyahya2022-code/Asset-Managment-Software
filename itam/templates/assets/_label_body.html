@@ -6,7 +6,7 @@
 <div class="label">
   {% if L.show_org %}
   <div class="lhead">
-    <div class="org">{{ app_name }}</div>
+    <div class="org">{{ L.org_line1 or app_name }}{% if L.org_line2 %}<br>{{ L.org_line2 }}{% endif %}</div>
   </div>
   {% endif %}
   {% if L.fields %}
