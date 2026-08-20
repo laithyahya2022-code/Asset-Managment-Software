@@ -4,7 +4,7 @@ from datetime import datetime
 
 from flask import Flask, g, redirect, request, session, url_for
 
-APP_VERSION = "2026.08.06.46"  # bumped on each release so users can confirm their build
+APP_VERSION = "2026.08.06.47"  # bumped on each release so users can confirm their build
 
 from .i18n import LANGS, t, translate_html
 from .models import (DEFAULT_ROLE_PERMS, PERMISSIONS, ROLES, Notification,
@@ -115,6 +115,8 @@ def create_app(test_config=None, instance_path=None):
         _last_request[0] = time.time()
         load_user()
         g.lang = session.get("lang") or (g.user.language if g.user else "en")
+        g.theme = (session.get("theme")
+                   or (g.user.theme if g.user else None) or "dark")
         _auto_backup(app)
 
     @app.after_request
@@ -134,6 +136,15 @@ def create_app(test_config=None, instance_path=None):
             session["lang"] = code
             if g.user:
                 g.user.language = code
+                db.session.commit()
+        return redirect(request.referrer or url_for("main.dashboard"))
+
+    @app.get("/theme/<mode>")
+    def set_theme(mode):
+        if mode in ("dark", "light"):
+            session["theme"] = mode
+            if g.user:
+                g.user.theme = mode
                 db.session.commit()
         return redirect(request.referrer or url_for("main.dashboard"))
 

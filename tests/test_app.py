@@ -779,6 +779,22 @@ def test_label_tspl_program_is_well_formed():
     assert "مدرسة" not in dirty and '"' + "'" not in dirty
 
 
+def test_theme_toggle_switches_and_persists(client, app):
+    from itam.models import User
+
+    login(client)
+    assert b'data-theme="dark"' in client.get("/assets/").data   # default
+    client.get("/theme/light", follow_redirects=True)
+    assert b'data-theme="light"' in client.get("/assets/").data
+    with app.app_context():
+        assert db.session.scalar(db.select(User).where(
+            User.username == "admin")).theme == "light"
+    client.get("/theme/dark", follow_redirects=True)
+    assert b'data-theme="dark"' in client.get("/assets/").data
+    client.get("/theme/banana", follow_redirects=True)           # nonsense
+    assert b'data-theme="dark"' in client.get("/assets/").data
+
+
 def test_rotate_setting_pre_rotates_the_printed_label(client, app):
     """For drivers that turn the page sideways: the page swaps to portrait
     and the label rotates into it, cancelling the driver's rotation."""

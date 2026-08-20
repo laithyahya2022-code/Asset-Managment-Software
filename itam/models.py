@@ -86,6 +86,7 @@ class User(db.Model):
     role = db.Column(db.String(20), nullable=False, default="viewer")
     active = db.Column(db.Boolean, nullable=False, default=True)
     language = db.Column(db.String(5), nullable=False, default="en")
+    theme = db.Column(db.String(10))             # "dark" (default) or "light"
     api_key = db.Column(db.String(64), unique=True)
     reset_token = db.Column(db.String(64))
     reset_expires = db.Column(db.DateTime)

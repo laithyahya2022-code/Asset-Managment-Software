@@ -222,6 +222,8 @@ AR.update({
         "يمكن للمسؤول تثبيته من الإعدادات.",
     "Update now": "التحديث الآن",
     "Change location": "تغيير الموقع",
+    "Light theme": "الوضع الفاتح",
+    "Dark theme": "الوضع الداكن",
     "Rotate printed label 90° (tick this if labels come out sideways)":
         "تدوير الملصق المطبوع 90 درجة (فعّل هذا إذا خرجت الملصقات جانبية)",
     "Held by classes & rooms": "بحوزة الصفوف والغرف",

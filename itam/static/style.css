@@ -56,6 +56,42 @@
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
   --radius: 10px;
 }
+/* Light theme: the same token system with the ramp flipped. The accent
+   moves to its darker steps so lines and links keep their contrast. */
+html[data-theme="light"] {
+  --color-bg: #f2f0e8;
+  --color-surface: #fbfaf4;
+  --color-section: #ece9dd;
+  --color-text: #26251e;
+  --color-neutral-100: #26251e;
+  --color-neutral-200: #35342b;
+  --color-neutral-300: #4a4940;
+  --color-neutral-400: #5f5d52;
+  --color-neutral-500: #7b7869;
+  --color-neutral-600: #96937f;
+  --color-neutral-700: #b8b5a4;
+  --color-neutral-800: #d9d6c7;
+  --color-neutral-900: #e7e4d7;
+  --color-accent: #7d8b36;
+  --color-accent-100: #31351b;
+  --color-accent-200: #4b5323;
+  --color-accent-300: #5d6a2c;
+  --color-accent-400: #6e7a33;
+  --color-accent-500: #7d8b36;
+  --color-accent-600: #96a548;
+  --color-accent-700: #b8c95e;
+  --color-accent-800: #dfe6ac;
+  --color-accent-900: #eef1d6;
+
+  --status-available-bg: #e9f0cf;   --status-available-fg: #5d6a2c;
+  --status-checkedout-bg: #dfe8fb;  --status-checkedout-fg: #2f5bb7;
+  --status-maintenance-bg: #f7ead0; --status-maintenance-fg: #9a6b17;
+  --status-damaged-bg: #f9e0d6;     --status-damaged-fg: #b04a28;
+  --status-retired-bg: #e8e6dc;     --status-retired-fg: #6b695e;
+
+  --shadow: 0 1px 3px rgba(35, 33, 20, 0.12);
+}
+
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
 body {
