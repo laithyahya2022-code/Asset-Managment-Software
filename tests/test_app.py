@@ -524,7 +524,7 @@ def test_lifecycle_and_movement_reports(client):
     assert client.get("/reports/locations").status_code == 200
 
 
-def test_asset_label_6x3(client, app):
+def test_asset_label_uses_the_measured_stock_size(client, app):
     login(client)
     client.post("/assets/new", data={
         "tag": "LBL-1", "name": "Label Asset", "status": "Available",
@@ -535,8 +535,9 @@ def test_asset_label_6x3(client, app):
     resp = client.get(f"/assets/{asset_id}/label")
     assert resp.status_code == 200
     body = resp.data.decode()
-    # 6 x 3 in is the default, now expressed in mm so any stock size works
-    assert "@page { size: 152.4mm 76.2mm; margin: 0; }" in body
+    # 2.46 x 1.57 in — the school's Xprinter stock as measured in their
+    # label design tool; applied to every install by _ensure_defaults.
+    assert "@page { size: 62.5mm 39.9mm; margin: 0; }" in body
     assert "LBL-1" in body                   # tag in the header chip
     assert "Mada 3" in body and "SN-8842-XJ01" in body
     assert 'class="bc"' in body              # Code 128 across the bottom
@@ -653,7 +654,8 @@ def test_schema_sync_is_idempotent(tmp_path):
 
 
 @pytest.mark.parametrize("w,h", [(152.4, 76.2), (101.6, 152.4), (101.6, 50.8),
-                                 (70, 38), (55, 38), (50, 30), (40, 20)])
+                                 (70, 38), (62.5, 39.9), (55, 38), (50, 30),
+                                 (40, 20)])
 def test_label_layout_fits_every_offered_size(w, h):
     """Nothing may be sized past the sticker it prints on."""
     from itam.utils import label_layout
@@ -863,6 +865,22 @@ def test_label_size_is_clamped_to_something_printable(app):
         set_setting("label_width_mm", "not a number")
         db.session.commit()
         assert label_size_mm()[0] == 152.4      # falls back to the default
+
+
+def test_update_moves_every_install_onto_the_measured_stock(app):
+    """2.46 × 1.57 in is set once by the update; later edits then stick."""
+    from itam import _ensure_defaults
+    from itam.utils import get_setting, set_setting
+
+    with app.app_context():
+        assert get_setting("label_width_mm") == "62.5"
+        assert get_setting("label_height_mm") == "39.9"
+        set_setting("label_width_mm", "70")     # the school picks another size
+        set_setting("label_height_mm", "38")
+        db.session.commit()
+        _ensure_defaults()                      # next app start
+        assert get_setting("label_width_mm") == "70"
+        assert get_setting("label_height_mm") == "38"
 
 
 def test_label_prints_the_organisation_not_the_software_name(client, app):

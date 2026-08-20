@@ -4,7 +4,7 @@ from datetime import datetime
 
 from flask import Flask, g, redirect, request, session, url_for
 
-APP_VERSION = "2026.08.06.47"  # bumped on each release so users can confirm their build
+APP_VERSION = "2026.08.06.48"  # bumped on each release so users can confirm their build
 
 from .i18n import LANGS, t, translate_html
 from .models import (DEFAULT_ROLE_PERMS, PERMISSIONS, ROLES, Notification,
@@ -407,6 +407,19 @@ def _ensure_defaults():
     row = db.session.get(Setting, "update_repo")
     if row is not None and row.value == "laithyahya2022-code/IT-Asset-Management-System-":
         row.value = DEFAULT_SETTINGS["update_repo"]
+    # The school measured their Xprinter label stock at 2.46 × 1.57 in
+    # (62.5 × 39.9 mm) in their label design tool and asked for the app to
+    # print at exactly that size. Applied once; a size changed in Settings
+    # after this update is left alone.
+    if db.session.get(Setting, "label_stock_246_applied") is None:
+        for key, value in (("label_width_mm", "62.5"),
+                           ("label_height_mm", "39.9")):
+            row = db.session.get(Setting, key)
+            if row is None:
+                db.session.add(Setting(key=key, value=value))
+            else:
+                row.value = value
+        db.session.add(Setting(key="label_stock_246_applied", value="1"))
     # first-run admin account
     if not db.session.scalar(db.select(User).limit(1)):
         admin = User(username="admin", name="Administrator",
