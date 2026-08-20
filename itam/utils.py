@@ -114,10 +114,11 @@ def label_layout(width_mm=None, height_mm=None, org_name=None):
     pad = max(1.2, short * 0.055)
 
     # The organisation name runs across the whole width on a single line,
-    # black on white: thermal printers turn a filled header band into a grainy
-    # smudge, so the header is plain and the name is sized to fill the width.
+    # black uppercase on white: thermal printers turn a filled header band
+    # into a grainy smudge, so the header is plain and the name is sized to
+    # fill the width (0.78 ~ the advance of a letterspaced uppercase glyph).
     org_len = max(len(org_name or ""), 8)
-    fs_org = (width_mm - 2 * pad) / (org_len * 0.68)
+    fs_org = (width_mm - 2 * pad) / (org_len * 0.78)
     fs_org = min(max(fs_org, 2.0), height_mm * 0.14, 7.0)
     header_h = min(max(fs_org * 1.9, 5.0), 14.0)
     fs_tag = max(header_h * 0.20, 1.8)      # header tag size where one is drawn
@@ -135,22 +136,17 @@ def label_layout(width_mm=None, height_mm=None, org_name=None):
     else:
         fields = ["branch", "department", "serial"]
 
-    # Rows are sized to fill the space between the header rule and the
-    # barcode; the squeeze below pulls them back only when they overflow.
-    fs_label = max(short * 0.06, 1.9)
+    # Captions and values share one bold size, and the rows are sized to
+    # fill the space between the header rule and the barcode; the squeeze
+    # below pulls them back only when they overflow.
     fs_value = max(short * 0.09, 2.4)
     avail = height_mm - header_h - bc_h - fs_bctag * 1.5 - 2 * pad
     needed = len(fields) * fs_value * 1.45
     if needed > avail > 0:
-        squeeze = avail / needed
-        fs_label = max(fs_label * squeeze, 1.1)
-        fs_value = max(fs_value * squeeze, 1.6)
+        fs_value = max(fs_value * (avail / needed), 1.6)
     elif fields and avail > needed:
-        # And grown when the sticker leaves the rows extra room, so the
-        # detail text fills the space between the header rule and barcode.
-        grow = min(avail / needed, 1.35)
-        fs_label = fs_label * grow
-        fs_value = fs_value * grow
+        fs_value = fs_value * min(avail / needed, 1.35)
+    fs_label = fs_value
 
     try:
         rotate = get_setting("label_rotate") == "1"

@@ -38,41 +38,42 @@
 
   .label {
     width: {{ L.width }}mm; height: {{ L.height }}mm; margin: 0 auto 12px; background: #fff;
-    overflow: hidden; color: #23231d; border-radius: {{ (L.pad * 1.4) | round(2) }}mm;
+    overflow: hidden; color: #000; border: 0.5mm solid #000;
+    border-radius: {{ (L.pad * 0.6) | round(2) }}mm;
     box-shadow: 0 10px 34px rgba(0,0,0,0.55);
     display: flex; flex-direction: column;
     font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
   }
   .mono { font-family: ui-monospace, Menlo, Consolas, monospace; }
-  /* Header: the organisation name in solid black across the full width.
-     No background band and no tag chip -- filled areas print as a grainy
-     smudge on thermal stock, and the tag already sits under the barcode. */
+  /* Header: the organisation name in solid black caps across the full
+     width, over a strong rule. No background band and no tag chip --
+     filled areas print as a grainy smudge on thermal stock, and the tag
+     already sits under the barcode. */
   .lhead {
-    flex-shrink: 0; height: {{ L.header_h }}mm; background: #fff; color: #111;
+    flex-shrink: 0; height: {{ L.header_h }}mm; background: #fff; color: #000;
     display: flex; align-items: center; justify-content: center;
-    padding-inline: {{ L.pad }}mm;
-    border-bottom: 0.35mm solid #23231d;
+    padding-inline: {{ L.pad }}mm; margin-inline: {{ L.pad }}mm;
+    border-bottom: 0.55mm solid #000;
   }
   .lhead .org { font-size: {{ L.fs_org }}mm; font-weight: 800; line-height: 1.1;
-    letter-spacing: 0.01em; text-align: center; white-space: nowrap;
-    overflow: hidden; max-width: 100%; }
+    letter-spacing: 0.07em; text-transform: uppercase; text-align: center;
+    white-space: nowrap; overflow: hidden; max-width: 100%; }
   /* Detail rows: BRANCH / DEPT / S/N. */
   .lrows { flex: 1; min-height: 0; overflow: hidden;
     padding: {{ (L.pad * 0.8) | round(2) }}mm {{ L.pad }}mm 0; }
   .lrow { display: flex; align-items: baseline; gap: {{ L.gap }}mm;
     margin-bottom: {{ (L.pad * 0.45) | round(2) }}mm; }
-  /* Solid black, not a light grey: thermal heads either burn a dot or don't,
-     so anything pale simply vanishes from the printed sticker. */
-  .lrow .lk { flex-shrink: 0; width: {{ (L.width * 0.2) | round(2) }}mm;
-    font-size: {{ L.fs_label }}mm; font-weight: 800; letter-spacing: 0.16em;
-    text-transform: uppercase; color: #23231d; }
+  /* Captions and values share one bold size, in solid black: thermal heads
+     either burn a dot or don't, so anything pale simply vanishes. */
+  .lrow .lk { flex-shrink: 0; width: {{ (L.width * 0.26) | round(2) }}mm;
+    font-size: {{ L.fs_label }}mm; font-weight: 800; letter-spacing: 0.08em;
+    text-transform: uppercase; color: #000; }
   .lrow .lv { font-size: {{ L.fs_value }}mm; font-weight: 800; line-height: 1.15;
-    color: #23231d;
+    color: #000;
     min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  /* Dashed rule, then the barcode with the tag beneath it. */
+  /* The barcode with the tag beneath it. */
   .label .bc { flex-shrink: 0; height: {{ L.bc_h }}mm;
-    border-top: 0.3mm dashed #d8d4c2;
-    margin: 0 {{ L.pad }}mm; padding-top: {{ (L.pad * 0.5) | round(2) }}mm; }
+    margin: 0 {{ L.pad }}mm; }
   .label .bc svg { width: 84%; height: 100%; display: block; margin: 0 auto; }
   .bctag { flex-shrink: 0; text-align: center;
     font-family: ui-monospace, Menlo, Consolas, monospace;
@@ -82,8 +83,9 @@
   @media print {
     html, body { background: #fff; }
     .toolbar, .hint, .guide { display: none !important; }
-    /* One sticker per label on the roll. */
-    .label { border: none; margin: 0; box-shadow: none; border-radius: 0;
+    /* One sticker per label on the roll. The frame border is part of the
+       design, so it stays; only the screen decoration goes. */
+    .label { margin: 0; box-shadow: none; border-radius: 0;
       page-break-inside: avoid; break-inside: avoid;
       page-break-after: always; break-after: page; }
     .label:last-of-type { page-break-after: auto; break-after: auto; }

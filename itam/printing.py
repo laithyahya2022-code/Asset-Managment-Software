@@ -129,10 +129,11 @@ def label_tspl(width_mm, height_mm, org, tag, rows, flip=False, gap_mm=3):
     h = int(height_mm * DOTS_PER_MM)
     pad = max(int(w * 0.03), 8)
     tag_a = _ascii(tag, 20)
-    # Header: the organisation alone, centred, in the biggest built-in font
-    # that spans the width. The tag is not repeated here -- it already sits
-    # under the barcode.
-    org_a = _ascii(org, 40)
+    # Header: the organisation alone, centred and uppercase, in the biggest
+    # built-in font that spans the width, over a strong rule. The tag is not
+    # repeated here -- it already sits under the barcode. A frame box round
+    # the whole sticker matches the on-screen design.
+    org_a = _ascii(org, 40).upper()
     for font, cw, ch in (("5", 32, 48), ("4", 24, 32), ("3", 16, 24), ("2", 12, 20)):
         if len(org_a) * cw <= w - 2 * pad:
             break
@@ -142,14 +143,15 @@ def label_tspl(width_mm, height_mm, org, tag, rows, flip=False, gap_mm=3):
         f"DIRECTION {0 if flip else 1}",
         "REFERENCE 0,0",
         "CLS",
+        f"BOX 1,1,{w - 2},{h - 2},4",
         f'TEXT {max(pad, (w - len(org_a) * cw) // 2)},{pad},"{font}",0,1,1,"{org_a}"',
-        f"BAR 0,{pad + ch + 6},{w},3",
+        f"BAR {pad},{pad + ch + 6},{w - 2 * pad},4",
     ]
-    y = pad + ch + 20
+    y = pad + ch + 22
     for field, value in rows:
-        out.append(f'TEXT {pad},{y + 5},"1",0,1,1,"{_ascii(field, 8).upper()}"')
-        out.append(f'TEXT {pad + 84},{y},"2",0,1,1,"{_ascii(value, 28)}"')
-        y += 30
+        out.append(f'TEXT {pad},{y},"2",0,1,1,"{_ascii(field, 8).upper()}"')
+        out.append(f'TEXT {pad + 100},{y},"2",0,1,1,"{_ascii(value, 26)}"')
+        y += 28
     # Code 128 across the bottom with the tag centred beneath it.
     bc_h = max(int(h * 0.26), 40)
     bc_y = h - pad - 22 - bc_h
