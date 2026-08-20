@@ -1,16 +1,14 @@
 {# One printed label for `asset`. Expects `L` (label_layout) and `app_name`.
-   Design: blue header band (organisation + tag chip), detail rows, then a
-   full-width Code 128 barcode with the tag beneath it. #}
+   Design: organisation name full-width across the top (plain white header —
+   a filled band prints as a smudge on thermal stock), detail rows, then a
+   full-width Code 128 barcode with the tag beneath it. The tag appears only
+   under the barcode; a second copy in the header wasted space. #}
 <div class="label">
+  {% if L.show_org %}
   <div class="lhead">
-    {% if L.show_org %}
-    <div class="org-wrap">
-      <div class="org">{{ app_name }}</div>
-      <div class="sub">Asset Tag</div>
-    </div>
-    {% endif %}
-    <div class="chip">{{ asset.tag }}</div>
+    <div class="org">{{ app_name }}</div>
   </div>
+  {% endif %}
   {% if L.fields %}
   {% set values = {
     "branch": asset.branch, "serial": asset.serial,

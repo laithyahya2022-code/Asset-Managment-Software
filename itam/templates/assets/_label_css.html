@@ -44,37 +44,28 @@
     font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
   }
   .mono { font-family: ui-monospace, Menlo, Consolas, monospace; }
-  /* Header band: gold organisation name (up to two lines) with an ASSET TAG
-     caption, and the asset-tag chip outlined in gold on the right. */
+  /* Header: the organisation name in solid black across the full width.
+     No background band and no tag chip -- filled areas print as a grainy
+     smudge on thermal stock, and the tag already sits under the barcode. */
   .lhead {
-    flex-shrink: 0; height: {{ L.header_h }}mm; background: #454136; color: #d3c76d;
-    display: flex; align-items: center; justify-content: space-between;
-    gap: {{ L.gap }}mm; padding-inline: {{ L.pad }}mm;
+    flex-shrink: 0; height: {{ L.header_h }}mm; background: #fff; color: #111;
+    display: flex; align-items: center; justify-content: center;
+    padding-inline: {{ L.pad }}mm;
+    border-bottom: 0.35mm solid #23231d;
   }
-  .lhead .org-wrap { min-width: 0; }
-  .lhead .org { font-size: {{ L.fs_org }}mm; font-weight: 800; line-height: 1.12;
-    letter-spacing: 0.01em; overflow: hidden;
-    display: -webkit-box; -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2; line-clamp: 2; overflow-wrap: anywhere; }
-  .lhead .sub { font-size: {{ (L.fs_org * 0.5) | round(2) }}mm; font-weight: 600;
-    letter-spacing: 0.28em; text-transform: uppercase; color: rgba(211,199,109,0.6);
-    margin-top: {{ (L.header_h * 0.05) | round(2) }}mm; }
-  .lhead .chip {
-    flex-shrink: 0; font-family: ui-monospace, Menlo, Consolas, monospace;
-    font-size: {{ L.fs_tag }}mm; font-weight: 700; letter-spacing: 0.05em;
-    color: #d3c76d; border: 0.4mm solid rgba(211,199,109,0.85);
-    border-radius: {{ (L.header_h * 0.22) | round(2) }}mm;
-    padding: {{ (L.header_h * 0.1) | round(2) }}mm {{ (L.header_h * 0.24) | round(2) }}mm;
-    white-space: nowrap;
-  }
+  .lhead .org { font-size: {{ L.fs_org }}mm; font-weight: 800; line-height: 1.1;
+    letter-spacing: 0.01em; text-align: center; white-space: nowrap;
+    overflow: hidden; max-width: 100%; }
   /* Detail rows: BRANCH / DEPT / S/N. */
   .lrows { flex: 1; min-height: 0; overflow: hidden;
     padding: {{ (L.pad * 0.8) | round(2) }}mm {{ L.pad }}mm 0; }
   .lrow { display: flex; align-items: baseline; gap: {{ L.gap }}mm;
     margin-bottom: {{ (L.pad * 0.45) | round(2) }}mm; }
+  /* Solid black, not a light grey: thermal heads either burn a dot or don't,
+     so anything pale simply vanishes from the printed sticker. */
   .lrow .lk { flex-shrink: 0; width: {{ (L.width * 0.2) | round(2) }}mm;
-    font-size: {{ L.fs_label }}mm; font-weight: 700; letter-spacing: 0.16em;
-    text-transform: uppercase; color: #8a8672; }
+    font-size: {{ L.fs_label }}mm; font-weight: 800; letter-spacing: 0.16em;
+    text-transform: uppercase; color: #23231d; }
   .lrow .lv { font-size: {{ L.fs_value }}mm; font-weight: 800; line-height: 1.15;
     color: #23231d;
     min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

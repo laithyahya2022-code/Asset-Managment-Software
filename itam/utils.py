@@ -113,15 +113,14 @@ def label_layout(width_mm=None, height_mm=None, org_name=None):
     portrait = height_mm > width_mm
     pad = max(1.2, short * 0.055)
 
-    # The header is taller in this design: the organisation name may wrap to
-    # two lines, with an "ASSET TAG" caption underneath.
-    header_h = min(max(height_mm * 0.24, 7.0), 18.0)
-    fs_org = max(header_h * 0.26, 2.0)
-    fs_tag = max(header_h * 0.20, 1.8)
-    per_line = max(1, int((width_mm * 0.62 - 2 * pad) / (fs_org * 0.52)))
-    org_len = len(org_name or "")
-    if org_len > per_line * 2:
-        fs_org *= max(0.6, (per_line * 2) / org_len)
+    # The organisation name runs across the whole width on a single line,
+    # black on white: thermal printers turn a filled header band into a grainy
+    # smudge, so the header is plain and the name is sized to fill the width.
+    org_len = max(len(org_name or ""), 8)
+    fs_org = (width_mm - 2 * pad) / (org_len * 0.58)
+    fs_org = min(max(fs_org, 2.0), height_mm * 0.14, 7.0)
+    header_h = min(max(fs_org * 1.9, 5.0), 14.0)
+    fs_tag = max(header_h * 0.20, 1.8)      # header tag size where one is drawn
 
     bc_h = min(max(height_mm * 0.20, 4.5), 16.0)
     fs_bctag = max(short * 0.05, 2.0)

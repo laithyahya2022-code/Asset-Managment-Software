@@ -538,7 +538,7 @@ def test_asset_label_uses_the_measured_stock_size(client, app):
     # 2.46 x 1.57 in — the school's Xprinter stock as measured in their
     # label design tool; applied to every install by _ensure_defaults.
     assert "@page { size: 62.5mm 39.9mm; margin: 0; }" in body
-    assert "LBL-1" in body                   # tag in the header chip
+    assert "LBL-1" in body                   # tag under the barcode
     assert "Mada 3" in body and "SN-8842-XJ01" in body
     assert 'class="bc"' in body              # Code 128 across the bottom
 
@@ -773,6 +773,9 @@ def test_label_tspl_program_is_well_formed():
     assert "DIRECTION 1" in tspl
     assert '"128"' in tspl and '"DES-000001"' in tspl
     assert '"BRANCH"' in tspl and '"Reception"' in tspl
+    # The tag prints once in the barcode and once beneath it — not a third
+    # time in the header, which now carries only the organisation name.
+    assert tspl.count("DES-000001") == 2
     assert tspl.rstrip().endswith("PRINT 1,1")
     # flip = roll loaded the other way round
     assert "DIRECTION 0" in label_tspl(55, 38, "x", "T-1", [], flip=True)

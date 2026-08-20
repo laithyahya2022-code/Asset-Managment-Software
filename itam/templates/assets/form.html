@@ -12,7 +12,6 @@
     <div class="label-preview" id="label-preview">
       <div class="lpv-head">
         <span class="lpv-org">{{ label_org }}</span>
-        <span class="lpv-chip" id="lbl-tag">{{ asset.tag if asset else "—" }}</span>
       </div>
       <div class="lpv-rows">
         <div class="lpv-row"><span class="lpv-k">Branch</span><span class="lpv-v" id="lbl-branch">{{ a.branch or "—" if a else "—" }}</span></div>
@@ -164,7 +163,6 @@ function printLabelPreview() {
   var tag = document.getElementById("f-tag");
   var bcImg = document.getElementById("bc-live");
   var lblBcTag = document.getElementById("lbl-bctag");
-  var lblTag = document.getElementById("lbl-tag");
   var lblBranch = document.getElementById("lbl-branch");
   var lblSerial = document.getElementById("lbl-serial");
   var branch = document.getElementById("f-branch");
@@ -183,7 +181,6 @@ function printLabelPreview() {
       if (id && !userEdited) { tag.value = id; }
     }
     var shown = tag.value || "";
-    lblTag.textContent = shown || "—";
     lblBcTag.textContent = shown || "—";
     showBarcode(shown);
     if (branch) lblBranch.textContent = branch.value || "—";
