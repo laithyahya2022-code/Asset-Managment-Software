@@ -129,16 +129,18 @@ def label_layout(width_mm=None, height_mm=None, org_name=None):
         org_line2 = " ".join(words[best:])
     org_lines = 2 if org_line2 else 1
     longest = max(len(org_line1), len(org_line2))
-    fs_org = (width_mm - 2 * pad) / (max(longest, 6) * 0.80)
-    fs_org = min(max(fs_org, 2.0), height_mm * 0.16, 7.0)
-    header_h = min(max(fs_org * (1.18 * org_lines + 0.3), 5.0), 18.0)
+    # The school signed off on point sizes: the title at ~12pt (4.23mm),
+    # shrunk only when the sticker is too narrow or short to hold it.
+    fs_org = (width_mm - 2 * pad) / (max(longest, 6) * 0.77)
+    fs_org = min(max(fs_org, 2.0), height_mm * 0.16, 4.23)
+    header_h = min(max(fs_org * (1.12 * org_lines + 0.2), 5.0), 18.0)
     fs_tag = max(header_h * 0.20, 1.8)      # header tag size where one is drawn
     # Breathing room above the header, so the frame and title never sit on
     # the sticker's physical top edge when the roll registration drifts.
     top_pad = round(pad * 0.7, 2)
 
-    bc_h = min(max(height_mm * 0.22, 4.5), 18.0)
-    fs_bctag = max(short * 0.065, 2.0)
+    # Tag under the barcode at ~10pt (3.53mm), like the rows.
+    fs_bctag = min(max(short * 0.09, 2.0), 3.53)
 
     show_org = short >= 24
     if short < 24:
@@ -150,16 +152,16 @@ def label_layout(width_mm=None, height_mm=None, org_name=None):
     else:
         fields = ["branch", "department", "serial"]
 
-    # Captions and values share one bold size, and the rows are sized to
-    # fill the space between the header rule and the barcode; the squeeze
-    # below pulls them back only when they overflow.
-    fs_value = max(short * 0.09, 2.4)
+    # Captions and values share one regular-weight ~10pt size (3.53mm). The
+    # barcode takes whatever height is left over; when even its floor won't
+    # fit, the rows are squeezed instead -- only ever on tiny stickers.
+    fs_value = min(max(short * 0.09, 2.4), 3.53)
+    rows_need = len(fields) * fs_value * 1.28
+    bc_h = height_mm - top_pad - header_h - rows_need - fs_bctag * 1.5 - 2 * pad
+    bc_h = min(max(bc_h, 4.5), 18.0)
     avail = height_mm - top_pad - header_h - bc_h - fs_bctag * 1.5 - 2 * pad
-    needed = len(fields) * fs_value * 1.45
-    if needed > avail > 0:
-        fs_value = max(fs_value * (avail / needed), 1.6)
-    elif fields and avail > needed:
-        fs_value = fs_value * min(avail / needed, 1.35)
+    if rows_need > avail > 0:
+        fs_value = max(fs_value * (avail / rows_need), 1.6)
     fs_label = fs_value
 
     try:
