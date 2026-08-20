@@ -117,13 +117,13 @@ def label_layout(width_mm=None, height_mm=None, org_name=None):
     # black on white: thermal printers turn a filled header band into a grainy
     # smudge, so the header is plain and the name is sized to fill the width.
     org_len = max(len(org_name or ""), 8)
-    fs_org = (width_mm - 2 * pad) / (org_len * 0.58)
+    fs_org = (width_mm - 2 * pad) / (org_len * 0.68)
     fs_org = min(max(fs_org, 2.0), height_mm * 0.14, 7.0)
     header_h = min(max(fs_org * 1.9, 5.0), 14.0)
     fs_tag = max(header_h * 0.20, 1.8)      # header tag size where one is drawn
 
-    bc_h = min(max(height_mm * 0.20, 4.5), 16.0)
-    fs_bctag = max(short * 0.05, 2.0)
+    bc_h = min(max(height_mm * 0.26, 4.5), 18.0)
+    fs_bctag = max(short * 0.065, 2.0)
 
     show_org = short >= 24
     if short < 24:
@@ -135,14 +135,22 @@ def label_layout(width_mm=None, height_mm=None, org_name=None):
     else:
         fields = ["branch", "department", "serial"]
 
-    fs_label = max(short * 0.046, 1.9)
-    fs_value = max(short * 0.066, 2.4)
+    # Rows are sized to fill the space between the header rule and the
+    # barcode; the squeeze below pulls them back only when they overflow.
+    fs_label = max(short * 0.06, 1.9)
+    fs_value = max(short * 0.09, 2.4)
     avail = height_mm - header_h - bc_h - fs_bctag * 1.5 - 2 * pad
-    needed = len(fields) * fs_value * 1.7
+    needed = len(fields) * fs_value * 1.45
     if needed > avail > 0:
         squeeze = avail / needed
         fs_label = max(fs_label * squeeze, 1.1)
         fs_value = max(fs_value * squeeze, 1.6)
+    elif fields and avail > needed:
+        # And grown when the sticker leaves the rows extra room, so the
+        # detail text fills the space between the header rule and barcode.
+        grow = min(avail / needed, 1.35)
+        fs_label = fs_label * grow
+        fs_value = fs_value * grow
 
     try:
         rotate = get_setting("label_rotate") == "1"

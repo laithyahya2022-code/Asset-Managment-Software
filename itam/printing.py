@@ -151,13 +151,13 @@ def label_tspl(width_mm, height_mm, org, tag, rows, flip=False, gap_mm=3):
         out.append(f'TEXT {pad + 84},{y},"2",0,1,1,"{_ascii(value, 28)}"')
         y += 30
     # Code 128 across the bottom with the tag centred beneath it.
-    bc_h = max(int(h * 0.2), 40)
-    bc_y = h - pad - 14 - bc_h
+    bc_h = max(int(h * 0.26), 40)
+    bc_y = h - pad - 22 - bc_h
     modules = 11 * (len(tag_a) + 3) + 2          # start+check+stop+quiet
     narrow = 2 if modules * 2 <= w - 2 * pad else 1
     bc_x = max(pad, (w - modules * narrow) // 2)
     out.append(f'BARCODE {bc_x},{bc_y},"128",{bc_h},0,0,{narrow},{narrow * 2},"{tag_a}"')
-    out.append(f'TEXT {max(pad, (w - len(tag_a) * 8) // 2)},{bc_y + bc_h + 4},"1",0,1,1,"{tag_a}"')
+    out.append(f'TEXT {max(pad, (w - len(tag_a) * 12) // 2)},{bc_y + bc_h + 4},"2",0,1,1,"{tag_a}"')
     out.append("PRINT 1,1")
     return "\r\n".join(out) + "\r\n"
 
