@@ -53,22 +53,25 @@
     flex-shrink: 0; height: {{ L.header_h }}mm; background: #fff; color: #000;
     display: flex; align-items: center; justify-content: center;
     padding-inline: {{ L.pad }}mm; margin-inline: {{ L.pad }}mm;
+    margin-top: {{ L.top_pad }}mm;
     border-bottom: 0.55mm solid #000;
   }
-  .lhead .org { font-size: {{ L.fs_org }}mm; font-weight: 800; line-height: 1.1;
-    letter-spacing: 0.07em; text-transform: uppercase; text-align: center;
-    white-space: nowrap; overflow: hidden; max-width: 100%; }
+  .lhead .org { font-size: {{ L.fs_org }}mm; font-weight: 800; line-height: 1.18;
+    letter-spacing: 0.05em; text-transform: uppercase; text-align: center;
+    overflow: hidden; max-width: 100%; text-wrap: balance;
+    display: -webkit-box; -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2; line-clamp: 2; }
   /* Detail rows: BRANCH / DEPT / S/N. */
   .lrows { flex: 1; min-height: 0; overflow: hidden;
     padding: {{ (L.pad * 0.8) | round(2) }}mm {{ L.pad }}mm 0; }
   .lrow { display: flex; align-items: baseline; gap: {{ L.gap }}mm;
     margin-bottom: {{ (L.pad * 0.45) | round(2) }}mm; }
-  /* Captions and values share one bold size, in solid black: thermal heads
-     either burn a dot or don't, so anything pale simply vanishes. */
+  /* Captions and values share one regular-weight size (only the
+     organisation name is bold), in solid black: thermal heads either burn
+     a dot or don't, so anything pale simply vanishes. */
   .lrow .lk { flex-shrink: 0; width: {{ (L.width * 0.26) | round(2) }}mm;
-    font-size: {{ L.fs_label }}mm; font-weight: 800; letter-spacing: 0.08em;
-    text-transform: uppercase; color: #000; }
-  .lrow .lv { font-size: {{ L.fs_value }}mm; font-weight: 800; line-height: 1.15;
+    font-size: {{ L.fs_label }}mm; font-weight: 400; color: #000; }
+  .lrow .lv { font-size: {{ L.fs_value }}mm; font-weight: 400; line-height: 1.15;
     color: #000;
     min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   /* The barcode with the tag beneath it. */

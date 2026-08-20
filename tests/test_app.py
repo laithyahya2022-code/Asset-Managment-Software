@@ -772,7 +772,7 @@ def test_label_tspl_program_is_well_formed():
     assert "GAP 3 mm,0 mm" in tspl
     assert "DIRECTION 1" in tspl
     assert '"128"' in tspl and '"DES-000001"' in tspl
-    assert '"BRANCH"' in tspl and '"Reception"' in tspl
+    assert '"Branch:"' in tspl and '"Reception"' in tspl
     # The tag prints once in the barcode and once beneath it — not a third
     # time in the header, which now carries only the organisation name.
     assert tspl.count("DES-000001") == 2

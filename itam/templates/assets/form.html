@@ -14,9 +14,9 @@
         <span class="lpv-org">{{ label_org }}</span>
       </div>
       <div class="lpv-rows">
-        <div class="lpv-row"><span class="lpv-k">Branch</span><span class="lpv-v" id="lbl-branch">{{ a.branch or "—" if a else "—" }}</span></div>
-        <div class="lpv-row"><span class="lpv-k">Dept</span><span class="lpv-v" id="lbl-dept">{{ a.department.name if a and a.department else "—" }}</span></div>
-        <div class="lpv-row"><span class="lpv-k">S/N</span><span class="lpv-v lpv-mono" id="lbl-serial">{{ a.serial or "—" if a else "—" }}</span></div>
+        <div class="lpv-row"><span class="lpv-k">Branch:</span><span class="lpv-v" id="lbl-branch">{{ a.branch or "—" if a else "—" }}</span></div>
+        <div class="lpv-row"><span class="lpv-k">Dept:</span><span class="lpv-v" id="lbl-dept">{{ a.department.name if a and a.department else "—" }}</span></div>
+        <div class="lpv-row"><span class="lpv-k">S/N:</span><span class="lpv-v lpv-mono" id="lbl-serial">{{ a.serial or "—" if a else "—" }}</span></div>
       </div>
       <img class="lpv-bc" id="bc-live" alt="">
       <div class="lpv-bctag" id="lbl-bctag">{{ asset.tag if asset else "—" }}</div>

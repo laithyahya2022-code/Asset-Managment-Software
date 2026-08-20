@@ -18,7 +18,7 @@
   <div class="lrows">
     {% for key in L.fields %}
     <div class="lrow">
-      <span class="lk">{{ titles[key] }}</span>
+      <span class="lk">{{ titles[key] }}:</span>
       <span class="lv {{ 'mono' if key == 'serial' }}">{{ values[key] or "—" }}</span>
     </div>
     {% endfor %}

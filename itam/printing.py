@@ -129,14 +129,23 @@ def label_tspl(width_mm, height_mm, org, tag, rows, flip=False, gap_mm=3):
     h = int(height_mm * DOTS_PER_MM)
     pad = max(int(w * 0.03), 8)
     tag_a = _ascii(tag, 20)
-    # Header: the organisation alone, centred and uppercase, in the biggest
-    # built-in font that spans the width, over a strong rule. The tag is not
-    # repeated here -- it already sits under the barcode. A frame box round
-    # the whole sticker matches the on-screen design.
+    # Header: the organisation alone, centred and uppercase, over a strong
+    # rule -- wrapped onto two balanced lines when long, so it prints large.
+    # The tag is not repeated here (it already sits under the barcode), and
+    # a frame box round the whole sticker matches the on-screen design. The
+    # extra top inset keeps the title off the sticker's physical edge.
     org_a = _ascii(org, 40).upper()
+    org_words = org_a.split()
+    lines = [org_a]
+    if len(org_a) > 14 and len(org_words) > 1:
+        best = min(range(1, len(org_words)),
+                   key=lambda i: abs(len(" ".join(org_words[:i])) - len(org_a) // 2))
+        lines = [" ".join(org_words[:best]), " ".join(org_words[best:])]
+    longest = max(len(ln) for ln in lines)
     for font, cw, ch in (("5", 32, 48), ("4", 24, 32), ("3", 16, 24), ("2", 12, 20)):
-        if len(org_a) * cw <= w - 2 * pad:
+        if longest * cw <= w - 2 * pad:
             break
+    top = pad + 10
     out = [
         f"SIZE {width_mm} mm,{height_mm} mm",
         f"GAP {gap_mm} mm,0 mm",
@@ -144,12 +153,15 @@ def label_tspl(width_mm, height_mm, org, tag, rows, flip=False, gap_mm=3):
         "REFERENCE 0,0",
         "CLS",
         f"BOX 1,1,{w - 2},{h - 2},4",
-        f'TEXT {max(pad, (w - len(org_a) * cw) // 2)},{pad},"{font}",0,1,1,"{org_a}"',
-        f"BAR {pad},{pad + ch + 6},{w - 2 * pad},4",
     ]
-    y = pad + ch + 22
+    y = top
+    for ln in lines:
+        out.append(f'TEXT {max(pad, (w - len(ln) * cw) // 2)},{y},"{font}",0,1,1,"{ln}"')
+        y += ch + 4
+    out.append(f"BAR {pad},{y + 2},{w - 2 * pad},4")
+    y += 16
     for field, value in rows:
-        out.append(f'TEXT {pad},{y},"2",0,1,1,"{_ascii(field, 8).upper()}"')
+        out.append(f'TEXT {pad},{y},"2",0,1,1,"{_ascii(field, 8)}:"')
         out.append(f'TEXT {pad + 100},{y},"2",0,1,1,"{_ascii(value, 26)}"')
         y += 28
     # Code 128 across the bottom with the tag centred beneath it.

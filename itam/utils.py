@@ -113,17 +113,30 @@ def label_layout(width_mm=None, height_mm=None, org_name=None):
     portrait = height_mm > width_mm
     pad = max(1.2, short * 0.055)
 
-    # The organisation name runs across the whole width on a single line,
-    # black uppercase on white: thermal printers turn a filled header band
-    # into a grainy smudge, so the header is plain and the name is sized to
-    # fill the width (0.78 ~ the advance of a letterspaced uppercase glyph).
+    # The organisation name runs across the whole width, black uppercase on
+    # white (thermal printers turn a filled band into a grainy smudge). A
+    # long name wraps onto two balanced lines so it can be printed larger;
+    # the font is sized to the longest wrapped line (0.78 ~ the advance of a
+    # letterspaced uppercase glyph).
     org_len = max(len(org_name or ""), 8)
-    fs_org = (width_mm - 2 * pad) / (org_len * 0.78)
-    fs_org = min(max(fs_org, 2.0), height_mm * 0.14, 7.0)
-    header_h = min(max(fs_org * 1.9, 5.0), 14.0)
+    words = (org_name or "").split()
+    org_lines = 1
+    longest = org_len
+    if len(words) > 1 and org_len > 14:
+        half = org_len / 2
+        best = min(range(1, len(words)),
+                   key=lambda i: abs(len(" ".join(words[:i])) - half))
+        longest = max(len(" ".join(words[:best])), len(" ".join(words[best:])))
+        org_lines = 2
+    fs_org = (width_mm - 2 * pad) / (max(longest, 6) * 0.78)
+    fs_org = min(max(fs_org, 2.0), height_mm * 0.16, 7.0)
+    header_h = min(max(fs_org * (1.18 * org_lines + 0.3), 5.0), 18.0)
     fs_tag = max(header_h * 0.20, 1.8)      # header tag size where one is drawn
+    # Breathing room above the header, so the frame and title never sit on
+    # the sticker's physical top edge when the roll registration drifts.
+    top_pad = round(pad * 0.7, 2)
 
-    bc_h = min(max(height_mm * 0.26, 4.5), 18.0)
+    bc_h = min(max(height_mm * 0.22, 4.5), 18.0)
     fs_bctag = max(short * 0.065, 2.0)
 
     show_org = short >= 24
@@ -140,7 +153,7 @@ def label_layout(width_mm=None, height_mm=None, org_name=None):
     # fill the space between the header rule and the barcode; the squeeze
     # below pulls them back only when they overflow.
     fs_value = max(short * 0.09, 2.4)
-    avail = height_mm - header_h - bc_h - fs_bctag * 1.5 - 2 * pad
+    avail = height_mm - top_pad - header_h - bc_h - fs_bctag * 1.5 - 2 * pad
     needed = len(fields) * fs_value * 1.45
     if needed > avail > 0:
         fs_value = max(fs_value * (avail / needed), 1.6)
@@ -155,12 +168,12 @@ def label_layout(width_mm=None, height_mm=None, org_name=None):
     return {
         "width": round(width_mm, 2), "height": round(height_mm, 2),
         "rotate": rotate,
-        "portrait": portrait, "pad": round(pad, 2),
+        "portrait": portrait, "pad": round(pad, 2), "top_pad": top_pad,
         "header_h": round(header_h, 2), "bc_h": round(bc_h, 2),
         "fs_bctag": round(fs_bctag, 2),
         "qr": 0, "gap": round(pad * 0.8, 2),
         "show_org": show_org, "fields": fields, "full_fields": [],
-        "org_lines": 1, "columns": 1,
+        "org_lines": org_lines, "columns": 1,
         "fs_org": round(fs_org, 2), "fs_tag": round(fs_tag, 2),
         "fs_label": round(fs_label, 2), "fs_value": round(fs_value, 2),
     }

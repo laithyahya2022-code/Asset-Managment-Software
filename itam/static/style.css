@@ -506,7 +506,7 @@ dl.props dd { margin: 0; }
 }
 .label-preview .lpv-head {
   background: #fff; color: #000; display: flex; align-items: center;
-  justify-content: center; padding: 0.55rem 1rem; margin: 0 1rem;
+  justify-content: center; padding: 0.55rem 1rem; margin: 0.5rem 1rem 0;
   border-bottom: 3px solid #000;
 }
 .label-preview .lpv-org { font-size: 1.15rem; font-weight: 800;
@@ -516,9 +516,8 @@ dl.props dd { margin: 0; }
 .label-preview .lpv-row { display: flex; align-items: baseline; gap: 0.9rem;
   margin-bottom: 0.35rem; }
 .label-preview .lpv-k { flex-shrink: 0; width: 6.5rem; font-size: 1.05rem;
-  font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase;
-  color: #000; }
-.label-preview .lpv-v { font-size: 1.05rem; font-weight: 800; color: #23231d;
+  font-weight: 400; color: #000; }
+.label-preview .lpv-v { font-size: 1.05rem; font-weight: 400; color: #000;
   min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .label-preview .lpv-mono { font-family: ui-monospace, "SFMono-Regular", Menlo, monospace; }
 .label-preview .lpv-bc { display: block; width: calc(100% - 2rem);
