@@ -1444,6 +1444,7 @@ def test_update_check_is_silent_when_github_is_unreachable(tmp_path, monkeypatch
     """No internet must be a no-op, not an error."""
     from itam import updater
 
+    monkeypatch.setattr(updater, "direct_version", lambda repo, token=None: None)
     monkeypatch.setattr(updater, "latest_release", lambda repo, token=None: None)
     assert updater.check_for_update("o/r", "2026.07.19", str(tmp_path)) == "unavailable"
     assert list(tmp_path.iterdir()) == []                # nothing written
@@ -1453,6 +1454,7 @@ def test_update_check_does_nothing_when_already_current(tmp_path, monkeypatch):
     from itam import updater
 
     release = {"name": "Mada AMS 2026.07.19", "assets": []}
+    monkeypatch.setattr(updater, "direct_version", lambda repo, token=None: None)
     monkeypatch.setattr(updater, "latest_release", lambda repo, token=None: release)
     monkeypatch.setattr(updater, "remote_version", lambda r, token=None: "2026.07.19")
     called = []
@@ -1492,6 +1494,7 @@ def test_update_downloads_beside_the_exe_and_never_touches_instance(tmp_path, mo
     release = {"name": "Mada AMS 2026.07.20",
                "assets": [{"name": "AMS.exe",
                            "browser_download_url": "https://example/AMS.exe"}]}
+    monkeypatch.setattr(updater, "direct_version", lambda repo, token=None: None)
     monkeypatch.setattr(updater, "latest_release", lambda repo, token=None: release)
     monkeypatch.setattr(updater, "remote_version", lambda r, token=None: "2026.07.20")
     monkeypatch.setattr(updater, "download_update",
@@ -1505,6 +1508,25 @@ def test_update_downloads_beside_the_exe_and_never_touches_instance(tmp_path, mo
     assert (tmp_path / "AMS.exe.new").read_bytes() == b"new build"
     assert exe.read_bytes() == b"old build", "the running exe was replaced too early"
     assert fingerprint() == before, "an update modified the instance folder"
+
+
+def test_update_check_prefers_github_com_over_the_api(tmp_path, monkeypatch):
+    """A network that allows github.com but blocks api.github.com must still
+    update — the fixed download links are the primary path, the API a fallback."""
+    from itam import updater
+
+    monkeypatch.setattr(updater, "direct_version", lambda repo, token=None: "2026.07.20")
+    monkeypatch.setattr(updater, "latest_release",
+                        lambda *a, **k: (_ for _ in ()).throw(AssertionError(
+                            "the API was called although github.com answered")))
+    fetched = []
+    monkeypatch.setattr(updater, "_fetch_exe",
+                        lambda url, base, ex=None, token=None:
+                        fetched.append(url) or True)
+
+    status = updater.check_for_update("o/r", "2026.07.19", str(tmp_path))
+    assert status == "downloaded"
+    assert fetched == ["https://github.com/o/r/releases/download/v1.0.0/AMS.exe"]
 
 
 def test_applying_an_update_swaps_the_exe_and_leaves_data_alone(tmp_path):

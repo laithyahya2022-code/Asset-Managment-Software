@@ -1,7 +1,10 @@
 """Self-update for the packaged Windows build.
 
-Talks only to the GitHub Releases API — no other service is involved and no
-account or subscription is needed beyond access to the repository itself.
+Talks to GitHub Releases — no other service is involved and no account or
+subscription is needed beyond access to the repository itself. The fixed
+download links on github.com are the primary path; the REST API on
+api.github.com is only a fallback, since networks may treat the two hosts
+differently.
 
 How an update lands:
 
@@ -38,7 +41,16 @@ PENDING_SUFFIX = ".new"
 RETIRED_SUFFIX = ".old"
 
 API = "https://api.github.com/repos/{repo}/releases/latest"
+#: The workflow publishes every build under this fixed tag so the links never
+#: change. Reading them directly needs only github.com — school networks
+#: quite often allow that (the browser opens it fine) while blocking or
+#: rate-limiting api.github.com, which used to fail the whole check.
+TAG = "v1.0.0"
 TIMEOUT = 8
+
+
+def _download_url(repo, name):
+    return f"https://github.com/{repo}/releases/download/{TAG}/{name}"
 
 
 def parse_version(text):
@@ -90,6 +102,21 @@ def latest_release(repo, token=None):
         return None
 
 
+def direct_version(repo, token=None):
+    """The advertised version straight from the fixed download link, or None.
+
+    This is the primary check; the GitHub API is only a fallback for it.
+    """
+    try:
+        with _request(_download_url(repo, VERSION_ASSET), token,
+                      accept="application/octet-stream") as resp:
+            text = resp.read(64).decode("utf-8", "replace").strip()
+        return text if parse_version(text) else None
+    except (urllib.error.URLError, urllib.error.HTTPError, OSError,
+            TimeoutError):
+        return None
+
+
 def _asset(release, name):
     for asset in (release or {}).get("assets") or []:
         if asset.get("name") == name:
@@ -136,21 +163,17 @@ def pending_update(base_dir, exe=None):
     return os.path.exists(pending_path(base_dir, exe))
 
 
-def download_update(release, base_dir, exe=None, token=None):
+def _fetch_exe(url, base_dir, exe=None, token=None):
     """Fetch the new executable to <exe>.new. Returns True on success.
 
     Downloads to a temporary name first and renames into place, so a connection
     that drops halfway can never leave a half-written file that the next start
     would treat as a valid update.
     """
-    asset = _asset(release, EXE_ASSET)
-    if not asset or not asset.get("browser_download_url"):
-        return False
     target = pending_path(base_dir, exe)
     partial = target + ".part"
     try:
-        with _request(asset["browser_download_url"], token,
-                      accept="application/octet-stream") as resp, \
+        with _request(url, token, accept="application/octet-stream") as resp, \
                 open(partial, "wb") as fh:
             shutil.copyfileobj(resp, fh)
         if os.path.getsize(partial) < 1_000_000:      # a real build is ~27 MB
@@ -168,22 +191,41 @@ def download_update(release, base_dir, exe=None, token=None):
         return False
 
 
+def download_update(release, base_dir, exe=None, token=None):
+    """Fetch the executable a release advertises. Returns True on success."""
+    asset = _asset(release, EXE_ASSET)
+    if not asset or not asset.get("browser_download_url"):
+        return False
+    return _fetch_exe(asset["browser_download_url"], base_dir, exe, token)
+
+
 def check_for_update(repo, current_version, base_dir, exe=None, token=None):
     """Look for a newer build and download it. Never raises.
 
     Returns one of: "downloaded", "pending" (one was already waiting),
     "up-to-date", "unavailable" (offline / private repo / no release).
+
+    The fixed download links on github.com are tried first; the GitHub API is
+    only a fallback, because api.github.com is a different host that school
+    networks may block or rate-limit even when github.com itself works.
     """
     if pending_update(base_dir, exe):
         return "pending"
-    release = latest_release(repo, token)
-    if not release:
-        return "unavailable"
-    version = remote_version(release, token)
+    version = direct_version(repo, token)
+    release = None
+    if not version:
+        release = latest_release(repo, token)
+        if not release:
+            return "unavailable"
+        version = remote_version(release, token)
     if not is_newer(version, current_version):
         return "up-to-date"
-    return "downloaded" if download_update(release, base_dir, exe, token) \
-        else "unavailable"
+    if release:
+        fetched = download_update(release, base_dir, exe, token)
+    else:
+        fetched = _fetch_exe(_download_url(repo, EXE_ASSET),
+                             base_dir, exe, token)
+    return "downloaded" if fetched else "unavailable"
 
 
 def apply_pending_update(base_dir, exe=None):
