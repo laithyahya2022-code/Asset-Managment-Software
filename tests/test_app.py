@@ -1520,6 +1520,23 @@ def test_update_downloads_beside_the_exe_and_never_touches_instance(tmp_path, mo
     assert fingerprint() == before, "an update modified the instance folder"
 
 
+def test_update_check_falls_back_to_the_system_downloader(monkeypatch):
+    """When urllib can't get through (PAC proxy, TLS inspection), the check
+    retries through the OS downloader instead of giving up."""
+    import urllib.error
+
+    from itam import updater
+
+    def blocked(*a, **k):
+        raise urllib.error.URLError("proxy in the way")
+
+    monkeypatch.setattr(updater, "_request", blocked)
+    monkeypatch.setattr(updater, "_ps_text", lambda url: "2026.08.06.99")
+    assert updater.direct_version("o/r") == "2026.08.06.99"
+    # And the fallback itself is Windows-only: elsewhere it must just say no.
+    assert updater._ps_fetch("https://example/x", "/nonexistent/x") is False
+
+
 def test_update_check_prefers_github_com_over_the_api(tmp_path, monkeypatch):
     """A network that allows github.com but blocks api.github.com must still
     update — the fixed download links are the primary path, the API a fallback."""

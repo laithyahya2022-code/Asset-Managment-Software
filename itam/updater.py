@@ -23,13 +23,20 @@ read, written, moved or deleted here. An update only ever touches the three
 executable files next to it.
 """
 import json
+import logging
 import os
 import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import urllib.error
 import urllib.request
+
+#: Flask's app logger is logging.getLogger("itam"), so records written here
+#: land in instance/error.log on an installed server — the only place a
+#: school can look when an update check fails.
+log = logging.getLogger("itam")
 
 #: Asset names published by .github/workflows/release.yml.
 EXE_ASSET = "AMS.exe"
@@ -51,6 +58,57 @@ TIMEOUT = 8
 
 def _download_url(repo, name):
     return f"https://github.com/{repo}/releases/download/{TAG}/{name}"
+
+
+def _ps_fetch(url, dest, timeout=300):
+    """Windows fallback: download with PowerShell instead of urllib.
+
+    School networks often force all traffic through a proxy configured by a
+    PAC auto-config script and/or inspect TLS with their own certificate.
+    Browsers follow both; Python's urllib follows neither, so the app's own
+    requests fail on a machine whose browser opens GitHub fine. PowerShell's
+    Invoke-WebRequest uses the system proxy and certificate store the same
+    way the browser does. Returns True when dest exists and is non-empty.
+    """
+    if os.name != "nt":
+        return False
+    command = (
+        "$ProgressPreference='SilentlyContinue'; "
+        "[Net.ServicePointManager]::SecurityProtocol="
+        "[Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13; "
+        f"Invoke-WebRequest -UseBasicParsing -Uri '{url}' -OutFile '{dest}'"
+    )
+    try:
+        subprocess.run(
+            ["powershell", "-NoProfile", "-NonInteractive",
+             "-ExecutionPolicy", "Bypass", "-Command", command],
+            timeout=timeout, check=True,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return os.path.exists(dest) and os.path.getsize(dest) > 0
+    except Exception as exc:
+        log.warning("update: PowerShell fetch of %s failed: %r", url, exc)
+        try:
+            os.remove(dest)
+        except OSError:
+            pass
+        return False
+
+
+def _ps_text(url):
+    """Small text file via the PowerShell fallback, or None."""
+    fd, path = tempfile.mkstemp(suffix=".txt")
+    os.close(fd)
+    try:
+        if _ps_fetch(url, path, timeout=60):
+            with open(path, "r", encoding="utf-8", errors="replace") as fh:
+                return fh.read(64).strip()
+        return None
+    finally:
+        try:
+            os.remove(path)
+        except OSError:
+            pass
 
 
 def parse_version(text):
@@ -106,15 +164,18 @@ def direct_version(repo, token=None):
     """The advertised version straight from the fixed download link, or None.
 
     This is the primary check; the GitHub API is only a fallback for it.
+    urllib first, then the PowerShell fallback for networks whose proxy or
+    TLS inspection only browsers (and PowerShell) can traverse.
     """
+    url = _download_url(repo, VERSION_ASSET)
     try:
-        with _request(_download_url(repo, VERSION_ASSET), token,
-                      accept="application/octet-stream") as resp:
+        with _request(url, token, accept="application/octet-stream") as resp:
             text = resp.read(64).decode("utf-8", "replace").strip()
-        return text if parse_version(text) else None
     except (urllib.error.URLError, urllib.error.HTTPError, OSError,
-            TimeoutError):
-        return None
+            TimeoutError) as exc:
+        log.warning("update: direct check of %s failed: %r", url, exc)
+        text = _ps_text(url)
+    return text if text and parse_version(text) else None
 
 
 def _asset(release, name):
@@ -172,22 +233,27 @@ def _fetch_exe(url, base_dir, exe=None, token=None):
     """
     target = pending_path(base_dir, exe)
     partial = target + ".part"
+    fetched = False
     try:
         with _request(url, token, accept="application/octet-stream") as resp, \
                 open(partial, "wb") as fh:
             shutil.copyfileobj(resp, fh)
-        if os.path.getsize(partial) < 1_000_000:      # a real build is ~27 MB
-            os.remove(partial)
+        fetched = True
+    except (urllib.error.URLError, urllib.error.HTTPError, OSError,
+            TimeoutError) as exc:
+        log.warning("update: direct download of %s failed: %r", url, exc)
+        fetched = _ps_fetch(url, partial)
+    try:
+        if not fetched or os.path.getsize(partial) < 1_000_000:
+            os.remove(partial)                        # a real build is ~27 MB
             return False
         os.replace(partial, target)
         return True
-    except (urllib.error.URLError, urllib.error.HTTPError, OSError,
-            TimeoutError):
-        for path in (partial,):
-            try:
-                os.remove(path)
-            except OSError:
-                pass
+    except OSError:
+        try:
+            os.remove(partial)
+        except OSError:
+            pass
         return False
 
 
