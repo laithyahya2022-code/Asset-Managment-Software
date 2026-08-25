@@ -45,7 +45,15 @@ def licenses_export_csv():
 @perm_required("licenses.manage")
 def licenses_import():
     if request.method == "POST" and request.files.get("file"):
-        _, rows = read_table(request.files["file"])
+        # Same guard as the employee importer: an unreadable file is a
+        # message, not a 500.
+        try:
+            _, rows = read_table(request.files["file"])
+        except Exception:
+            flash("Could not read that file. In Excel use Save As → "
+                  "Excel Workbook (.xlsx) — the old .xls format is not "
+                  "supported — then upload it again.", "error")
+            return redirect(url_for("ops.licenses_import"))
         vendors = {v.name.lower(): v for v in db.session.scalars(db.select(Vendor))}
         created = updated = skipped = 0
         for r in rows:

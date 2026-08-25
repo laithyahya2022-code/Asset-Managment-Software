@@ -1,7 +1,7 @@
 from datetime import datetime
 
-from flask import (Blueprint, flash, g, redirect, render_template, request,
-                   url_for)
+from flask import (Blueprint, current_app, flash, g, redirect, render_template,
+                   request, url_for)
 
 from ..models import (EMPLOYEE_TYPES, LOCATION_KINDS, Asset, Category,
                       Department, Employee, Location, Vendor, db)
@@ -51,7 +51,16 @@ def employees_export_csv():
 @perm_required("people.manage")
 def employees_import():
     if request.method == "POST" and request.files.get("file"):
-        _, rows = read_table(request.files["file"])
+        # A file openpyxl cannot open -- an old .xls, a renamed PDF, a
+        # half-downloaded sheet -- must come back as a message, not a 500.
+        try:
+            _, rows = read_table(request.files["file"])
+        except Exception:
+            current_app.logger.exception("Employee import: unreadable file")
+            flash("Could not read that file. In Excel use Save As → "
+                  "Excel Workbook (.xlsx) — the old .xls format is not "
+                  "supported — then upload it again.", "error")
+            return redirect(url_for("org.employees_import"))
         depts = {d.name.lower(): d for d in db.session.scalars(db.select(Department))}
 
         def pick(r, *keys):
@@ -61,51 +70,59 @@ def employees_import():
                     return v
             return ""
 
-        created = updated = skipped = 0
-        for r in rows:
-            name = pick(r, "name", "employee name", "full name")
-            code = pick(r, "employee id", "emp_code", "emp code", "id", "badge")
-            email = pick(r, "email", "e-mail", "email address").lower()
-            if not name and not code:
-                skipped += 1
-                continue
-            # match an existing employee by Employee ID; only fall back to email
-            # when the row has no ID (emails may be shared, so they can't key rows)
-            emp = None
-            if code:
-                emp = db.session.scalar(db.select(Employee).where(Employee.emp_code == code))
-            elif email:
-                emp = db.session.scalar(db.select(Employee).where(Employee.email == email))
-            if not emp:
-                emp = Employee()
-                db.session.add(emp)
-                created += 1
-            else:
-                updated += 1
-            emp.name = name or emp.name or code
-            # Without an ID the next import cannot match this row and would
-            # add them a second time.
-            emp.emp_code = code or emp.emp_code or next_employee_code()
-            emp.email = email or emp.email
-            emp.emp_type = (pick(r, "employee type", "type", "emp_type", "staff type")
-                            or emp.emp_type)
-            emp.phone = pick(r, "phone", "mobile", "telephone") or emp.phone
-            emp.title = pick(r, "job title", "title", "position", "role") or emp.title
-            dname = pick(r, "department", "dept")
-            if dname:
-                dep = depts.get(dname.lower())
-                if not dep:                       # auto-create missing departments
-                    dep = Department(name=dname)
-                    db.session.add(dep)
-                    db.session.flush()
-                    depts[dname.lower()] = dep
-                emp.department_id = dep.id
-        log_activity("employees_imported", "employee", None,
-                     f"{created} new, {updated} updated")
-        db.session.commit()
-        flash(f"Imported {created} new and {updated} updated employees "
-              f"({skipped} skipped).", "success")
-        return redirect(url_for("org.employees"))
+        # Whatever goes wrong mid-file, the person gets a message and an
+        # unchanged register -- never a bare Internal Server Error.
+        try:
+            created = updated = skipped = 0
+            for r in rows:
+                name = pick(r, "name", "employee name", "full name")
+                code = pick(r, "employee id", "emp_code", "emp code", "id", "badge")
+                email = pick(r, "email", "e-mail", "email address").lower()
+                if not name and not code:
+                    skipped += 1
+                    continue
+                # match an existing employee by Employee ID; only fall back to email
+                # when the row has no ID (emails may be shared, so they can't key rows)
+                emp = None
+                if code:
+                    emp = db.session.scalar(db.select(Employee).where(Employee.emp_code == code))
+                elif email:
+                    emp = db.session.scalar(db.select(Employee).where(Employee.email == email))
+                if not emp:
+                    emp = Employee()
+                    db.session.add(emp)
+                    created += 1
+                else:
+                    updated += 1
+                emp.name = name or emp.name or code
+                # Without an ID the next import cannot match this row and would
+                # add them a second time.
+                emp.emp_code = code or emp.emp_code or next_employee_code()
+                emp.email = email or emp.email
+                emp.emp_type = (pick(r, "employee type", "type", "emp_type", "staff type")
+                                or emp.emp_type)
+                emp.phone = pick(r, "phone", "mobile", "telephone") or emp.phone
+                emp.title = pick(r, "job title", "title", "position", "role") or emp.title
+                dname = pick(r, "department", "dept")
+                if dname:
+                    dep = depts.get(dname.lower())
+                    if not dep:                       # auto-create missing departments
+                        dep = Department(name=dname)
+                        db.session.add(dep)
+                        db.session.flush()
+                        depts[dname.lower()] = dep
+                    emp.department_id = dep.id
+            log_activity("employees_imported", "employee", None,
+                         f"{created} new, {updated} updated")
+            db.session.commit()
+            flash(f"Imported {created} new and {updated} updated employees "
+                  f"({skipped} skipped).", "success")
+            return redirect(url_for("org.employees"))
+        except Exception as exc:
+            db.session.rollback()
+            current_app.logger.exception("Employee import failed")
+            flash(f"Import failed, nothing was changed: {exc}", "error")
+            return redirect(url_for("org.employees_import"))
     return render_template("org/import.html", title="Import employees",
                            cols=["Name", "Employee ID", "Employee Type", "Email",
                                  "Job Title", "Department"],

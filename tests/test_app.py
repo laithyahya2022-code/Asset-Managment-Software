@@ -1054,6 +1054,16 @@ def test_list_pages_offer_select_all(client, app, url, endpoint):
     assert 'form="bulk"' in body, f"{url} action button must point at the form"
 
 
+def test_employee_import_rejects_unreadable_file_politely(client):
+    """A .xls or corrupted upload must flash a message, never 500."""
+    login(client)
+    resp = client.post("/employees/import", data={
+        "file": (io.BytesIO(b"this is not an excel workbook"), "staff.xlsx")},
+        content_type="multipart/form-data", follow_redirects=True)
+    assert resp.status_code == 200
+    assert "Could not read that file" in resp.data.decode()
+
+
 def test_employees_delete_buttons_and_delete_all(client, app):
     """Explicit Delete selected / Delete all buttons with confirmation, and
     delete-all keeps anyone still holding assets."""
