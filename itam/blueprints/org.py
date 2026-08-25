@@ -514,6 +514,23 @@ def employees_bulk_delete():
         "org.employees", "employee")
 
 
+@bp.post("/employees/delete-all")
+@perm_required("people.manage")
+def employees_delete_all():
+    """The whole staff list in one go, e.g. before a clean re-import.
+    Anyone still holding assets is kept, exactly as in a bulk delete."""
+    ids = db.session.scalars(db.select(Employee.id)).all()
+    for emp in db.session.scalars(db.select(Employee).where(Employee.id.in_(ids))):
+        if not emp.current_assets:
+            for assignment in list(emp.assignments):
+                db.session.delete(assignment)
+            log_activity("employee_deleted", "employee", emp.id, emp.name)
+    return _bulk_delete(
+        Employee, ids,
+        lambda e: (f"{e.name} still has assets checked out." if e.current_assets else None),
+        "org.employees", "employee")
+
+
 @bp.post("/employees/bulk")
 @perm_required("people.manage")
 def employees_bulk():

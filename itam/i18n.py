@@ -234,6 +234,8 @@ AR.update({
     "Delete ALL": "حذف كل",
     "assets and their history? This cannot be undone.":
         "أصلاً مع كامل سجلها؟ لا يمكن التراجع عن هذا.",
+    "employees? Anyone still holding assets is kept. This cannot be undone.":
+        "موظفًا؟ من لا يزال بحوزته أصول سيُبقى عليه. لا يمكن التراجع عن هذا.",
     "Set department": "تعيين القسم",
     "Set type": "تعيين النوع",
     "Set condition": "تعيين الحالة الفنية",

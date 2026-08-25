@@ -1054,6 +1054,35 @@ def test_list_pages_offer_select_all(client, app, url, endpoint):
     assert 'form="bulk"' in body, f"{url} action button must point at the form"
 
 
+def test_employees_delete_buttons_and_delete_all(client, app):
+    """Explicit Delete selected / Delete all buttons with confirmation, and
+    delete-all keeps anyone still holding assets."""
+    from itam.models import Assignment, Category, Employee
+
+    with app.app_context():
+        cat = db.session.scalar(db.select(Category))
+        holder = Employee(name="Holder Person")
+        free = Employee(name="Free Person")
+        db.session.add_all([holder, free])
+        asset = Asset(tag="EMPDA-1", name="Laptop", status="Checked Out",
+                      condition="Good", category=cat)
+        db.session.add(asset)
+        db.session.flush()
+        db.session.add(Assignment(asset=asset, employee=holder))
+        db.session.commit()
+
+    login(client)
+    body = client.get("/employees").data.decode()
+    assert "Delete selected" in body
+    assert "Delete all" in body and "data-confirm=" in body
+
+    page = client.post("/employees/delete-all", follow_redirects=True).data.decode()
+    assert "still has assets checked out" in page
+    with app.app_context():
+        names = set(db.session.scalars(db.select(Employee.name)))
+        assert "Holder Person" in names and "Free Person" not in names
+
+
 def test_employees_bulk_edit_actions(client, app):
     """Select-all offers more than delete: set department/type, active flag."""
     from itam.models import Department, Employee

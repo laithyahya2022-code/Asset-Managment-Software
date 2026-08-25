@@ -11,6 +11,13 @@
     {% endif %}
     {{ export_menu(url_for('org.employees_export_xlsx'),
                    url_for('org.employees_export_csv')) }}
+    {% if has_perm("people.manage") and rows %}
+    <form class="inline" method="post" action="{{ url_for('org.employees_delete_all') }}">
+      <button class="btn danger" type="submit"
+              data-confirm="{{ t('Delete ALL') }} {{ rows | length }} {{ t('employees? Anyone still holding assets is kept. This cannot be undone.') }}">
+        {{ t("Delete all") }} ({{ rows | length }})</button>
+    </form>
+    {% endif %}
   </div>
 </div>
 {% if rows %}
@@ -50,6 +57,9 @@
   <input name="emp_type" placeholder="({{ t('type') }}… e.g. Teacher)" style="width:auto">
   <button class="btn secondary bulk-go" type="submit" form="bulk" disabled
           data-label="{{ t('Apply') }}">{{ t("Apply") }}</button>
+  <button class="btn danger bulk-go" type="submit" form="bulk" disabled
+          formaction="{{ url_for('org.employees_bulk_delete') }}"
+          data-label="{{ t('Delete') }}">{{ t("Delete selected") }}</button>
 </div>
 {% endif %}
 </form>
