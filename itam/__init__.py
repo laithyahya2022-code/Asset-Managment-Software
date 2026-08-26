@@ -2,9 +2,9 @@ import os
 import shutil
 from datetime import datetime
 
-from flask import Flask, g, redirect, request, session, url_for
+from flask import Flask, g, redirect, render_template, request, session, url_for
 
-APP_VERSION = "2026.08.06.58"  # bumped on each release so users can confirm their build
+APP_VERSION = "2026.08.06.59"  # bumped on each release so users can confirm their build
 
 from .i18n import LANGS, t, translate_html
 from .models import (DEFAULT_ROLE_PERMS, PERMISSIONS, ROLES, Notification,
@@ -66,6 +66,14 @@ def create_app(test_config=None, instance_path=None):
     if test_config:
         app.config.update(test_config)
 
+    # SQLite lets a writer wait a few seconds for the lock, then gives up. A
+    # second AMS.exe left running (or a slow disk) then turned every save
+    # into an Internal Server Error. Waiting longer costs nothing and rides
+    # out the moment instead.
+    app.config.setdefault("SQLALCHEMY_ENGINE_OPTIONS", {})
+    app.config["SQLALCHEMY_ENGINE_OPTIONS"].setdefault(
+        "connect_args", {}).setdefault("timeout", 30)
+
     # When served behind a reverse proxy (Caddy / Nginx / IIS) that terminates
     # HTTPS for a domain like https://itam.yourschool.edu, trust the standard
     # forwarded headers so redirects and generated links use the right
@@ -89,7 +97,7 @@ def create_app(test_config=None, instance_path=None):
             handler = RotatingFileHandler(
                 os.path.join(app.instance_path, "error.log"),
                 maxBytes=512_000, backupCount=2, encoding="utf-8")
-            handler.setLevel(logging.ERROR)
+            handler.setLevel(logging.WARNING)
             handler.setFormatter(logging.Formatter(
                 "%(asctime)s %(levelname)s %(name)s: %(message)s"))
             app.logger.addHandler(handler)
@@ -108,6 +116,36 @@ def create_app(test_config=None, instance_path=None):
     app.register_blueprint(reports.bp)
     app.register_blueprint(admin.bp)
     app.register_blueprint(api.bp)
+
+    @app.errorhandler(500)
+    def server_error(e):
+        """A crash becomes a page that says what went wrong and what to do.
+
+        The common field failures -- a second AMS.exe locking the database,
+        the database file marked read-only after a manual copy, a full disk
+        -- each get their own instruction instead of a bare error.
+        """
+        original = getattr(e, "original_exception", None)
+        detail = f"{type(original).__name__}: {original}" if original else ""
+        low = detail.lower()
+        if "locked" in low:
+            hint = ("The database is locked by another running copy of AMS. "
+                    "Open Task Manager, end every AMS.exe you find, then "
+                    "start the app once — or simply restart the computer.")
+        elif "readonly" in low or "read-only" in low or "permission" in low:
+            hint = ("The database cannot be written. Right-click "
+                    "C:\\ProgramData\\AMS\\instance\\itam.sqlite → Properties "
+                    "and clear the Read-only box, and make sure the app is "
+                    "allowed to write in that folder.")
+        elif "no space" in low or ("disk" in low and "full" in low):
+            hint = "The disk is full — free some space and try again."
+        else:
+            hint = ""
+        try:
+            return render_template("errors/500.html",
+                                   detail=detail, hint=hint), 500
+        except Exception:
+            return e        # even the error page failed: show the plain one
 
     @app.before_request
     def before():

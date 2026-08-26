@@ -1520,6 +1520,28 @@ def test_update_downloads_beside_the_exe_and_never_touches_instance(tmp_path, mo
     assert fingerprint() == before, "an update modified the instance folder"
 
 
+def test_500_page_names_the_cause_and_the_fix(tmp_path):
+    """A crash shows what to do — e.g. a locked database names the second
+    AMS.exe — instead of the bare Internal Server Error."""
+    from sqlalchemy.exc import OperationalError
+
+    app = create_app({"SQLALCHEMY_DATABASE_URI": "sqlite://",
+                      "SECRET_KEY": "t", "WTF_CSRF_ENABLED": False,
+                      "UPLOAD_FOLDER": str(tmp_path), "BACKUP_FOLDER": str(tmp_path),
+                      "PROPAGATE_EXCEPTIONS": False})
+
+    @app.route("/boom")
+    def boom():
+        raise OperationalError("stmt", {}, Exception("database is locked"))
+
+    client = app.test_client()
+    resp = client.get("/boom")
+    body = resp.data.decode()
+    assert resp.status_code == 500
+    assert "end every AMS.exe" in body        # the locked-db instruction
+    assert "error.log" in body
+
+
 def test_update_check_falls_back_to_the_system_downloader(monkeypatch):
     """When urllib can't get through (PAC proxy, TLS inspection), the check
     retries through the OS downloader instead of giving up."""
