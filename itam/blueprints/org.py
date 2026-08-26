@@ -47,6 +47,19 @@ def employees_export_csv():
     return csv_response(EMP_HEADERS, _employee_rows(), "employees.csv")
 
 
+def _name_is_place(name):
+    """True for "Admin office", "Grade 5", "المكتبة" — rooms and offices that
+    schools list among staff. The assets importer already refuses to turn
+    these into employees; a staff sheet must not smuggle them in either."""
+    import re
+    from .assets import PERSON_WORDS, PLACE_WORDS
+    tokens = set(re.sub(r"[^\w؀-ۿ]+", " ", (name or "").lower()).split())
+    if tokens & PERSON_WORDS:
+        return False                    # a title always means a person
+    return any(t in PLACE_WORDS or (t.startswith("ال") and t[2:] in PLACE_WORDS)
+               for t in tokens)
+
+
 @bp.route("/employees/import", methods=["GET", "POST"])
 @perm_required("people.manage")
 def employees_import():
@@ -73,13 +86,16 @@ def employees_import():
         # Whatever goes wrong mid-file, the person gets a message and an
         # unchanged register -- never a bare Internal Server Error.
         try:
-            created = updated = skipped = 0
+            created = updated = skipped = places = 0
             for r in rows:
                 name = pick(r, "name", "employee name", "full name")
                 code = pick(r, "employee id", "emp_code", "emp code", "id", "badge")
                 email = pick(r, "email", "e-mail", "email address").lower()
                 if not name and not code:
                     skipped += 1
+                    continue
+                if _name_is_place(name):
+                    places += 1
                     continue
                 # match an existing employee by Employee ID; only fall back to email
                 # when the row has no ID (emails may be shared, so they can't key rows)
@@ -115,8 +131,10 @@ def employees_import():
             log_activity("employees_imported", "employee", None,
                          f"{created} new, {updated} updated")
             db.session.commit()
+            note = (f", {places} rows named rooms/offices, not people — left out"
+                    if places else "")
             flash(f"Imported {created} new and {updated} updated employees "
-                  f"({skipped} skipped).", "success")
+                  f"({skipped} skipped{note}).", "success")
             return redirect(url_for("org.employees"))
         except Exception as exc:
             db.session.rollback()

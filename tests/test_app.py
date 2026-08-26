@@ -1054,6 +1054,25 @@ def test_list_pages_offer_select_all(client, app, url, endpoint):
     assert 'form="bulk"' in body, f"{url} action button must point at the form"
 
 
+def test_employee_import_refuses_rooms_and_offices(client, app):
+    """"Admin office" in a staff sheet is a place, not a person."""
+    from itam.models import Employee
+
+    login(client)
+    csv = ("Name,Employee ID\n"
+           "Admin office,EMP-0900\n"
+           "المكتبة,EMP-0901\n"
+           "Bayan Alnashash,EMP-0902\n")
+    resp = client.post("/employees/import", data={
+        "file": (io.BytesIO(csv.encode("utf-8")), "staff.csv")},
+        content_type="multipart/form-data", follow_redirects=True)
+    assert "rooms/offices" in resp.data.decode()
+    with app.app_context():
+        names = set(db.session.scalars(db.select(Employee.name)))
+        assert "Bayan Alnashash" in names
+        assert "Admin office" not in names and "المكتبة" not in names
+
+
 def test_employee_import_rejects_unreadable_file_politely(client):
     """A .xls or corrupted upload must flash a message, never 500."""
     login(client)
