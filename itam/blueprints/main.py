@@ -119,7 +119,20 @@ def dashboard():
     counts = dict(db.session.execute(
         db.select(Asset.status, func.count(Asset.id)).group_by(Asset.status)).all())
     total = sum(counts.values())
-    total_value = sum(float(a.purchase_cost or 0) for a in db.session.scalars(db.select(Asset)))
+    assets_all = db.session.scalars(db.select(Asset)).all()
+    total_value = sum(float(a.purchase_cost or 0) for a in assets_all)
+    # Counted from what is actually lent out, not from the status text: an
+    # imported sheet can mark everything "In Use", and the cards must still
+    # agree with the Lending page.
+    from .operations import _place_held_assets
+    held_ids = set(db.session.scalars(db.select(Assignment.asset_id).where(
+        Assignment.returned_at.is_(None))))
+    held_ids |= {a.id for a in _place_held_assets()}
+    on_loan = len(held_ids)
+    unavailable = {"Lost", "Missing", "Damaged", "Retired", "Disposed",
+                   "Under Maintenance"}
+    available = len([a for a in assets_all
+                     if a.id not in held_ids and a.status not in unavailable])
     overdue = db.session.scalar(db.select(func.count(Assignment.id)).where(
         Assignment.returned_at.is_(None), Assignment.due_at.isnot(None),
         Assignment.due_at < today)) or 0
@@ -164,6 +177,7 @@ def dashboard():
                    else f"${total_value:,.0f}")
     return render_template(
         "dashboard.html", total=total, counts=counts, overdue=overdue,
+        on_loan=on_loan, available=available,
         scheduled=scheduled, expiring=expiring, active_lic=active_lic,
         lic_soon=lic_soon, added_month=added_month, value_short=value_short,
         cat_chart=cat_chart, donut=donut, dept_chart=dept_chart,
@@ -204,7 +218,11 @@ def analytics():
     util = 0
     active_assets = [a for a in assets if a.status != "Retired"]
     if active_assets:
-        util = round(100 * len([a for a in active_assets if a.status == "Checked Out"])
+        # Utilisation from real loans, not the status text, for the same
+        # reason as the dashboard cards.
+        held = set(db.session.scalars(db.select(Assignment.asset_id).where(
+            Assignment.returned_at.is_(None))))
+        util = round(100 * len([a for a in active_assets if a.id in held])
                      / len(active_assets))
     return render_template("analytics.html",
                            added_chart=line_chart(added),

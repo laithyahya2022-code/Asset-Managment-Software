@@ -19,7 +19,7 @@
   </a>
   <a class="kpi" href="{{ url_for('ops.checkouts') }}">
     <span class="tile blue">{{ icon("checkout") }}</span>
-    <div><span class="k-label">{{ t("Checked Out") }}</span><span class="k-value">{{ counts.get("Checked Out", 0) }}</span>
+    <div><span class="k-label">{{ t("Checked Out") }}</span><span class="k-value">{{ on_loan }}</span>
     <span class="k-sub {{ 'red' if overdue }}">{{ overdue }} {{ t("Overdue") | lower }}</span></div>
   </a>
   <a class="kpi" href="{{ url_for('ops.maintenance_list') }}">
@@ -35,16 +35,16 @@
   <a class="kpi" href="{{ url_for('reports.show', name='financial') }}">
     <span class="tile deepgreen">{{ icon("dollar") }}</span>
     <div><span class="k-label">{{ t("Total Asset Value") }}</span><span class="k-value">{{ value_short }}</span>
-    <span class="k-sub">{{ counts.get("Available", 0) }} assets available</span></div>
+    <span class="k-sub">{{ available }} assets available</span></div>
   </a>
   <a class="kpi" href="{{ url_for('ops.licenses') }}">
     <span class="tile purple">{{ icon("license") }}</span>
     <div><span class="k-label">{{ t("Active Licenses") }}</span><span class="k-value">{{ active_lic }}</span>
     <span class="k-sub">{{ lic_soon }} expiring soon</span></div>
   </a>
-  <a class="kpi" href="{{ url_for('assets.list_', status='Available') }}">
+  <a class="kpi" href="{{ url_for('assets.list_') }}">
     <span class="tile teal">{{ icon("check") }}</span>
-    <div><span class="k-label">{{ t("Available Assets") }}</span><span class="k-value">{{ counts.get("Available", 0) }}</span>
+    <div><span class="k-label">{{ t("Available Assets") }}</span><span class="k-value">{{ available }}</span>
     <span class="k-sub">Ready for checkout</span></div>
   </a>
   <a class="kpi" href="{{ url_for('assets.list_', status='Lost') }}">

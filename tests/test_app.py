@@ -1054,6 +1054,37 @@ def test_list_pages_offer_select_all(client, app, url, endpoint):
     assert 'form="bulk"' in body, f"{url} action button must point at the form"
 
 
+def test_dashboard_counts_come_from_real_loans(client, app):
+    """An imported sheet marks everything "In Use"; the cards must still
+    agree with Lending — loans counted from assignments and place-holds,
+    not from the status text."""
+    import re
+
+    from itam.models import Assignment, Category, Employee
+
+    login(client)
+    with app.app_context():
+        cat = db.session.scalar(db.select(Category))
+        emp = Employee(name="Loan Holder")
+        db.session.add(emp)
+        a1 = Asset(tag="DB-1", name="PC1", status="In Use", condition="Good",
+                   category=cat)
+        a2 = Asset(tag="DB-2", name="PC2", status="In Use", condition="Good",
+                   category=cat)
+        a3 = Asset(tag="DB-3", name="PC3", status="In Use", condition="Good",
+                   category=cat, notes="Assigned to: Grade.5.A")
+        db.session.add_all([a1, a2, a3])
+        db.session.flush()
+        db.session.add(Assignment(asset=a1, employee=emp))
+        db.session.commit()
+
+    body = client.get("/").data.decode()
+    checked = re.search(r'Checked Out.*?k-value">(\d+)<', body, re.S)
+    assert checked and checked.group(1) == "2"      # the loan + the place-hold
+    avail = re.search(r'Available Assets.*?k-value">(\d+)<', body, re.S)
+    assert avail and avail.group(1) == "1"          # only the free one
+
+
 def test_employee_import_refuses_rooms_and_offices(client, app):
     """"Admin office" in a staff sheet is a place, not a person."""
     from itam.models import Employee
