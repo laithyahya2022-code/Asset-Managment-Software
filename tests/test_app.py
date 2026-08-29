@@ -3233,3 +3233,20 @@ def test_label_links_stay_in_the_app_window(client, app):
 
     # The label page itself carries a way back, so same-window is not a trap.
     assert b"Back to asset" in client.get(f"/assets/{aid}/label").data
+
+
+def test_dashboard_survives_a_locked_database(client, app, monkeypatch):
+    """A locked database during alert generation (e.g. a second AMS.exe, or
+    heavy concurrent use) must never 500 the dashboard — the page still
+    renders and the alerts are recreated on the next load."""
+    import sqlalchemy.exc
+    from itam.blueprints import main
+
+    login(client)
+
+    def locked():
+        raise sqlalchemy.exc.OperationalError("database is locked", None, None)
+
+    monkeypatch.setattr(main, "_generate_alerts", locked)
+    resp = client.get("/")
+    assert resp.status_code == 200

@@ -114,7 +114,14 @@ def welcome():
 @bp.route("/")
 @login_required
 def dashboard():
-    _generate_alerts()
+    # Alert generation writes to the database. If the database is momentarily
+    # locked (e.g. a second AMS.exe, or heavy concurrent use), that write must
+    # never take the whole dashboard down with a 500 — skip it and still render
+    # the page. The alerts are recreated on the next load.
+    try:
+        _generate_alerts()
+    except Exception:
+        db.session.rollback()
     today = date.today()
     counts = dict(db.session.execute(
         db.select(Asset.status, func.count(Asset.id)).group_by(Asset.status)).all())
