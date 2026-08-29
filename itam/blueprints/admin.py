@@ -222,8 +222,13 @@ def update_now():
                   "connection and try again.", "error")
             return redirect(url_for("admin.settings"))
 
-    log_activity("update_applied", "setting", None)
-    db.session.commit()
+    # Recording the update is non-essential — a locked database (e.g. a second
+    # AMS.exe) must never stop the update from proceeding with a 500.
+    try:
+        log_activity("update_applied", "setting", None)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
 
     def restart():
         time.sleep(1.0)                  # let the response reach the browser
