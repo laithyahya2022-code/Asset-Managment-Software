@@ -4,7 +4,7 @@ from datetime import datetime
 
 from flask import Flask, g, redirect, render_template, request, session, url_for
 
-APP_VERSION = "2026.08.30.65"  # bumped on each release so users can confirm their build
+APP_VERSION = "2026.08.30.66"  # bumped on each release so users can confirm their build
 
 from .i18n import LANGS, t, translate_html
 from .models import (DEFAULT_ROLE_PERMS, PERMISSIONS, ROLES, Notification,

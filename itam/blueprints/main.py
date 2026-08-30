@@ -1,7 +1,7 @@
 from datetime import date, datetime, timedelta
 
-from flask import (Blueprint, flash, make_response, redirect, render_template,
-                   request, url_for)
+from flask import (Blueprint, flash, g, make_response, redirect,
+                   render_template, request, url_for)
 from sqlalchemy import func, or_
 
 from ..models import (ASSET_STATUSES, ActivityLog, Asset, Assignment, Category,
@@ -83,12 +83,15 @@ def service_worker():
 
 @bp.route("/welcome")
 def welcome():
-    """The public landing page from the design handoff.
+    """The marketing landing page — kept, but no longer the front door.
 
-    No sign-in required: it explains the system and routes to /login. The
-    stat band uses live numbers -- they are wayfinding, not secrets, and this
-    page only exists inside the school's network.
+    Opening the app now goes straight to sign-in (or the dashboard). The
+    landing is preserved and reachable any time at /welcome?show=1, so it can
+    be brought back or shown on demand in the future.
     """
+    if request.args.get("show") != "1":
+        return redirect(url_for("main.dashboard") if g.user
+                        else url_for("auth.login"))
     from ..i18n import t as tr
     assets = db.session.scalar(db.select(func.count(Asset.id))) or 0
     loans = db.session.scalar(db.select(func.count(Assignment.id))
