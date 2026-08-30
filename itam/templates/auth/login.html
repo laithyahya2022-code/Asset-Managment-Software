@@ -2,6 +2,11 @@
 {% block title %}{{ t("Log in") }}{% endblock %}
 {% block auth_content %}
 <div class="auth-split">
+  <a class="top-icon" style="position:fixed;top:14px;inset-inline-end:18px;z-index:20"
+     href="{{ url_for('set_lang', code='ar' if g.lang == 'en' else 'en') }}"
+     title="{{ 'العربية' if g.lang == 'en' else 'English' }}">
+    <span class="lang-tag">{{ 'ع' if g.lang == 'en' else 'EN' }}</span>
+  </a>
   <div class="auth-side">
     <a class="btn secondary sm back" href="{{ url_for('main.welcome') }}">← {{ t("Back") }}</a>
     <div class="pitch">
@@ -17,11 +22,6 @@
         <img src="{{ url_for('static', filename='icon.svg') }}" alt=""
              style="width:26px;height:26px;display:block">
         <span class="wordmark" style="font-size:13px;font-weight:500;letter-spacing:.06em;text-transform:uppercase">AMS</span>
-        <a class="top-icon" style="margin-inline-start:auto"
-           href="{{ url_for('set_lang', code='ar' if g.lang == 'en' else 'en') }}"
-           title="{{ 'العربية' if g.lang == 'en' else 'English' }}">
-          <span class="lang-tag">{{ 'ع' if g.lang == 'en' else 'EN' }}</span>
-        </a>
       </div>
       <h1 style="margin-top:26px">{{ t("Sign in to AMS") }}</h1>
       <p class="muted">{{ t("Use your school account.") }}</p>

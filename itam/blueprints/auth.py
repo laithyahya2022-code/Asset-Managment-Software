@@ -81,7 +81,10 @@ def login():
             _clear_failures(keys)
             session.clear()
             session["uid"] = user.id
-            session.permanent = True
+            # A browser-session cookie (no expiry): closing the browser signs
+            # the user out, so the next person on a shared device lands on the
+            # welcome screen and must sign in again — not on the last session.
+            session.permanent = False
             user.last_login = datetime.utcnow()
             g.user = user
             log_activity("login", "user", user.id)
