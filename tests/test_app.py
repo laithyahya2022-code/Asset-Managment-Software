@@ -3250,3 +3250,65 @@ def test_dashboard_survives_a_locked_database(client, app, monkeypatch):
     monkeypatch.setattr(main, "_generate_alerts", locked)
     resp = client.get("/")
     assert resp.status_code == 200
+
+
+def test_admin_can_undo_a_delete(client, app):
+    """Deleting an asset is reversible from the Activity log."""
+    from itam.models import ActivityLog, Category
+
+    login(client)
+    with app.app_context():
+        cat = db.session.scalar(db.select(Category))
+        a = Asset(tag="UNDO-1", name="PC", status="Available",
+                  condition="Good", category=cat)
+        db.session.add(a)
+        db.session.commit()
+        aid = a.id
+
+    client.post(f"/assets/{aid}/delete")
+    with app.app_context():
+        assert db.session.get(Asset, aid) is None
+        log = db.session.scalars(db.select(ActivityLog)
+                                 .where(ActivityLog.action == "deleted")
+                                 .order_by(ActivityLog.id.desc())).first()
+        assert log.undo_data
+        logid = log.id
+
+    client.post(f"/assets/undo/{logid}", follow_redirects=True)
+    with app.app_context():
+        assert db.session.scalar(
+            db.select(Asset).where(Asset.tag == "UNDO-1")) is not None
+        assert db.session.get(ActivityLog, logid).undone_at is not None
+        # undo cannot run twice
+    client.post(f"/assets/undo/{logid}", follow_redirects=True)
+    with app.app_context():
+        assert db.session.scalar(db.select(db.func.count(Asset.id))
+                                 .where(Asset.tag == "UNDO-1")) == 1
+
+
+def test_admin_can_undo_an_import(client, app):
+    """An import can be undone, removing exactly the assets it created."""
+    import io
+    import re
+
+    from itam.models import ActivityLog
+
+    login(client)
+    data = b"tag,name,category\nIMP-9,Imported PC,Desktop\n"
+    r = client.post("/assets/import",
+                    data={"file": (io.BytesIO(data), "x.csv")},
+                    content_type="multipart/form-data")
+    tok = re.search(rb'name="token" value="([^"]+)"', r.data).group(1).decode()
+    client.post("/assets/import", data={"token": tok}, follow_redirects=True)
+    with app.app_context():
+        assert db.session.scalar(db.select(Asset).where(Asset.tag == "IMP-9"))
+        log = db.session.scalars(db.select(ActivityLog)
+                                 .where(ActivityLog.action == "imported")
+                                 .order_by(ActivityLog.id.desc())).first()
+        assert log.undo_data
+        logid = log.id
+
+    client.post(f"/assets/undo/{logid}", follow_redirects=True)
+    with app.app_context():
+        assert db.session.scalar(
+            db.select(Asset).where(Asset.tag == "IMP-9")) is None

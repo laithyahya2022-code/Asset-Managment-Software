@@ -189,12 +189,16 @@ def custom_field_names():
 # ------------------------------------------------------------------ auditing
 
 
-def log_activity(action, entity_type=None, entity_id=None, details=None):
-    db.session.add(ActivityLog(
+def log_activity(action, entity_type=None, entity_id=None, details=None,
+                 undo_data=None):
+    entry = ActivityLog(
         user_id=g.user.id if getattr(g, "user", None) else None,
         action=action, entity_type=entity_type, entity_id=entity_id,
         details=details, ip=request.remote_addr if request else None,
-    ))
+        undo_data=undo_data,
+    )
+    db.session.add(entry)
+    return entry
 
 # -------------------------------------------------------------- notifications
 

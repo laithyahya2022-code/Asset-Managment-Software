@@ -121,6 +121,10 @@ class ActivityLog(db.Model):
     details = db.Column(db.Text)
     ip = db.Column(db.String(45))
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    # How to reverse this action (JSON), and when it was undone (null = not yet).
+    # Set for reversible actions — imports and deletes — so an admin can undo.
+    undo_data = db.Column(db.Text)
+    undone_at = db.Column(db.DateTime)
 
     user = db.relationship("User")
 

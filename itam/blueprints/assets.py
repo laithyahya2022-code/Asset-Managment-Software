@@ -4,6 +4,7 @@ import json
 import os
 import uuid
 from datetime import date, datetime, timedelta
+from decimal import Decimal
 
 from flask import (Blueprint, Response, current_app, flash, g, jsonify,
                    redirect, render_template, request, send_from_directory,
@@ -14,7 +15,7 @@ from werkzeug.utils import secure_filename
 
 from ..models import (ASSET_CONDITIONS, ASSET_STATUSES, BRANCHES, BUILDINGS,
                       BLOCKED_CHECKOUT_STATUSES, FLOORS, OPERATING_SYSTEMS,
-                      PLACES, Asset,
+                      PLACES, ActivityLog, Asset,
                       Assignment, Category, Department, Employee, Location,
                       Reservation, Transfer, Vendor, db)
 from ..security import has_perm, login_required, perm_required
@@ -23,6 +24,90 @@ from ..utils import (barcode_svg, csv_response, custom_field_names,
                      parse_date, qr_svg)
 
 bp = Blueprint("assets", __name__, url_prefix="/assets")
+
+
+# --------------------------------------------------------------- undo support
+# A few actions are reversible by an admin from the Activity log. We keep just
+# enough on the ActivityLog row (undo_data JSON) to reverse them:
+#   - an import records the ids it created   -> undo deletes them
+#   - a delete records a snapshot of each asset -> undo re-creates them
+# Undo runs once (undone_at guards it) and asks for confirmation first.
+_SNAPSHOT_SKIP = {"id", "created_at", "updated_at"}
+
+
+def _asset_snapshot(a):
+    """A JSON-safe copy of an asset's columns, enough to re-create it."""
+    snap = {}
+    for col in Asset.__table__.columns:
+        if col.name in _SNAPSHOT_SKIP:
+            continue
+        v = getattr(a, col.name)
+        if isinstance(v, (date, datetime)):
+            v = v.isoformat()
+        elif isinstance(v, Decimal):
+            v = float(v)
+        snap[col.name] = v
+    return snap
+
+
+def _restore_asset(snap):
+    """Re-create an asset from a snapshot (new id; a dangling parent is dropped)."""
+    kwargs = {}
+    for col in Asset.__table__.columns:
+        if col.name in _SNAPSHOT_SKIP or col.name not in snap:
+            continue
+        v = snap[col.name]
+        if isinstance(v, str) and v:
+            kind = str(col.type).lower()
+            try:
+                if "datetime" in kind:
+                    v = datetime.fromisoformat(v)
+                elif "date" in kind:
+                    v = date.fromisoformat(v)
+            except ValueError:
+                pass
+        kwargs[col.name] = v
+    a = Asset(**kwargs)
+    a.parent_id = None      # the parent may not have been restored
+    db.session.add(a)
+    return a
+
+
+def undo_activity(log):
+    """Reverse a reversible activity. Returns (ok, message)."""
+    if not log.undo_data or log.undone_at:
+        return False, "This action can't be undone."
+    data = json.loads(log.undo_data)
+    op = data.get("op")
+    if op == "delete":                       # undo an import: remove what it made
+        ids = data.get("asset_ids", [])
+        assets = db.session.scalars(
+            db.select(Asset).where(Asset.id.in_(ids))).all()
+        for a in assets:
+            db.session.delete(a)
+        msg = f"Undone — {len(assets)} imported assets removed."
+    elif op == "restore":                    # undo a delete: bring the assets back
+        snaps = data.get("assets", [])
+        for snap in snaps:
+            _restore_asset(snap)
+        msg = f"Undone — {len(snaps)} assets restored."
+    else:
+        return False, "This action can't be undone."
+    log.undone_at = datetime.utcnow()
+    log_activity("undone", log.entity_type, None,
+                 f"Undid: {log.action} — {log.details or ''}".strip())
+    db.session.commit()
+    _refresh_locations()
+    return True, msg
+
+
+@bp.post("/undo/<int:log_id>")
+@perm_required("assets.manage")
+def undo(log_id):
+    log = db.get_or_404(ActivityLog, log_id)
+    ok, msg = undo_activity(log)
+    flash(msg, "success" if ok else "error")
+    return redirect(request.referrer or url_for("main.activity"))
 
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"}
 ALLOWED_EXTS = IMAGE_EXTS | {".pdf", ".doc", ".docx", ".xls", ".xlsx", ".txt", ".csv"}
@@ -444,7 +529,8 @@ def edit(asset_id):
 @perm_required("assets.manage")
 def delete(asset_id):
     a = db.get_or_404(Asset, asset_id)
-    log_activity("deleted", "asset", a.id, a.tag)
+    log_activity("deleted", "asset", a.id, a.tag,
+                 undo_data=json.dumps({"op": "restore", "assets": [_asset_snapshot(a)]}))
     db.session.delete(a)
     db.session.commit()
     flash(f"Asset {a.tag} deleted.", "success")
@@ -758,8 +844,10 @@ def bulk():
         return redirect(url_for("assets.labels", id=ids))
     assets = db.session.scalars(db.select(Asset).where(Asset.id.in_(ids))).all()
     if action == "delete":
+        snaps = [_asset_snapshot(a) for a in assets]
+        log_activity("deleted", "asset", None, f"{len(assets)} assets",
+                     undo_data=json.dumps({"op": "restore", "assets": snaps}))
         for a in assets:
-            log_activity("deleted", "asset", a.id, a.tag)
             db.session.delete(a)
         flash(f"{len(assets)} assets deleted.", "success")
     elif action and action.startswith("status:"):
@@ -821,9 +909,11 @@ def delete_all():
     their assignments, transfers and history) after an explicit confirm.
     """
     assets = db.session.scalars(db.select(Asset)).all()
+    snaps = [_asset_snapshot(a) for a in assets]
     for a in assets:
         db.session.delete(a)
-    log_activity("deleted", "asset", None, f"all assets ({len(assets)})")
+    log_activity("deleted", "asset", None, f"all assets ({len(assets)})",
+                 undo_data=json.dumps({"op": "restore", "assets": snaps}))
     db.session.commit()
     _refresh_locations()
     db.session.commit()
@@ -966,8 +1056,9 @@ def import_():
         with open(path, encoding="utf-8") as fh:
             raw = fh.read()
         rows, errors = _validate_import(raw)
-        created = _apply_asset_import(rows)
-        log_activity("imported", "asset", None, f"{created} assets from file")
+        created, created_ids = _apply_asset_import(rows)
+        log_activity("imported", "asset", None, f"{created} assets from file",
+                     undo_data=json.dumps({"op": "delete", "asset_ids": created_ids}))
         db.session.commit()
         try:
             os.remove(path)
@@ -1126,7 +1217,7 @@ def _apply_asset_import(rows):
                 used.add(cand.lower())
                 return cand
 
-    created = 0
+    created_assets = []
     for r in rows:
         if r["_error"]:
             continue
@@ -1201,12 +1292,13 @@ def _apply_asset_import(rows):
         if dep_years:
             a.depreciation_years = dep_years
         db.session.add(a)
+        created_assets.append(a)
         if holder and not holder_is_place:
             db.session.add(Assignment(
                 asset=a, employee=employee_for(holder, dep),
                 assigned_by=g.user.id if g.get("user") else None))
-        created += 1
-    return created
+    db.session.flush()      # assign ids so the import can be undone later
+    return len(created_assets), [a.id for a in created_assets]
 
 
 # canonical fields carried on each parsed row
