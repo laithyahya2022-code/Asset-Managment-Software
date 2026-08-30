@@ -39,7 +39,7 @@
   <div class="top-actions">
     <a class="top-icon" href="{{ url_for('set_theme', mode='light' if g.theme == 'dark' else 'dark') }}"
        title="{{ t('Light theme') if g.theme == 'dark' else t('Dark theme') }}">
-      <span class="lang-tag">{{ '🌙' if g.theme == 'dark' else '☀️' }}</span>
+      {{ icon("moon") if g.theme == 'dark' else icon("sun") }}
     </a>
     <a class="top-icon" href="{{ url_for('set_lang', code='ar' if g.lang == 'en' else 'en') }}" title="{{ 'العربية' if g.lang == 'en' else 'English' }}">
       {{ icon("globe") }}<span class="lang-tag">{{ 'ع' if g.lang == 'en' else 'EN' }}</span>
