@@ -24,10 +24,11 @@
 {% set ep = request.endpoint or "" %}
 <header class="topbar no-print">
   <label for="nav-toggle" class="nav-btn" aria-label="{{ t('Menu') }}">{{ icon("menu") }}</label>
-  <a class="brand" href="{{ url_for('main.dashboard') }}">
+  {# The logged-in person's name next to the mark opens their profile — it's
+     the single account link now, so the duplicate chip on the right is gone. #}
+  <a class="brand" href="{{ url_for('auth.profile') if g.user else url_for('main.dashboard') }}"
+     title="{{ t('Profile') }}">
     <img class="brand-mark" src="{{ url_for('static', filename='icon.svg') }}" alt="">
-    {# The logged-in person's name next to the mark, per request; the app
-       name still lives in the tab title and the user menu. #}
     <span class="wordmark">{{ g.user.name or g.user.username if g.user else "AMS" }}</span>
   </a>
   <span class="divider" aria-hidden="true"></span>
@@ -47,10 +48,6 @@
     <a class="top-icon" href="{{ url_for('main.notifications') }}" title="{{ t('Notifications') }}">
       {{ icon("bell") }}
       {% if unread_count %}<span class="bell-badge">{{ unread_count if unread_count < 100 else "99+" }}</span>{% endif %}
-    </a>
-    <a class="user-chip" href="{{ url_for('auth.profile') }}" title="{{ t('Profile') }}">
-      <span class="avatar">{{ g.user.name[:1] | upper }}</span>
-      <span class="user-name">{{ g.user.name }}<small>{{ g.user.role }}</small></span>
     </a>
     <a class="top-icon" href="{{ url_for('auth.logout') }}" title="{{ t('Log out') }}">{{ icon("logout") }}</a>
   </div>
