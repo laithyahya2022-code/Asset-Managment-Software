@@ -1959,6 +1959,46 @@ def test_lending_lists_only_assets_that_are_free(client, app):
     assert facts["serial"] == "SN-FREE" and facts["tag"] == "LEND-FREE"
 
 
+def test_lookup_shows_who_currently_holds_a_device(client, app):
+    """Before lending, the desk can search any asset and see its holder."""
+    from itam.models import Assignment, Category, Employee
+
+    with app.app_context():
+        cat = db.session.scalar(db.select(Category))
+        emp = db.session.scalar(db.select(Employee))
+        free = Asset(tag="LK-FREE", name="Spare tablet", status="Available",
+                     condition="Good", category=cat)
+        out = Asset(tag="LK-OUT", name="Loaned tablet", status="Checked Out",
+                    condition="Good", category=cat)
+        db.session.add_all([free, out])
+        db.session.flush()
+        db.session.add(Assignment(asset=out, employee=emp))
+        db.session.commit()
+        free_id, out_id = free.id, out.id
+        emp_name = emp.name
+
+    login(client)
+    # The lookup spans the whole register — lent-out assets included, unlike
+    # the lend picker which only offers what is free.
+    hits = client.get("/lend/lookup.json?q=LK-").get_json()
+    tags = {h["id"]: h["hint"] for h in hits}
+    assert free_id in tags and out_id in tags, "lookup hid an asset already out"
+    assert tags[free_id] == "available"
+    assert emp_name in tags[out_id]
+
+    out_detail = client.get(f"/lend/lookup/{out_id}.json").get_json()
+    assert out_detail["holder"] == emp_name
+    assert out_detail["holder_kind"] == "person"
+    assert out_detail["lendable"] is False
+
+    free_detail = client.get(f"/lend/lookup/{free_id}.json").get_json()
+    assert free_detail["holder"] is None
+    assert free_detail["lendable"] is True
+
+    # The card is present on the Lending page.
+    assert "Who has this device?" in client.get("/checkouts").data.decode()
+
+
 def test_lending_picker_does_not_render_the_whole_register(client, app):
     """A few thousand <option> tags made this page a megabyte of HTML."""
     from itam.blueprints.operations import PICKER_LIMIT

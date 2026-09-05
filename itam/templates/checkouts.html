@@ -18,6 +18,36 @@
   {% endfor %}
 </div>
 
+<style>
+  .lk-banner{margin:.2rem 0 .9rem;padding:.6rem .8rem;border-radius:8px;
+             font-weight:600;border-inline-start:4px solid transparent}
+  .lk-out{background:rgba(220,38,38,.10);border-inline-start-color:#dc2626}
+  .lk-place{background:rgba(217,119,6,.10);border-inline-start-color:#d97706}
+  .lk-free{background:rgba(22,163,74,.10);border-inline-start-color:#16a34a}
+</style>
+<div class="card no-print" id="asset-lookup">
+  <p class="eyebrow">{{ t("Who has this device?") }}</p>
+  <p class="muted" style="margin:-0.3rem 0 0.7rem;font-size:0.86rem">
+    {{ t("Search any asset to see its full details and who is holding it right now — before you decide to lend it or keep it.") }}
+  </p>
+  <input id="lk-search" type="search" autocomplete="off"
+         placeholder="{{ t('Search by Asset ID, name or serial…') }}">
+  <select id="lk-asset" size="6" style="margin-top:.4rem" aria-label="{{ t('Search results') }}"></select>
+  <p class="field-note" id="lk-count">{{ t("Type to search the whole register.") }}</p>
+  <div id="lk-panel" hidden>
+    <div id="lk-holder" class="lk-banner"></div>
+    <dl class="readonly-facts" id="lk-facts">
+      {% for key, label in [("tag", "Asset ID"), ("name", "Name"), ("category", "Category"),
+                            ("model", "Make / model"), ("serial", "Serial"),
+                            ("department", "Department"), ("location", "Location"),
+                            ("condition", "Condition"), ("status", "Status")] %}
+      <div><dt>{{ t(label) }}</dt><dd data-fact="{{ key }}">—</dd></div>
+      {% endfor %}
+    </dl>
+    <p style="margin-top:.6rem"><a id="lk-open" class="btn secondary sm" href="#">{{ t("Open full asset page") }}</a></p>
+  </div>
+</div>
+
 {% if rows %}
 <form id="bulk" method="post" action="{{ url_for('ops.checkouts_bulk_checkin') }}" class="bulk-form">
 <div class="card table-wrap"><table>
@@ -216,6 +246,88 @@
     });
   }
   showDetails();
+})();
+
+// "Who has this device?" — look up any asset and see its current holder.
+(function () {
+  var search = document.getElementById("lk-search");
+  var sel = document.getElementById("lk-asset");
+  var count = document.getElementById("lk-count");
+  var panel = document.getElementById("lk-panel");
+  var facts = document.getElementById("lk-facts");
+  var banner = document.getElementById("lk-holder");
+  var openLink = document.getElementById("lk-open");
+  if (!search || !sel || !panel) return;
+  var searchUrl = {{ url_for('ops.asset_lookup') | tojson }};
+  var detailUrl = {{ url_for('ops.asset_lookup_detail', asset_id=0) | tojson }};
+  var shownFor = null;
+
+  function showBanner(d) {
+    if (d.holder_kind === "person") {
+      var s = "Currently lent to " + d.holder;
+      if (d.since) s += " · out since " + d.since;
+      if (d.due) s += " · due " + d.due + (d.overdue ? " (overdue)" : "");
+      banner.textContent = s;
+      banner.className = "lk-banner lk-out";
+    } else if (d.holder_kind === "place") {
+      banner.textContent = "Held by " + d.holder + " — shared class/room device";
+      banner.className = "lk-banner lk-place";
+    } else if (d.lendable) {
+      banner.textContent = "Available to lend now — nobody is holding it.";
+      banner.className = "lk-banner lk-free";
+    } else {
+      banner.textContent = "Not available to lend (status: " + (d.status || "—") + ").";
+      banner.className = "lk-banner lk-place";
+    }
+  }
+  function fill(d) {
+    if (!d) { panel.hidden = true; return; }
+    facts.querySelectorAll("[data-fact]").forEach(function (dd) {
+      dd.textContent = d[dd.dataset.fact] || "—";
+    });
+    showBanner(d);
+    if (openLink) openLink.href = d.detail_url || "#";
+    panel.hidden = false;
+  }
+  function showDetails() {
+    var id = sel.value;
+    if (!id) { panel.hidden = true; return; }
+    if (id === shownFor) return;
+    shownFor = id;
+    fetch(detailUrl.replace(/0(\.json)$/, id + "$1"), {credentials: "same-origin"})
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) { if (sel.value === id) fill(d); })
+      .catch(function () { panel.hidden = true; });
+  }
+  sel.addEventListener("change", showDetails);
+
+  var timer = null;
+  search.addEventListener("input", function () {
+    clearTimeout(timer);
+    timer = setTimeout(function () {
+      var q = search.value.trim();
+      if (!q) {
+        sel.innerHTML = ""; panel.hidden = true;
+        count.textContent = "Type to search the whole register.";
+        return;
+      }
+      fetch(searchUrl + "?q=" + encodeURIComponent(q), {credentials: "same-origin"})
+        .then(function (r) { return r.ok ? r.json() : []; })
+        .then(function (rows) {
+          sel.innerHTML = "";
+          rows.forEach(function (row) {
+            sel.add(new Option(row.label + (row.hint ? "  ·  " + row.hint : ""), row.id));
+          });
+          count.textContent = rows.length
+            ? rows.length + " match" + (rows.length === 1 ? "" : "es")
+            : "No asset matches that search.";
+          shownFor = null;
+          if (sel.options.length) { sel.selectedIndex = 0; showDetails(); }
+          else { panel.hidden = true; }
+        })
+        .catch(function () {});
+    }, 200);
+  });
 })();
 </script>
 {% endblock %}

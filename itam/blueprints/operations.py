@@ -235,6 +235,68 @@ def lendable_detail(asset_id):
     })
 
 
+def _lookup_query(q):
+    """Search the *whole* register — lent-out assets included.
+
+    The lend picker only lists what's free, so it can't answer "who has
+    device X right now?". This one spans every asset so the desk can look up
+    a device, see its holder, and decide whether to lend it or leave it.
+    """
+    like = f"%{q}%"
+    return (db.select(Asset)
+            .where(db.or_(Asset.tag.ilike(like), Asset.name.ilike(like),
+                          Asset.serial.ilike(like)))
+            .order_by(Asset.tag)
+            .limit(PICKER_LIMIT))
+
+
+@bp.get("/lend/lookup.json")
+@perm_required("assets.view")
+def asset_lookup():
+    """Feeds the 'Who has this device?' search box."""
+    q = request.args.get("q", "").strip()
+    if not q:
+        return jsonify([])
+    rows = db.session.scalars(_lookup_query(q)).all()
+    out = []
+    for a in rows:
+        holder = a.assigned_label
+        out.append({"id": a.id, "label": f"{a.tag} — {a.name}",
+                    "hint": f"out to {holder}" if holder else "available"})
+    return jsonify(out)
+
+
+@bp.get("/lend/lookup/<int:asset_id>.json")
+@perm_required("assets.view")
+def asset_lookup_detail(asset_id):
+    """Full detail for any asset, with who is holding it right now."""
+    a = db.get_or_404(Asset, asset_id)
+    where = " · ".join(p for p in (a.branch, a.building, a.floor, a.location_name) if p)
+    asg = a.current_assignment
+    holder = holder_kind = since = due = None
+    overdue = False
+    if asg:
+        holder, holder_kind = asg.employee.name, "person"
+        since = asg.assigned_at.strftime("%Y-%m-%d") if asg.assigned_at else None
+        due = asg.due_at.strftime("%Y-%m-%d") if asg.due_at else None
+        overdue = bool(asg.due_at and asg.due_at < date.today())
+    elif a.assigned_label:
+        holder, holder_kind = a.assigned_label, "place"
+    return jsonify({
+        "tag": a.tag, "name": a.name,
+        "category": a.category.name if a.category else "",
+        "model": " ".join(p for p in (a.manufacturer, a.model) if p),
+        "serial": a.serial or "", "location": where,
+        "department": a.department.name if a.department else "",
+        "condition": a.condition or "", "status": a.status or "",
+        "holder": holder, "holder_kind": holder_kind,
+        "since": since, "due": due, "overdue": overdue,
+        "lendable": (asg is None and a.status not in BLOCKED_CHECKOUT_STATUSES
+                     and a.status != "Checked Out"),
+        "detail_url": url_for("assets.detail", asset_id=a.id),
+    })
+
+
 @bp.post("/lend")
 @perm_required("checkout.manage")
 def lend():
