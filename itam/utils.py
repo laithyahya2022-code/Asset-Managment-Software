@@ -379,8 +379,10 @@ def bar_chart(pairs, color="#b8c95e", limit=10):
     if not pairs:
         return Markup("<p class='empty'>No data.</p>")
     pairs = list(pairs)[:limit]
-    row_h, bar_h, label_w, pad_r, pad_t = 30, 15, 104, 34, 8
-    width = 380
+    # A wider internal canvas is scaled down to fit the card, so the labels
+    # and numbers render smaller and calmer instead of blown up.
+    row_h, bar_h, label_w, pad_r, pad_t = 34, 15, 150, 44, 8
+    width = 560
     x0 = label_w + 8
     x1 = width - pad_r
     height = pad_t * 2 + len(pairs) * row_h

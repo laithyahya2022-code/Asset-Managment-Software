@@ -4,7 +4,7 @@ from datetime import datetime
 
 from flask import Flask, g, redirect, render_template, request, session, url_for
 
-APP_VERSION = "2026.09.05.73"  # bumped on each release so users can confirm their build
+APP_VERSION = "2026.09.05.74"  # bumped on each release so users can confirm their build
 
 from .i18n import LANGS, t, translate_html
 from .models import (DEFAULT_ROLE_PERMS, PERMISSIONS, ROLES, Notification,
@@ -145,7 +145,19 @@ def create_app(test_config=None, instance_path=None):
             return render_template("errors/500.html",
                                    detail=detail, hint=hint), 500
         except Exception:
-            return e        # even the error page failed: show the plain one
+            # Even the styled page failed to render (mid-update, say). Fall
+            # back to a plain but still helpful message instead of the bare
+            # "Internal Server Error" that explains nothing.
+            msg = hint or ("Something went wrong on the server. If this "
+                           "started after an update, wait a moment and "
+                           "reload; if it persists, restart the AMS app.")
+            return (f"<!doctype html><meta charset='utf-8'>"
+                    f"<title>AMS — problem</title>"
+                    f"<div style='font-family:system-ui;max-width:640px;"
+                    f"margin:12vh auto;padding:0 20px;line-height:1.6'>"
+                    f"<h1 style='font-size:1.3rem'>AMS hit a problem</h1>"
+                    f"<p>{msg}</p>"
+                    f"<p><a href='/'>Back to the dashboard</a></p></div>"), 500
 
     @app.before_request
     def before():

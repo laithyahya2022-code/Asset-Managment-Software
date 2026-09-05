@@ -269,7 +269,7 @@ main { padding: 20px 22px 40px; width: 100%; }
 
 /* charts (server-rendered SVG reads the legacy variables) */
 .chart { width: 100%; height: auto; }
-.chart .cl { font-size: 11px; fill: var(--color-neutral-500); }
+.chart .cl { font-size: 10.5px; fill: var(--color-neutral-500); }
 .chart .cv { font-size: 11px; font-weight: 600; fill: var(--color-text); }
 .chart .cg { stroke: var(--color-neutral-900); stroke-width: 1; }
 .chart .ctrack { fill: var(--color-neutral-500); opacity: .13; }
