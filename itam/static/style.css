@@ -127,11 +127,13 @@ h2 { font-size: 1.02rem; font-weight: 500; margin: 0 0 0.6rem; }
 /* ------------------------------------------------ shell: top bar over rail */
 .topbar {
   position: sticky; top: 0; z-index: 20;
-  display: flex; align-items: center; gap: 0.8rem;
+  display: grid; grid-template-columns: 1fr minmax(200px, 460px) 1fr;
+  align-items: center; gap: 0.8rem;
   height: 52px; padding-inline: 20px;
   background: var(--color-surface);
   border-bottom: 1px solid var(--color-neutral-900);
 }
+.tb-left { display: flex; align-items: center; gap: 0.6rem; min-width: 0; }
 .brand { display: flex; align-items: center; gap: 0.55rem; text-decoration: none; }
 .brand:hover { text-decoration: none; }
 .brand .brand-mark { width: 24px; height: 24px; display: block; }
@@ -143,15 +145,15 @@ h2 { font-size: 1.02rem; font-weight: 500; margin: 0 0 0.6rem; }
 .topbar .divider { width: 1px; height: 20px; background: var(--color-neutral-800); }
 .nav-btn { display: none; cursor: pointer; color: var(--color-neutral-400); }
 .global-search {
-  display: flex; align-items: center; gap: 0.5rem; flex: 1; max-width: 340px;
-  margin-inline-start: auto;
+  display: flex; align-items: center; gap: 0.5rem;
+  justify-self: center; width: 100%; max-width: 460px;
   background: var(--color-bg); border: 1px solid var(--color-neutral-800);
   border-radius: 8px; height: 32px; padding-inline: 10px;
   color: var(--color-neutral-500);
 }
 .global-search input { border: none; background: none; outline: none; width: 100%;
   font-size: 0.9rem; color: var(--color-text); font-family: inherit; }
-.top-actions { display: flex; align-items: center; gap: 0.45rem; }
+.top-actions { display: flex; align-items: center; gap: 0.45rem; justify-self: end; }
 .top-icon { position: relative; color: var(--color-neutral-400); display: flex;
   align-items: center; gap: 2px; padding: 0.34rem; border-radius: 8px;
   text-decoration: none; }
@@ -482,9 +484,9 @@ dl.props dd { margin: 0; }
   #nav-toggle:checked ~ .shell .rail { inset-inline-start: 0; }
   .nav-btn { display: block; }
   main { padding: 1rem; }
-  .topbar { padding-inline: 12px; }
+  .topbar { display: flex; padding-inline: 12px; }
   .user-name { display: none; }
-  .global-search { max-width: none; }
+  .global-search { max-width: none; justify-self: auto; flex: 1; }
 }
 @media (prefers-reduced-motion: reduce) { .rail { transition: none; } }
 

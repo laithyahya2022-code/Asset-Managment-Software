@@ -23,15 +23,16 @@
 <input type="checkbox" id="nav-toggle" hidden>
 {% set ep = request.endpoint or "" %}
 <header class="topbar no-print">
-  <label for="nav-toggle" class="nav-btn" aria-label="{{ t('Menu') }}">{{ icon("menu") }}</label>
-  {# The logged-in person's name next to the mark opens their profile — it's
-     the single account link now, so the duplicate chip on the right is gone. #}
-  <a class="brand" href="{{ url_for('auth.profile') if g.user else url_for('main.dashboard') }}"
-     title="{{ t('Profile') }}">
-    <img class="brand-mark" src="{{ url_for('static', filename='icon.svg') }}" alt="">
-    <span class="wordmark">{{ g.user.name or g.user.username if g.user else "AMS" }}</span>
-  </a>
-  <span class="divider" aria-hidden="true"></span>
+  <div class="tb-left">
+    <label for="nav-toggle" class="nav-btn" aria-label="{{ t('Menu') }}">{{ icon("menu") }}</label>
+    {# The logged-in person's name next to the mark opens their profile — it's
+       the single account link now, so the duplicate chip on the right is gone. #}
+    <a class="brand" href="{{ url_for('auth.profile') if g.user else url_for('main.dashboard') }}"
+       title="{{ t('Profile') }}">
+      <img class="brand-mark" src="{{ url_for('static', filename='icon.svg') }}" alt="">
+      <span class="wordmark">{{ g.user.name or g.user.username if g.user else "AMS" }}</span>
+    </a>
+  </div>
   <form class="global-search" action="{{ url_for('main.search') }}" method="get">
     {{ icon("search", 16) }}
     <input type="search" name="q" value="{{ request.args.get('q', '') if request.endpoint == 'main.search' else '' }}"
@@ -44,10 +45,6 @@
     </a>
     <a class="top-icon" href="{{ url_for('set_lang', code='ar' if g.lang == 'en' else 'en') }}" title="{{ 'العربية' if g.lang == 'en' else 'English' }}">
       {{ icon("globe") }}<span class="lang-tag">{{ 'ع' if g.lang == 'en' else 'EN' }}</span>
-    </a>
-    <a class="top-icon" href="{{ url_for('main.notifications') }}" title="{{ t('Notifications') }}">
-      {{ icon("bell") }}
-      {% if unread_count %}<span class="bell-badge">{{ unread_count if unread_count < 100 else "99+" }}</span>{% endif %}
     </a>
     <a class="top-icon" href="{{ url_for('auth.logout') }}" title="{{ t('Log out') }}">{{ icon("logout") }}</a>
   </div>
@@ -91,6 +88,7 @@
       {{ ritem("reports.index", t("Reports"), ep.startswith("reports.")) }}
       {{ ritem("main.analytics", t("Analytics"), ep == "main.analytics") }}
       {% endif %}
+      {{ ritem("main.notifications", t("Notifications"), ep == "main.notifications", unread_count or none) }}
       {{ ritem("main.activity", t("Activity"), ep == "main.activity") }}
       {% if has_perm("admin.settings") %}
       {{ ritem("admin.settings", t("Settings"), ep in ("admin.settings", "admin.backups")) }}
