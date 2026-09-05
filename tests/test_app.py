@@ -1957,6 +1957,29 @@ def test_lending_lists_only_assets_that_are_free(client, app):
     assert client.get("/lend/assets.json?q=LEND-OUT").get_json() == []
     facts = client.get(f"/lend/assets/{free_id}.json").get_json()
     assert facts["serial"] == "SN-FREE" and facts["tag"] == "LEND-FREE"
+    assert facts["holder"] == "", "a genuinely free asset should show no holder"
+
+
+def test_lend_detail_shows_place_holder(client, app):
+    """A shared device assigned to a room is lendable but not truly free —
+    the lend form must name who currently holds it."""
+    from itam.models import Category
+
+    with app.app_context():
+        cat = db.session.scalar(db.select(Category))
+        shared = Asset(tag="LEND-ROOM", name="Class desktop", status="In Use",
+                       condition="Good", category=cat,
+                       notes="Assigned to: Grade3.B")
+        db.session.add(shared)
+        db.session.commit()
+        sid = shared.id
+
+    login(client)
+    # It still appears in the lend picker (no open loan, not checked out)…
+    assert "LEND-ROOM" in client.get("/lend/assets.json?q=LEND-ROOM").get_json()[0]["label"]
+    # …but its detail card names the current holder.
+    facts = client.get(f"/lend/assets/{sid}.json").get_json()
+    assert facts["holder"] == "Grade3.B"
 
 
 def test_lookup_shows_who_currently_holds_a_device(client, app):

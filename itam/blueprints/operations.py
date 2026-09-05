@@ -225,6 +225,10 @@ def lendable_detail(asset_id):
     """The read-only detail card under the lending picker."""
     a = db.get_or_404(Asset, asset_id)
     where = " · ".join(p for p in (a.branch, a.building, a.floor, a.location_name) if p)
+    # A "lendable" asset has no open loan, but it can still be a shared device
+    # assigned to a class or room in the inventory sheet. Surface that holder so
+    # the desk knows what they'd be pulling away before they lend it.
+    holder = a.assigned_label
     return jsonify({
         "tag": a.tag, "name": a.name,
         "category": a.category.name if a.category else "",
@@ -232,6 +236,7 @@ def lendable_detail(asset_id):
         "serial": a.serial or "", "location": where,
         "department": a.department.name if a.department else "",
         "condition": a.condition or "", "status": a.status or "",
+        "holder": holder or "",
     })
 
 

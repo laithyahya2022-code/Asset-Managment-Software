@@ -148,6 +148,7 @@
         {% endif %}
       </p>
       <p class="eyebrow" style="margin:.9rem 0 .3rem">Asset details (read-only — edit on the asset page)</p>
+      <div id="co-holder" class="lk-banner lk-free">{{ t("Available to lend now — nobody is holding it.") }}</div>
       <dl class="readonly-facts" id="co-facts">
         {% for key, label in [("tag", "Asset ID"), ("name", "Name"), ("category", "Category"),
                               ("model", "Make / model"), ("serial", "Serial"),
@@ -187,6 +188,7 @@
 (function () {
   var sel = document.getElementById("co-asset");
   var facts = document.getElementById("co-facts");
+  var holder = document.getElementById("co-holder");
   var search = document.getElementById("co-search");
   var count = document.getElementById("co-count");
   if (!sel || !facts) return;
@@ -198,6 +200,16 @@
     facts.querySelectorAll("[data-fact]").forEach(function (dd) {
       dd.textContent = (data && data[dd.dataset.fact]) || "—";
     });
+    if (holder) {
+      if (data && data.holder) {
+        holder.textContent = "Currently assigned to " + data.holder
+          + " — lending it will pull it from there.";
+        holder.className = "lk-banner lk-place";
+      } else {
+        holder.textContent = "Available to lend now — nobody is holding it.";
+        holder.className = "lk-banner lk-free";
+      }
+    }
   }
   // A <select size="6"> is a list box, and a list box selects nothing by
   // default. Without this the details card stayed empty until you clicked a
