@@ -157,10 +157,14 @@
         <div><dt>{{ label }}</dt><dd data-fact="{{ key }}">—</dd></div>
         {% endfor %}
       </dl>
-      <label for="co-emp">Assign to</label>
-      <select id="co-emp" name="employee_id" required>
-        {% for e in employees %}<option value="{{ e.id }}">{{ e.name }}{{ " (" ~ e.emp_code ~ ")" if e.emp_code }}</option>{% endfor %}
+      <label for="co-emp-search">Assign to</label>
+      <input id="co-emp-search" type="search" autocomplete="off"
+             placeholder="{{ t('Type a name or code to filter…') }}">
+      <select id="co-emp" name="employee_id" required size="6" style="margin-top:.4rem">
+        {% for e in employees %}<option value="{{ e.id }}"
+          data-search="{{ (e.name ~ ' ' ~ (e.emp_code or '')) | lower }}">{{ e.name }}{{ " (" ~ e.emp_code ~ ")" if e.emp_code }}</option>{% endfor %}
       </select>
+      <p class="field-note" id="co-emp-count"></p>
       <label for="co-by">Edited by</label>
       <input id="co-by" name="handled_by" value="{{ g.user.name if g.user else '' }}">
       <label for="co-due">Due date</label>
@@ -258,6 +262,43 @@
     });
   }
   showDetails();
+})();
+
+// "Assign to" — type a name or code to filter the employee list instead of
+// scrolling a few hundred alphabetical options.
+(function () {
+  var search = document.getElementById("co-emp-search");
+  var sel = document.getElementById("co-emp");
+  var count = document.getElementById("co-emp-count");
+  if (!search || !sel) return;
+  var opts = Array.prototype.slice.call(sel.options);
+
+  function filter() {
+    var q = search.value.trim().toLowerCase();
+    var shown = 0, firstVisible = null;
+    opts.forEach(function (o) {
+      var match = !q || (o.dataset.search || o.text.toLowerCase()).indexOf(q) !== -1;
+      o.hidden = !match;
+      if (match) { shown++; if (!firstVisible) firstVisible = o; }
+    });
+    // Keep a valid selection: if the chosen one was filtered out, jump to the
+    // first match so the form stays submittable and the highlight is visible.
+    if (sel.selectedIndex < 0 || sel.options[sel.selectedIndex].hidden) {
+      if (firstVisible) firstVisible.selected = true;
+    }
+    if (count) {
+      count.textContent = q
+        ? (shown ? shown + " match" + (shown === 1 ? "" : "es") : "No employee matches that.")
+        : "";
+    }
+  }
+  search.addEventListener("input", filter);
+  // Enter in the search box shouldn't submit the form — it should just keep
+  // the current pick.
+  search.addEventListener("keydown", function (e) {
+    if (e.key === "Enter") { e.preventDefault(); if (sel.selectedIndex >= 0) sel.focus(); }
+  });
+  filter();   // select the first employee so the list box starts valid
 })();
 
 // "Who has this device?" — look up any asset and see its current holder.
