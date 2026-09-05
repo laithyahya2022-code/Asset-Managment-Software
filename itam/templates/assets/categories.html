@@ -24,7 +24,8 @@
     <td class="no-print">
       {% if has_perm("assets.manage") and not c.assets %}
       <form class="inline" method="post" action="{{ url_for('assets.category_delete', cat_id=c.id) }}">
-        <button class="btn danger sm" type="submit">{{ t("Delete") }}</button>
+        <button class="btn danger sm" type="submit"
+                data-confirm="{{ t('Delete the category') }} “{{ c.name }}”?">{{ t("Delete") }}</button>
       </form>
       {% endif %}
     </td>
