@@ -367,34 +367,42 @@ PALETTE = ["#b8c95e", "#7fa6f2", "#e0a94f", "#b3a1e8", "#6ec4bc",
            "#d05574", "#8a929e", "#4a4f57"]
 
 
-def bar_chart(pairs, color="#b8c95e", height=210):
-    """pairs: [(label, value)] -> responsive SVG bar chart."""
+def bar_chart(pairs, color="#b8c95e", limit=10):
+    """pairs: [(label, value)] -> horizontal SVG bar chart.
+
+    Horizontal bars keep every label flat and readable — no slanted text
+    colliding with the bars, and long names like "Reception" or a full
+    department fit on their own row. Rows are capped so a school with dozens
+    of categories doesn't stretch the card down the page; pass sorted data
+    (biggest first) and the long tail is dropped.
+    """
     if not pairs:
         return Markup("<p class='empty'>No data.</p>")
-    n = len(pairs)
-    bw, gap, pad_l, pad_b = 40, 22, 34, 46
-    width = pad_l + n * (bw + gap) + 10
+    pairs = list(pairs)[:limit]
+    row_h, bar_h, label_w, pad_r, pad_t = 30, 15, 104, 34, 8
+    width = 380
+    x0 = label_w + 8
+    x1 = width - pad_r
+    height = pad_t * 2 + len(pairs) * row_h
     top = max(v for _, v in pairs) or 1
-    bars = []
+    rows = []
     for i, (label, v) in enumerate(pairs):
-        h = round((v / top) * (height - pad_b - 24), 1)
-        x = pad_l + i * (bw + gap)
-        y = height - pad_b - h
-        short = label if len(label) <= 9 else label[:8] + "…"
-        bars.append(
-            f'<rect x="{x}" y="{y}" width="{bw}" height="{h}" rx="4" fill="{color}">'
-            f'<title>{label}: {v}</title></rect>'
-            f'<text x="{x + bw / 2}" y="{y - 6}" text-anchor="middle" class="cv">{v}</text>'
-            f'<text x="{x + bw / 2}" y="{height - pad_b + 14}" text-anchor="middle" '
-            f'class="cl" transform="rotate(28 {x + bw / 2} {height - pad_b + 14})">{short}</text>'
+        cy = pad_t + i * row_h + row_h / 2
+        bw = round((v / top) * (x1 - x0), 1)
+        short = label if len(label) <= 15 else label[:14] + "…"
+        rows.append(
+            f'<text x="{label_w}" y="{cy}" text-anchor="end" '
+            f'dominant-baseline="central" class="cl">{short}<title>{label}</title></text>'
+            f'<rect x="{x0}" y="{cy - bar_h / 2}" width="{x1 - x0}" height="{bar_h}" '
+            f'rx="4" class="ctrack"/>'
+            f'<rect x="{x0}" y="{cy - bar_h / 2}" width="{max(bw, 2)}" height="{bar_h}" '
+            f'rx="4" fill="{color}"><title>{label}: {v}</title></rect>'
+            f'<text x="{x0 + max(bw, 2) + 6}" y="{cy}" dominant-baseline="central" '
+            f'class="cv">{v}</text>'
         )
-    grid = "".join(
-        f'<line x1="{pad_l - 6}" y1="{height - pad_b - f * (height - pad_b - 24)}" '
-        f'x2="{width}" y2="{height - pad_b - f * (height - pad_b - 24)}" class="cg"/>'
-        for f in (0, 0.5, 1))
     return Markup(
         f'<svg viewBox="0 0 {width} {height}" class="chart" role="img" '
-        f'preserveAspectRatio="xMinYMid meet">{grid}{"".join(bars)}</svg>')
+        f'preserveAspectRatio="xMinYMin meet">{"".join(rows)}</svg>')
 
 
 def donut_chart(pairs, size=190):
